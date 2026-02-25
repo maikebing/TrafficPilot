@@ -133,12 +133,11 @@ internal class MainForm : Form
 	{
 		var panel = new TableLayoutPanel
 		{
-			Dock = DockStyle.Top,
-			AutoSize = true,
+			Dock = DockStyle.Fill,  // 改为 Fill，填充整个标签页
+			AutoSize = false,        // 改为 false，避免固定大小
 			ColumnCount = 2,
 			RowCount = 12,
-			Padding = new Padding(10),
-			AutoScroll = true
+			Padding = new Padding(10)
 		};
 
 		panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 150F));
@@ -147,31 +146,33 @@ internal class MainForm : Form
 		int row = 0;
 
 		// Proxy settings
-		panel.Controls.Add(new Label { Text = "Proxy Host:", TextAlign = ContentAlignment.MiddleRight }, 0, row);
+		panel.Controls.Add(new Label { Text = "Proxy Host:", TextAlign = ContentAlignment.MiddleRight, Anchor = AnchorStyles.Left | AnchorStyles.Right }, 0, row);
 		_txtProxyHost = new TextBox { Dock = DockStyle.Fill, Margin = new Padding(5) };
 		_txtProxyHost.Text = _currentConfig.Proxy?.Host ?? "host.docker.internal";
 		panel.Controls.Add(_txtProxyHost, 1, row);
+		panel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 		row++;
 
-		panel.Controls.Add(new Label { Text = "Proxy Port:", TextAlign = ContentAlignment.MiddleRight }, 0, row);
-        _numProxyPort = new NumericUpDown { Dock = DockStyle.Fill, Margin = new Padding(5),  Maximum=65535,Value = _currentConfig.Proxy?.Port ?? 7890 };
-	
+		panel.Controls.Add(new Label { Text = "Proxy Port:", TextAlign = ContentAlignment.MiddleRight, Anchor = AnchorStyles.Left | AnchorStyles.Right }, 0, row);
+		_numProxyPort = new NumericUpDown { Dock = DockStyle.Fill, Margin = new Padding(5), Maximum = 65535, Value = _currentConfig.Proxy?.Port ?? 7890 };
 		panel.Controls.Add(_numProxyPort, 1, row);
+		panel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 		row++;
 
-		panel.Controls.Add(new Label { Text = "Proxy Scheme:", TextAlign = ContentAlignment.MiddleRight }, 0, row);
+		panel.Controls.Add(new Label { Text = "Proxy Scheme:", TextAlign = ContentAlignment.MiddleRight, Anchor = AnchorStyles.Left | AnchorStyles.Right }, 0, row);
 		_cmbProxyScheme = new ComboBox { Dock = DockStyle.Fill, Margin = new Padding(5), DropDownStyle = ComboBoxStyle.DropDownList };
 		_cmbProxyScheme.Items.AddRange(["socks4", "socks5", "http"]);
 		_cmbProxyScheme.SelectedItem = _currentConfig.Proxy?.Scheme ?? "socks4";
 		panel.Controls.Add(_cmbProxyScheme, 1, row);
+		panel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 		row++;
 
-		// Process Names
-		panel.Controls.Add(new Label { Text = "Process Names:", TextAlign = ContentAlignment.TopRight }, 0, row);
+		// Process Names - 使用百分比高度，随窗口缩放
+		panel.Controls.Add(new Label { Text = "Process Names:", TextAlign = ContentAlignment.TopRight, Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right }, 0, row);
 		var procPanel = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1, Margin = new Padding(5) };
 		procPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-		procPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 50F));
-		_lstProcesses = new ListBox { Dock = DockStyle.Fill, Height = 80 };
+		procPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 70F));
+		_lstProcesses = new ListBox { Dock = DockStyle.Fill };
 		foreach (var proc in _currentConfig.Targeting?.ProcessNames ?? [])
 			_lstProcesses.Items.Add(proc);
 		procPanel.Controls.Add(_lstProcesses, 0, 0);
@@ -179,12 +180,13 @@ internal class MainForm : Form
 		_btnRemoveProcess.Click += (s, e) => { if (_lstProcesses.SelectedIndex >= 0) _lstProcesses.Items.RemoveAt(_lstProcesses.SelectedIndex); };
 		procPanel.Controls.Add(_btnRemoveProcess, 1, 0);
 		panel.Controls.Add(procPanel, 1, row);
+		panel.RowStyles.Add(new RowStyle(SizeType.Percent, 35F));
 		row++;
 
-		panel.Controls.Add(new Label { Text = "Add Process:", TextAlign = ContentAlignment.MiddleRight }, 0, row);
+		panel.Controls.Add(new Label { Text = "Add Process:", TextAlign = ContentAlignment.MiddleRight, Anchor = AnchorStyles.Left | AnchorStyles.Right }, 0, row);
 		var addProcPanel = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1, Margin = new Padding(5) };
 		addProcPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-		addProcPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 50F));
+		addProcPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 70F));
 		_txtNewProcess = new TextBox { Dock = DockStyle.Fill };
 		addProcPanel.Controls.Add(_txtNewProcess, 0, 0);
 		_btnAddProcess = new Button { Text = "Add", Dock = DockStyle.Fill, Margin = new Padding(2) };
@@ -198,14 +200,15 @@ internal class MainForm : Form
 		};
 		addProcPanel.Controls.Add(_btnAddProcess, 1, 0);
 		panel.Controls.Add(addProcPanel, 1, row);
+		panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 30F));
 		row++;
 
-		// Extra PIDs
-		panel.Controls.Add(new Label { Text = "Extra PIDs:", TextAlign = ContentAlignment.TopRight }, 0, row);
+		// Extra PIDs - 使用百分比高度，随窗口缩放
+		panel.Controls.Add(new Label { Text = "Extra PIDs:", TextAlign = ContentAlignment.TopRight, Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right }, 0, row);
 		var pidPanel = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1, Margin = new Padding(5) };
 		pidPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-		pidPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 50F));
-		_lstExtraPids = new ListBox { Dock = DockStyle.Fill, Height = 80 };
+		pidPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 70F));
+		_lstExtraPids = new ListBox { Dock = DockStyle.Fill };
 		foreach (var pid in _currentConfig.Targeting?.ExtraPids ?? [])
 			_lstExtraPids.Items.Add(pid);
 		pidPanel.Controls.Add(_lstExtraPids, 0, 0);
@@ -213,12 +216,13 @@ internal class MainForm : Form
 		_btnRemovePid.Click += (s, e) => { if (_lstExtraPids.SelectedIndex >= 0) _lstExtraPids.Items.RemoveAt(_lstExtraPids.SelectedIndex); };
 		pidPanel.Controls.Add(_btnRemovePid, 1, 0);
 		panel.Controls.Add(pidPanel, 1, row);
+		panel.RowStyles.Add(new RowStyle(SizeType.Percent, 35F));
 		row++;
 
-		panel.Controls.Add(new Label { Text = "Add PID:", TextAlign = ContentAlignment.MiddleRight }, 0, row);
+		panel.Controls.Add(new Label { Text = "Add PID:", TextAlign = ContentAlignment.MiddleRight, Anchor = AnchorStyles.Left | AnchorStyles.Right }, 0, row);
 		var addPidPanel = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1, Margin = new Padding(5) };
 		addPidPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-		addPidPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 50F));
+		addPidPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 70F));
 		_txtNewPid = new TextBox { Dock = DockStyle.Fill };
 		addPidPanel.Controls.Add(_txtNewPid, 0, 0);
 		_btnAddPid = new Button { Text = "Add", Dock = DockStyle.Fill, Margin = new Padding(2) };
@@ -232,12 +236,14 @@ internal class MainForm : Form
 		};
 		addPidPanel.Controls.Add(_btnAddPid, 1, 0);
 		panel.Controls.Add(addPidPanel, 1, row);
+		panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 30F));
 		row++;
 
 		// Config file info
-		panel.Controls.Add(new Label { Text = "Config File:", TextAlign = ContentAlignment.MiddleRight }, 0, row);
+		panel.Controls.Add(new Label { Text = "Config File:", TextAlign = ContentAlignment.MiddleRight, Anchor = AnchorStyles.Left | AnchorStyles.Right }, 0, row);
 		_lblConfigFile = new Label { Text = _configManager.GetConfigPath(), TextAlign = ContentAlignment.MiddleLeft, AutoEllipsis = true, Dock = DockStyle.Fill, Margin = new Padding(5) };
 		panel.Controls.Add(_lblConfigFile, 1, row);
+		panel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 		row++;
 
 		// Buttons
@@ -248,10 +254,11 @@ internal class MainForm : Form
 		_btnLoadConfig = new Button { Text = "Load Config", Width = 100, Height = 30, Margin = new Padding(2) };
 		_btnLoadConfig.Click += BtnLoadConfig_Click;
 		btnPanel.Controls.Add(_btnLoadConfig);
-		panel.Controls.Add(btnPanel, 0, row);
+		panel.Controls.Add(btnPanel, 1, row);
+		panel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 
-		for (int i = 0; i < row; i++)
-			panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 40F));
+		// 最后一行使用 Percent 填充剩余空间，避免控件挤在一起
+		panel.RowStyles.Add(new RowStyle(SizeType.Percent, 20F));
 
 		_configTab!.Controls.Add(panel);
 	}
