@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using TrafficPilot.Properties;
 
 namespace TrafficPilot;
 
@@ -55,19 +56,26 @@ internal class MainForm : Form
 		_logBuffer = new LogBuffer(BatchAppendLogs);
 		InitializeComponent();
 		InitializeNotifyIcon();
+		LoadApplicationIcon();
 		CenterToScreen();
 	}
+
+	private void LoadApplicationIcon()
+	{
+        _notifyIcon.Icon = Resources.favicon;
+        Icon = Resources.favicon;
+    }
 
 	private void InitializeComponent()
 	{
 		SuspendLayout();
-
+	
 		// Form settings
 		Text = "TrafficPilot - Proxy Manager";
 		Size = new Size(800, 600);
 		MinimumSize = new Size(600, 400);
 		StartPosition = FormStartPosition.CenterScreen;
-		Icon = SystemIcons.Application;
+		// Icon will be set by LoadApplicationIcon()
 
 		// Main layout
 		var mainPanel = new TableLayoutPanel
@@ -348,7 +356,7 @@ internal class MainForm : Form
 		};
 		contentPanel.Controls.Add(versionLabel, 0, row);
 		contentPanel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-		row++;
+	 row++;
 
 		// Description
 		var descLabel = new Label
@@ -449,7 +457,7 @@ internal class MainForm : Form
 
 		_notifyIcon = new NotifyIcon
 		{
-			Icon = SystemIcons.Application,
+			// Icon will be set by LoadApplicationIcon() after this method
 			Text = "TrafficPilot - Proxy Manager",
 			ContextMenuStrip = _contextMenu,
 			Visible = true

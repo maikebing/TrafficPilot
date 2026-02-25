@@ -36,7 +36,7 @@ jobs:
             $version = "${{ github.ref }}".Substring("refs/tags/v".Length)
             $is_release = "true"
           } else {
-            $version = "beta"
+            $version = "0.0.${{ github.run_number }}"
             $is_release = "false"
           }
           echo "VERSION=$version" >> $env:GITHUB_OUTPUT
