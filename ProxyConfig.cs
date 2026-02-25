@@ -1,7 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
-namespace VSifier;
+namespace TrafficPilot;
 
 // ════════════════════════════════════════════════════════════════
 //  JSON Configuration Models
@@ -62,7 +62,7 @@ internal sealed class ProxyConfigManager
 	{
 		_configPath = configPath ?? Path.Combine(
 			Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-			"VSifier",
+			"TrafficPilot",
 			"config.json");
 	}
 

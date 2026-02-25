@@ -4,7 +4,7 @@ using System.Runtime.InteropServices;
 //  Program Entry Point
 // ════════════════════════════════════════════════════════════════
 
-namespace VSifier;
+namespace TrafficPilot;
 
 internal static class Program
 {

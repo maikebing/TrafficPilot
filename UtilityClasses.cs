@@ -1,7 +1,7 @@
 using System.Diagnostics;
 using System.Text.RegularExpressions;
 
-namespace VSifier;
+namespace TrafficPilot;
 
 // ════════════════════════════════════════════════════════════════
 //  Process allow-list matcher

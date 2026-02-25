@@ -3,7 +3,7 @@ using System.Net;
 using System.Net.Sockets;
 using System.Runtime.InteropServices;
 
-namespace VSifier;
+namespace TrafficPilot;
 
 // ════════════════════════════════════════════════════════════════
 //  Proxy Engine
@@ -82,11 +82,21 @@ internal sealed class ProxyEngine : IDisposable
 		_isRunning = false;
 		_cts?.Cancel();
 		if (_packetLoopTask != null)
-			await _packetLoopTask;
+		{
+			try
+			{
+				await _packetLoopTask;
+			}
+			catch (OperationCanceledException)
+			{
+				// Expected when cancelling
+			}
+		}
 	}
 
 	public void Dispose()
 	{
+		_packetLoopTask?.Dispose();
 		_cts?.Dispose();
 		_relay?.Stop();
 		_tcpTableResolver?.Dispose();

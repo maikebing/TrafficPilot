@@ -1,6 +1,6 @@
 using System.Collections.Concurrent;
 
-namespace VSifier;
+namespace TrafficPilot;
 
 // ════════════════════════════════════════════════════════════════
 //  日志缓冲管理 - 避免频繁的 UI 更新导致卡顿

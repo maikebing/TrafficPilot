@@ -1,8 +1,8 @@
-# VSifier WinForms 迁移指南
+# TrafficPilot WinForms 迁移指南
 
 ## 概述
 
-VSifier 从命令行应用成功转换为功能完整的 WinForms 桌面应用。
+TrafficPilot 从命令行应用成功转换为功能完整的 WinForms 桌面应用。
 
 ## 主要改进
 
@@ -15,7 +15,7 @@ VSifier 从命令行应用成功转换为功能完整的 WinForms 桌面应用�
 ### 2. 配置管理
 ✅ **JSON 配置文件**
 - 自动保存和加载配置
-- 位置：`%AppData%\VSifier\config.json`
+- 位置：`%AppData%\TrafficPilot\config.json`
 - 支持手动编辑配置文件
 - 配置恢复功能
 
@@ -35,9 +35,9 @@ VSifier 从命令行应用成功转换为功能完整的 WinForms 桌面应用�
 
 ### 旧版本
 ```bash
-VSifier --proxy 127.0.0.1:7890 --proxy-scheme socks5
-VSifier --process-list "devenv.exe;msbuild.exe"
-VSifier --pid 1234
+TrafficPilot --proxy 127.0.0.1:7890 --proxy-scheme socks5
+TrafficPilot --process-list "devenv.exe;msbuild.exe"
+TrafficPilot --pid 1234
 ```
 
 ### 新版本
@@ -50,7 +50,7 @@ VSifier --pid 1234
 ## 配置文件格式
 
 ### 默认配置生成位置
-`%AppData%\VSifier\config.json`
+`%AppData%\TrafficPilot\config.json`
 
 ### 示例
 ```json
@@ -74,11 +74,11 @@ VSifier --pid 1234
 
 1. **备份旧版本**（可选）
    ```bash
-   copy VSifier.exe VSifier.backup.exe
+   copy TrafficPilot.exe TrafficPilot.backup.exe
    ```
 
 2. **替换可执行文件**
-   - 将新版 VSifier.exe 替换旧版本
+   - 将新版 TrafficPilot.exe 替换旧版本
    - 确保 WinDivert.dll 和 WinDivert64.sys 在同一目录
 
 3. **首次运行**
@@ -132,7 +132,7 @@ VSifier --pid 1234
 
 ### 项目结构
 ```
-VSifier/
+TrafficPilot/
 ├── ProgramEntry.cs          # 应用入口
 ├── MainForm.cs             # 主窗体
 ├── ProxyEngine.cs          # 代理引擎
@@ -140,7 +140,7 @@ VSifier/
 ├── TcpRelayServer.cs       # 中继服务器
 ├── NetworkClasses.cs       # 网络核心
 ├── UtilityClasses.cs       # 工具类
-└── VSifier.csproj          # 项目文件
+└── TrafficPilot.csproj          # 项目文件
 ```
 
 ### 依赖包

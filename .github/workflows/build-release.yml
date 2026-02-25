@@ -1,0 +1,142 @@
+name: Build and Release
+
+on:
+  push:
+    branches:
+      - master
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+env:
+  DOTNET_VERSION: '10.0.x'
+  PROJECT_NAME: 'TrafficPilot'
+
+jobs:
+  build:
+    runs-on: windows-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+      
+      - name: Restore dependencies
+        run: dotnet restore
+      
+      - name: Determine version
+        id: version
+        shell: pwsh
+        run: |
+          if ("${{ github.ref }}".StartsWith("refs/tags/v")) {
+            $version = "${{ github.ref }}".Substring("refs/tags/v".Length)
+            $is_release = "true"
+          } else {
+            $version = "beta"
+            $is_release = "false"
+          }
+          echo "VERSION=$version" >> $env:GITHUB_OUTPUT
+          echo "IS_RELEASE=$is_release" >> $env:GITHUB_OUTPUT
+          Write-Host "Version: $version"
+          Write-Host "Is Release: $is_release"
+      
+      - name: Build
+        run: dotnet build --configuration Release --no-restore -p:Version=${{ steps.version.outputs.VERSION }}
+      
+      - name: Publish
+        if: steps.version.outputs.IS_RELEASE == 'true'
+        shell: pwsh
+        run: |
+          dotnet publish -c Release -o publish -p:PublishSingleFile=true -p:SelfContained=true -p:RuntimeIdentifier=win-x64 -p:Version=${{ steps.version.outputs.VERSION }}
+      
+      - name: Package Release
+        if: steps.version.outputs.IS_RELEASE == 'true'
+        shell: pwsh
+        run: |
+          $version = "${{ steps.version.outputs.VERSION }}"
+          $releaseDir = "TrafficPilot-$version"
+          
+          # Create release directory
+          New-Item -ItemType Directory -Path $releaseDir -Force | Out-Null
+          
+          # Copy published files
+          Copy-Item -Path "publish/*" -Destination $releaseDir -Recurse
+          
+          # Create zip
+          Compress-Archive -Path $releaseDir -DestinationPath "$releaseDir.zip" -Force
+          
+          Write-Host "Package created: $releaseDir.zip"
+          
+          # Get file info for release notes
+          $fileSize = (Get-Item "$releaseDir.zip").Length / 1MB
+          echo "RELEASE_SIZE=$([math]::Round($fileSize, 2)) MB" >> $env:GITHUB_OUTPUT
+      
+      - name: Create Release Notes
+        if: steps.version.outputs.IS_RELEASE == 'true'
+        id: release_notes
+        shell: pwsh
+        run: |
+          $version = "${{ steps.version.outputs.VERSION }}"
+          $releaseNotes = @"
+          # TrafficPilot v$version Release
+          
+          ## What's Changed
+          See the commit log for detailed changes.
+          
+          ## Installation
+          1. Download the \`TrafficPilot-$version.zip\` file below
+          2. Extract it to your preferred location
+          3. Run \`TrafficPilot.exe\`
+          
+          ## Requirements
+          - Windows 10 or later
+          - .NET 10 Runtime (included in the release)
+          
+          ## Features
+          - Intercept and redirect traffic from specified processes
+          - Support for SOCKS4, SOCKS5, and HTTP proxies
+          - Real-time logging and statistics
+          - Configuration save/load functionality
+          - System tray integration
+          
+          "@
+          
+          # Save to file for later use
+          $releaseNotes | Out-File -FilePath "release_notes.md" -Encoding UTF8
+      
+      - name: Upload Release
+        if: steps.version.outputs.IS_RELEASE == 'true'
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            TrafficPilot-*.zip
+          tag_name: ${{ github.ref_name }}
+          body_path: release_notes.md
+          draft: false
+          prerelease: false
+          generate_release_notes: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Upload build artifacts (master)
+        if: github.ref == 'refs/heads/master' && steps.version.outputs.IS_RELEASE == 'false'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.PROJECT_NAME }}-beta-build
+          path: bin/Release/
+          retention-days: 7
+
+  notify:
+    runs-on: ubuntu-latest
+    needs: build
+    if: always()
+    
+    steps:
+      - name: Build Status
+        run: |
+          echo "Build Status: ${{ job.status }}"
+          echo "Build completed for ref: ${{ github.ref }}"

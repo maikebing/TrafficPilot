@@ -1,6 +1,6 @@
 using System.ComponentModel;
 
-namespace VSifier;
+namespace TrafficPilot;
 
 // ════════════════════════════════════════════════════════════════
 //  Main WinForms Window
@@ -19,6 +19,7 @@ internal class MainForm : Form
 	private TabControl? _tabControl;
 	private TabPage? _configTab;
 	private TabPage? _logsTab;
+	private TabPage? _aboutTab;
 
 	// Config tab
 	private TextBox? _txtProxyHost;
@@ -62,7 +63,7 @@ internal class MainForm : Form
 		SuspendLayout();
 
 		// Form settings
-		Text = "VSifier - Proxy Manager";
+		Text = "TrafficPilot - Proxy Manager";
 		Size = new Size(800, 600);
 		MinimumSize = new Size(600, 400);
 		StartPosition = FormStartPosition.CenterScreen;
@@ -93,6 +94,11 @@ internal class MainForm : Form
 		_logsTab = new TabPage { Text = "Logs", Padding = new Padding(5) };
 		CreateLogsTab();
 		_tabControl.TabPages.Add(_logsTab);
+
+		// About Tab
+		_aboutTab = new TabPage { Text = "About", Padding = new Padding(10) };
+		CreateAboutTab();
+		_tabControl.TabPages.Add(_aboutTab);
 
 		mainPanel.Controls.Add(_tabControl, 0, 0);
 
@@ -296,72 +302,258 @@ internal class MainForm : Form
 		_logsTab!.Controls.Add(logPanel);
 	}
 
+	private void CreateAboutTab()
+	{
+		var scrollPanel = new Panel
+		{
+			Dock = DockStyle.Fill,
+			AutoScroll = true,
+			Margin = new Padding(0),
+			Padding = new Padding(10)
+		};
+
+		var contentPanel = new TableLayoutPanel
+		{
+			AutoSize = true,
+			AutoSizeMode = AutoSizeMode.GrowAndShrink,
+			ColumnCount = 1,
+			RowCount = 7,
+			Padding = new Padding(10),
+			Margin = new Padding(0),
+			Dock = DockStyle.Top
+		};
+		contentPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+
+		int row = 0;
+
+		// Title
+		var titleLabel = new Label
+		{
+			Text = "TrafficPilot - Proxy Manager",
+			Font = new Font("Segoe UI", 16, FontStyle.Bold),
+			AutoSize = true,
+			Margin = new Padding(0, 0, 0, 10)
+		};
+		contentPanel.Controls.Add(titleLabel, 0, row);
+		contentPanel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+		row++;
+
+		// Version
+		var versionLabel = new Label
+		{
+			Text = "Version: 1.0.0\nRelease Date: 2024",
+			AutoSize = true,
+			Margin = new Padding(0, 0, 0, 15),
+			ForeColor = SystemColors.GrayText
+		};
+		contentPanel.Controls.Add(versionLabel, 0, row);
+		contentPanel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+		row++;
+
+		// Description
+		var descLabel = new Label
+		{
+			Text = "Project Description",
+			Font = new Font("Segoe UI", 11, FontStyle.Bold),
+			AutoSize = true,
+			Margin = new Padding(0, 0, 0, 5)
+		};
+		contentPanel.Controls.Add(descLabel, 0, row);
+		contentPanel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+		row++;
+
+		var descContentLabel = new Label
+		{
+			Text = "TrafficPilot is a Windows proxy manager that allows you to route network traffic from specific processes through a proxy server.\n\n" +
+				   "Features:\n" +
+				   "• Intercept and redirect traffic from specified processes\n" +
+				   "• Support for wildcard process matching\n" +
+				   "• Support for SOCKS4, SOCKS5, and HTTP proxies\n" +
+				   "• Real-time logging and statistics\n" +
+				   "• Configuration save/load functionality\n" +
+				   "• Process filtering and PID-based targeting",
+			AutoSize = true,
+			Margin = new Padding(10, 0, 0, 15),
+			MaximumSize = new Size(450, 0)
+		};
+		contentPanel.Controls.Add(descContentLabel, 0, row);
+		contentPanel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+		row++;
+
+		// Contributors
+		var contribLabel = new Label
+		{
+			Text = "Contributors & Acknowledgments",
+			Font = new Font("Segoe UI", 11, FontStyle.Bold),
+			AutoSize = true,
+			Margin = new Padding(0, 0, 0, 5)
+		};
+		contentPanel.Controls.Add(contribLabel, 0, row);
+		contentPanel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+		row++;
+
+		var contribContentLabel = new Label
+		{
+			Text = "• Original Author: maikebing\n" +
+				   "• Repository: github.com/maikebing/TrafficPilot\n" +
+				   "• WinDivert: Windows Packet Divert library\n" +
+				   "• Contributors: Community members and testers",
+			AutoSize = true,
+			Margin = new Padding(10, 0, 0, 15),
+			MaximumSize = new Size(450, 0)
+		};
+		contentPanel.Controls.Add(contribContentLabel, 0, row);
+		contentPanel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+		row++;
+
+		// Tech Info
+		var techLabel = new Label
+		{
+			Text = "Technical Information",
+			Font = new Font("Segoe UI", 11, FontStyle.Bold),
+			AutoSize = true,
+			Margin = new Padding(0, 0, 0, 5)
+		};
+		contentPanel.Controls.Add(techLabel, 0, row);
+		contentPanel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+		row++;
+
+		var techContentLabel = new Label
+		{
+			Text = $"Platform: Windows\n" +
+				   $".NET Version: .NET 10\n" +
+				   $"C# Version: 14.0\n" +
+				   $"Architecture: x64\n" +
+				   $"License: Open Source",
+			AutoSize = true,
+			Margin = new Padding(10, 0, 0, 0),
+			MaximumSize = new Size(450, 0)
+		};
+		contentPanel.Controls.Add(techContentLabel, 0, row);
+		contentPanel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+
+		scrollPanel.Controls.Add(contentPanel);
+		_aboutTab!.Controls.Add(scrollPanel);
+	}
+
 	private void InitializeNotifyIcon()
 	{
 		_contextMenu = new ContextMenuStrip();
 		_contextMenu.Items.Add("Show", null, (s, e) => ShowWindow());
 		_contextMenu.Items.Add("Hide", null, (s, e) => HideWindow());
 		_contextMenu.Items.Add("-");
+		_contextMenu.Items.Add("Start Proxy", null, async (s, e) => await StartProxyAsync());
+		_contextMenu.Items.Add("Stop Proxy", null, async (s, e) => await StopProxyAsync());
+		_contextMenu.Items.Add("-");
 		_contextMenu.Items.Add("Exit", null, (s, e) => ExitApplication());
 
 		_notifyIcon = new NotifyIcon
 		{
 			Icon = SystemIcons.Application,
-			Text = "VSifier - Proxy Manager",
+			Text = "TrafficPilot - Proxy Manager",
 			ContextMenuStrip = _contextMenu,
 			Visible = true
 		};
 		_notifyIcon.DoubleClick += (s, e) => ShowWindow();
+		
+		UpdateTrayMenuState();
 	}
 
-	private  void BtnStartStop_Click(object? sender, EventArgs e)
+	private async void BtnStartStop_Click(object? sender, EventArgs e)
 	{
 		if (_isStarting) return;
 		_isStarting = true;
 		_btnStartStop!.Enabled = false;
-		_btnStartStop.Text = "Starting...";
 
-        try
-        {
-            if (_engine == null || !_engine.IsRunning)
-            {
-                var opts = BuildProxyOptions();
-                _engine = new ProxyEngine(opts);
-                _engine.OnLog += (msg) => AppendLog(msg);
-                _engine.OnStatsUpdated += (stats) => UpdateStats(stats);
-
-                Task.Run(async () => await _engine.StartAsync());
-                _btnStartStop!.Text = "Stop Proxy";
-                _btnStartStop.BackColor = Color.Red;
-                _lblStatus!.Text = "Status: Running";
-                _lblStatus.ForeColor = Color.Green;
-            }
-            else
-            {
-                _btnStartStop.Text = "Stopping...";
-                Task.Run(async () =>
-                {
-                    await _engine.StopAsync();
-                    _engine.Dispose();
-                });
-                _engine.Dispose();
-                _engine = null;
-                _btnStartStop!.Text = "Start Proxy";
-                _btnStartStop.BackColor = Color.LimeGreen;
-                _lblStatus!.Text = "Status: Stopped";
-                _lblStatus.ForeColor = Color.Black;
-            }
+		try
+		{
+			if (_engine == null || !_engine.IsRunning)
+			{
+				_btnStartStop.Text = "Starting...";
+				await StartProxyAsync();
+			}
+			else
+			{
+				_btnStartStop.Text = "Stopping...";
+				await StopProxyAsync();
+			}
 		}
 		catch (Exception ex)
 		{
 			MessageBox.Show($"Error: {ex.Message}", "Proxy Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
 			_btnStartStop!.Text = "Start Proxy";
 			_btnStartStop.BackColor = Color.LimeGreen;
+			_lblStatus!.Text = "Status: Stopped";
+			_engine?.Dispose();
+			_engine = null;
 		}
 		finally
 		{
 			_btnStartStop!.Enabled = true;
 			_isStarting = false;
+		}
+	}
+
+	private void UpdateTrayMenuState()
+	{
+		if (_contextMenu?.Items.Count < 7)
+			return;
+
+		bool isRunning = _engine?.IsRunning ?? false;
+		_contextMenu.Items[3].Enabled = !isRunning;  // Start Proxy
+		_contextMenu.Items[4].Enabled = isRunning;   // Stop Proxy
+	}
+
+	private async Task StartProxyAsync()
+	{
+		if (_engine?.IsRunning == true || _isStarting)
+			return;
+
+		try
+		{
+			var opts = BuildProxyOptions();
+			_engine = new ProxyEngine(opts);
+			_engine.OnLog += (msg) => AppendLog(msg);
+			_engine.OnStatsUpdated += (stats) => UpdateStats(stats);
+
+			await Task.Run(async () => await _engine.StartAsync());
+			
+			_btnStartStop!.Text = "Stop Proxy";
+			_btnStartStop.BackColor = Color.Red;
+			_lblStatus!.Text = "Status: Running";
+			_lblStatus.ForeColor = Color.Green;
+			
+			UpdateTrayMenuState();
+		}
+		catch (Exception ex)
+		{
+			_engine?.Dispose();
+			_engine = null;
+			throw;
+		}
+	}
+
+	private async Task StopProxyAsync()
+	{
+		if (_engine?.IsRunning != true)
+			return;
+
+		try
+		{
+			await _engine.StopAsync();
+			_engine.Dispose();
+			_engine = null;
+			
+			_btnStartStop!.Text = "Start Proxy";
+			_btnStartStop.BackColor = Color.LimeGreen;
+			_lblStatus!.Text = "Status: Stopped";
+			_lblStatus.ForeColor = Color.Black;
+			
+			UpdateTrayMenuState();
+		}
+		catch (Exception ex)
+		{
+			throw;
 		}
 	}
 

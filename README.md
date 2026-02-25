@@ -1,8 +1,8 @@
-# VSifier - WinForms 代理管理工具
+# TrafficPilot - WinForms 代理管理工具
 
 ## 项目说明
 
-VSifier 已从控制台应用转换为 **WinForms 桌面应用**，提供了友好的图形化界面来管理网络代理规则。
+TrafficPilot 已从控制台应用转换为 **WinForms 桌面应用**，提供了友好的图形化界面来管理网络代理规则。
 
 ## 主要功能
 
@@ -26,7 +26,7 @@ VSifier 已从控制台应用转换为 **WinForms 桌面应用**，提供了友�
 
 ### 4. **JSON 配置文件格式**
 
-配置文件位置：`%AppData%\VSifier\config.json`
+配置文件位置：`%AppData%\TrafficPilot\config.json`
 
 ```json
 {
@@ -184,7 +184,7 @@ VSifier 已从控制台应用转换为 **WinForms 桌面应用**，提供了友�
 
 ### 配置文件丢失
 
-- 文件位置：`%AppData%\VSifier\config.json`
+- 文件位置：`%AppData%\TrafficPilot\config.json`
 - 删除配置文件后重启会使用默认值
 
 ## 构建和编译
