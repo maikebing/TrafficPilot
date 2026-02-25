@@ -13,6 +13,7 @@ internal class MainForm : Form
 	private ProxyConfigModel _currentConfig;
 	private NotifyIcon? _notifyIcon;
 	private ContextMenuStrip? _contextMenu;
+	private LogBuffer? _logBuffer;
 
 	// UI Controls
 	private TabControl? _tabControl;
@@ -50,6 +51,7 @@ internal class MainForm : Form
 	{
 		_configManager = new ProxyConfigManager();
 		_currentConfig = _configManager.Load();
+		_logBuffer = new LogBuffer(BatchAppendLogs);
 		InitializeComponent();
 		InitializeNotifyIcon();
 		CenterToScreen();
@@ -273,7 +275,8 @@ internal class MainForm : Form
 			ReadOnly = true,
 			BackColor = Color.Black,
 			ForeColor = Color.Lime,
-			Font = new Font("Courier New", 9)
+			Font = new Font("Courier New", 9),
+			WordWrap = false
 		};
 		logPanel.Controls.Add(_rtbLogs, 0, 0);
 
@@ -304,36 +307,43 @@ internal class MainForm : Form
 		_notifyIcon.DoubleClick += (s, e) => ShowWindow();
 	}
 
-	private async void BtnStartStop_Click(object? sender, EventArgs e)
+	private  void BtnStartStop_Click(object? sender, EventArgs e)
 	{
 		if (_isStarting) return;
 		_isStarting = true;
+		_btnStartStop!.Enabled = false;
+		_btnStartStop.Text = "Starting...";
 
-		try
-		{
-			if (_engine == null || !_engine.IsRunning)
-			{
-				var opts = BuildProxyOptions();
-				_engine = new ProxyEngine(opts);
-				_engine.OnLog += (msg) => AppendLog(msg);
-				_engine.OnStatsUpdated += (stats) => UpdateStats(stats);
+        try
+        {
+            if (_engine == null || !_engine.IsRunning)
+            {
+                var opts = BuildProxyOptions();
+                _engine = new ProxyEngine(opts);
+                _engine.OnLog += (msg) => AppendLog(msg);
+                _engine.OnStatsUpdated += (stats) => UpdateStats(stats);
 
-				await _engine.StartAsync();
-				_btnStartStop!.Text = "Stop Proxy";
-				_btnStartStop.BackColor = Color.Red;
-				_lblStatus!.Text = "Status: Running";
-				_lblStatus.ForeColor = Color.Green;
-			}
-			else
-			{
-				await _engine.StopAsync();
-				_engine.Dispose();
-				_engine = null;
-				_btnStartStop!.Text = "Start Proxy";
-				_btnStartStop.BackColor = Color.LimeGreen;
-				_lblStatus!.Text = "Status: Stopped";
-				_lblStatus.ForeColor = Color.Black;
-			}
+                Task.Run(async () => await _engine.StartAsync());
+                _btnStartStop!.Text = "Stop Proxy";
+                _btnStartStop.BackColor = Color.Red;
+                _lblStatus!.Text = "Status: Running";
+                _lblStatus.ForeColor = Color.Green;
+            }
+            else
+            {
+                _btnStartStop.Text = "Stopping...";
+                Task.Run(async () =>
+                {
+                    await _engine.StopAsync();
+                    _engine.Dispose();
+                });
+                _engine.Dispose();
+                _engine = null;
+                _btnStartStop!.Text = "Start Proxy";
+                _btnStartStop.BackColor = Color.LimeGreen;
+                _lblStatus!.Text = "Status: Stopped";
+                _lblStatus.ForeColor = Color.Black;
+            }
 		}
 		catch (Exception ex)
 		{
@@ -343,6 +353,7 @@ internal class MainForm : Form
 		}
 		finally
 		{
+			_btnStartStop!.Enabled = true;
 			_isStarting = false;
 		}
 	}
@@ -407,13 +418,22 @@ internal class MainForm : Form
 
 	private void AppendLog(string message)
 	{
+		_logBuffer?.Enqueue(message);
+	}
+
+	private void BatchAppendLogs(List<string> messages)
+	{
 		if (_rtbLogs!.InvokeRequired)
 		{
-			_rtbLogs.Invoke(() => AppendLog(message));
+			_rtbLogs.Invoke(() => BatchAppendLogs(messages));
 			return;
 		}
 
-		_rtbLogs.AppendText(message + Environment.NewLine);
+		foreach (var msg in messages)
+		{
+			_rtbLogs.AppendText(msg + Environment.NewLine);
+		}
+
 		_rtbLogs.SelectionStart = _rtbLogs.TextLength;
 		_rtbLogs.ScrollToCaret();
 
@@ -425,7 +445,7 @@ internal class MainForm : Form
 	{
 		if (_lblStats!.InvokeRequired)
 		{
-			_lblStats.Invoke(() => UpdateStats(stats));
+			_lblStats.BeginInvoke(() => UpdateStats(stats));
 			return;
 		}
 
@@ -472,6 +492,7 @@ internal class MainForm : Form
 	{
 		if (disposing)
 		{
+			_logBuffer?.Dispose();
 			_engine?.Dispose();
 			_notifyIcon?.Dispose();
 			_contextMenu?.Dispose();

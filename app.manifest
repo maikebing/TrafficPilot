@@ -2,16 +2,16 @@
 <assembly manifestVersion="1.0" xmlns="urn:schemas-microsoft-com:asm.v1">
   <assemblyIdentity version="1.0.0.0" name="VSifier.App"/>
 
-  <!-- Request non-elevated execution. -->
+  <!-- Request administrator execution privileges. -->
   <trustInfo xmlns="urn:schemas-microsoft-com:asm.v2">
     <security>
       <requestedPrivileges xmlns="urn:schemas-microsoft-com:asm.v3">
-        <requestedExecutionLevel level="asInvoker" uiAccess="false" />
+        <requestedExecutionLevel level="requireAdministrator" uiAccess="false" />
       </requestedPrivileges>
     </security>
   </trustInfo>
 
-  <!-- Declare compatibility with Windows 10 and Windows 11. -->
+  <!-- Declare compatibility with Windows 8, 8.1, 10 and Windows 11. -->
   <compatibility xmlns="urn:schemas-microsoft-com:compatibility.v1">
     <application>
       <!-- Windows 10 / Windows 11 -->

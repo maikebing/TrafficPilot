@@ -1,119 +1,209 @@
-﻿# VSifier (C# + WinDivert)
+# VSifier - WinForms 代理管理工具
 
-将指定进程的 **出站 IPv4 TCP 流量** 强制重定向到指定代理地址。
+## 项目说明
 
-默认代理：`host.docker.internal:7899`，协议标识：`https`。
+VSifier 已从控制台应用转换为 **WinForms 桌面应用**，提供了友好的图形化界面来管理网络代理规则。
 
-## 功能说明
+## 主要功能
 
-- 使用 WinDivert 拦截 `ip and tcp`（出站+入站）。
-- 通过系统 TCP 连接表（`GetExtendedTcpTable`）将连接五元组映射到进程 PID。
-- 仅对目标进程的数据包改写目标 IP/端口到代理。
-- 维护会话映射并对入站回包做反向改写（将代理源地址还原为原始目标），保证 TCP 会话可用。
-- 改写后自动重算 IP/TCP 校验和。
+### 1. **图形化配置界面**
+- 代理设置：支持设置代理主机、端口和协议（SOCKS4/SOCKS5/HTTP）
+- 进程管理：
+  - 添加/移除要拦截的进程名称
+  - 支持通配符 (如 `msbuild*.exe`)
+  - 添加/移除特定的进程 PID
+- JSON 配置文件支持：自动加载和保存配置
 
-## 前置要求
+### 2. **系统托盘集成**
+- 最小化到系统托盘
+- 托盘图标快速访问
+- 右键菜单：显示/隐藏、退出
 
-1. Windows 系统。
-2. 以管理员权限运行。
-3. 准备 WinDivert 二进制文件（与程序位数一致）：
-	- `WinDivert.dll`
-	- `WinDivert64.sys`（或对应架构驱动）
+### 3. **实时日志视图**
+- 彩色日志显示
+- 实时统计信息
+- 可清空日志
 
-> 建议将上述文件放在可执行程序同目录，或加入系统可搜索路径。
+### 4. **JSON 配置文件格式**
 
-## 构建
+配置文件位置：`%AppData%\VSifier\config.json`
 
-```powershell
+```json
+{
+  "proxy": {
+    "host": "host.docker.internal",
+    "port": 7890,
+    "scheme": "socks5"
+  },
+  "targeting": {
+    "processNames": [
+      "devenv.exe",
+      "msbuild*.exe",
+      "vstest*.exe"
+    ],
+    "extraPids": [1234, 5678]
+  }
+}
+```
+
+## 项目结构
+
+### 核心文件
+
+| 文件 | 描述 |
+|------|------|
+| `ProgramEntry.cs` | 应用入口点，包含 Main 方法和管理员检查 |
+| `MainForm.cs` | 主 WinForms 窗体，包含所有 UI 控件 |
+| `ProxyEngine.cs` | 代理引擎核心，处理数据包转发 |
+| `ProxyConfig.cs` | JSON 配置管理 |
+| `TcpRelayServer.cs` | TCP 中继服务器 |
+| `NetworkClasses.cs` | 网络处理核心类（WinDivert、数据包检查等） |
+| `UtilityClasses.cs` | 工具类（进程匹配、本地流量绕过等） |
+
+### WinDivert 依赖
+
+- `WinDivert.dll`：Windows 网络数据包拦截库
+- `WinDivert64.sys`：系统驱动程序
+
+## 使用方法
+
+### 基本流程
+
+1. **以管理员身份运行** - 应用需要管理员权限
+2. **配置代理设置**：
+   - 填入代理服务器地址和端口
+   - 选择代理协议
+3. **配置目标进程**：
+   - 添加要拦截流量的进程名称
+   - 或添加具体的进程 PID
+4. **保存配置**：点击"Save Config"保存到 JSON 文件
+5. **启动代理**：点击"Start Proxy"开始拦截
+
+### UI 界面
+
+#### Configuration 标签页
+- 代理设置表单
+- 进程名称列表（支持通配符）
+- 额外 PID 列表
+- 保存/加载配置按钮
+
+#### Logs 标签页
+- 实时日志显示
+- 清除日志按钮
+
+#### 状态栏
+- 当前运行状态
+- 实时统计信息（重定向数、代理成功/失败数）
+
+## 配置说明
+
+### 代理协议支持
+
+- **SOCKS4**：基础 SOCKS 协议
+- **SOCKS5**：支持更多功能的 SOCKS 协议
+- **HTTP**：HTTP CONNECT 隧道
+
+### 进程名称格式
+
+- 完整名称：`devenv.exe`
+- 通配符：`msbuild*.exe` 匹配所有 msbuild 相关程序
+- 自动补全：输入 `devenv` 会自动转换为 `devenv.exe`
+
+### 本地流量自动绕过
+
+以下本地流量会自动绕过代理：
+- 127.0.0.0/8 (本地回环)
+- 10.0.0.0/8 (私有网络)
+- 172.16.0.0/12 (私有网络)
+- 192.168.0.0/16 (私有网络)
+- 169.254.0.0/16 (链接本地)
+- 本机名称
+- localhost
+
+## 技术架构
+
+### 分层设计
+
+```
+┌─────────────────────────────────┐
+│     WinForms UI (MainForm)      │  用户界面
+├─────────────────────────────────┤
+│     ProxyEngine (ProxyEngine)   │  业务逻辑
+├─────────────────────────────────┤
+│  Network Stack & WinDivert      │  低层网络
+└─────────────────────────────────┘
+```
+
+### 关键组件
+
+1. **ProxyEngine**：
+   - 管理 WinDivert 会话
+   - 处理数据包拦截和重定向
+   - 发送事件给 UI 更新
+
+2. **TcpRelayServer**：
+   - 接收被重定向的连接
+   - 与上游代理进行握手
+   - 双向数据转发
+
+3. **ProxyConfigManager**：
+   - JSON 配置的序列化/反序列化
+   - 自动创建配置目录
+
+4. **ProcessAllowListMatcher**：
+   - 进程白名单管理
+   - 支持通配符模式匹配
+   - 缓存活跃进程列表
+
+## 异步设计
+
+- 所有网络操作都是异步的
+- UI 操作在主线程执行
+- 支持 CancellationToken 优雅关闭
+
+## 安全性注意
+
+1. **管理员权限**：必须以管理员身份运行
+2. **配置文件保护**：存储在用户 AppData 目录
+3. **错误处理**：捕获并记录所有异常
+4. **资源清理**：使用 IDisposable 模式确保资源释放
+
+## 故障排除
+
+### 启动失败
+
+- 检查是否以管理员身份运行
+- 检查 WinDivert.dll 和 WinDivert64.sys 是否存在
+- 查看日志信息获取详细错误
+
+### 代理不生效
+
+- 确认目标进程名称正确
+- 检查代理服务器是否可访问
+- 查看日志中是否有"skip"消息
+
+### 配置文件丢失
+
+- 文件位置：`%AppData%\VSifier\config.json`
+- 删除配置文件后重启会使用默认值
+
+## 构建和编译
+
+### 系统要求
+- Windows 7 或更新版本
+- .NET 8.0 或更新版本
+- Visual Studio 2022 或更新版本（开发用）
+
+### 编译命令
+```bash
 dotnet build
+dotnet publish -c Release
 ```
 
-## 运行
+## 许可证
 
-使用默认配置直接运行（已内置常见进程白名单）：
+按照原项目许可证
 
-```powershell
-dotnet run --
-```
+## 贡献指南
 
-按 PID 指定：
-
-```powershell
-dotnet run -- --pid 1234 --proxy host.docker.internal:7899 --proxy-scheme https
-```
-
-按进程名指定：
-
-```powershell
-dotnet run -- --process devenv.exe --proxy host.docker.internal:7899 --proxy-scheme https
-```
-
-按进程名列表覆盖默认白名单：
-
-```powershell
-dotnet run -- --process-list "devenv.exe;msbuild.exe;onedrive.exe" --proxy host.docker.internal:7899
-```
-
-## 参数
-
-- `--pid <数字>`：目标进程 PID。
-- `--process <进程名>`：目标进程名（不区分是否带 `.exe` 后缀）。
-- `--process-list "a.exe;b.exe"`：用分号分隔进程名，覆盖默认白名单。
-- `--proxy <HOST:PORT>`：代理地址，支持主机名，例如 `host.docker.internal:7899`。
-- `--proxy-scheme <http|https>`：代理协议标识（默认 `https`）。
-
-## 默认进程白名单
-
-- `devenv.exe`
-- `blend.exe`
-- `servicehub.host.netfx.x64.exe`
-- `servicehub.intellicodemodelservice.exe`
-- `servicehub.datawarehousehost.exe`
-- `copilot-language-server.exe`
-- `onedrive.exe`
-- `perfwatson2.exe`
-- `servicehub.roslyncodeanalysisservice.exe`
-- `devhub.exe`
-- `servicehub.host.extensibility.x64.exe`
-- `servicehub.roslyncodeanalysisservices.exe`
-- `servicehub.identityhost.exe`
-- `servicehub.host.netfx.x86.exe`
-- `msbuild.exe`
-- `msbuildtaskhost.exe`
-- `m365copilot.exe`
-- `m365copilot_autostarter.exe`
-- `m365copilot_widget.exe`
-- `webviewhost.exe`
-
-## 注意事项
-
-1. 当前实现只处理 **IPv4 + TCP**，不含 UDP/IPv6。
-2. 这是“强制改写目标地址”方案，代理端需能接收这类转发流量（通常用于透明代理/TUN 网关场景）。`https` 在此处是代理协议配置标识，不会把普通 TCP 数据自动转换为 HTTP CONNECT；请使用代理软件的透明转发端口（redir/tproxy），不要直接用显式 HTTP/HTTPS 代理端口。
-3. 如需保留原目标信息给代理端，通常需要额外协议或配套透明代理方案。
-4. 本地网络流量会被自动忽略（不重定向），规则：`localhost; 127.0.0.1; %ComputerName%; ::1; 10.*.*.*; 172.16-31.*.*`。
-
-## 观测输出
-
-程序在命中白名单进程时会输出日志，包含：源进程、PID、原始目标地址、重定向目标地址。例如：
-
-```text
-[15:21:06.318] process=devenv.exe(10432) target=13.107.42.14:443 redirect=192.168.65.254:7899
-```
-
-统计日志会包含：
-
-- `out`：出站 TCP 包数量
-- `in`：入站 TCP 包数量
-- `redirected`：已改写到代理的出站包数量
-- `inRewrite`：已反向改写的入站回包数量（这个值持续增长通常表示链路已打通）
-
-## 主要代码文件
-
-✓ ProgramEntry.cs       - 应用入口点（STAThread Main）
-✓ MainForm.cs           - 主 WinForms 窗体（800×600）
-✓ ProxyEngine.cs        - 代理引擎核心
-✓ ProxyConfig.cs        - JSON 配置管理
-✓ TcpRelayServer.cs     - TCP 中继服务器
-✓ NetworkClasses.cs     - 网络底层类（WinDivert、数据包解析等)
-✓ UtilityClasses.cs     - 工具类（进程匹配、流量绕过等）
-✓ VSifier.csproj        - 更新为 WinForms 项目
+欢迎提交 Issue 和 Pull Request！
