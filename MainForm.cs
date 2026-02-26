@@ -470,7 +470,7 @@ internal class MainForm : Form
 	private async void BtnStartStop_Click(object? sender, EventArgs e)
 	{
 		if (_isStarting) return;
-		_isStarting = true;
+	
 		_btnStartStop!.Enabled = false;
 
 		try
@@ -479,12 +479,15 @@ internal class MainForm : Form
 			{
 				_btnStartStop.Text = "Starting...";
 				await StartProxyAsync();
-			}
+                _isStarting = true;
+            }
 			else
 			{
 				_btnStartStop.Text = "Stopping...";
 				await StopProxyAsync();
-			}
+                _isStarting=false;
+
+            }
 		}
 		catch (Exception ex)
 		{
@@ -494,7 +497,8 @@ internal class MainForm : Form
 			_lblStatus!.Text = "Status: Stopped";
 			_engine?.Dispose();
 			_engine = null;
-		}
+            _isStarting = false;
+        }
 		finally
 		{
 			_btnStartStop!.Enabled = true;
