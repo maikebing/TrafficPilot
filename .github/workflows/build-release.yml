@@ -91,9 +91,9 @@ jobs:
           See the commit log for detailed changes.
           
           ## Installation
-          1. Download the `TrafficPilot-$version.zip` file below
+          1. Download the ``TrafficPilot-$version.zip`` file below
           2. Extract it to your preferred location
-          3. Run `TrafficPilot.exe`
+          3. Run ``TrafficPilot.exe``
           
           ## Requirements
           - Windows 10 or later
