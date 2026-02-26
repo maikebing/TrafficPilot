@@ -79,5 +79,25 @@ namespace TrafficPilot.Properties {
                 return ((System.Drawing.Bitmap)(obj));
             }
         }
+        
+        /// <summary>
+        ///   查找 System.Byte[] 类型的本地化资源。
+        /// </summary>
+        internal static byte[] WinDivert {
+            get {
+                object obj = ResourceManager.GetObject("WinDivert", resourceCulture);
+                return ((byte[])(obj));
+            }
+        }
+        
+        /// <summary>
+        ///   查找 System.Byte[] 类型的本地化资源。
+        /// </summary>
+        internal static byte[] WinDivertSys {
+            get {
+                object obj = ResourceManager.GetObject("WinDivertSys", resourceCulture);
+                return ((byte[])(obj));
+            }
+        }
     }
 }
