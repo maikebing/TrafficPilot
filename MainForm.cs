@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.Reflection;
 using TrafficPilot.Properties;
 
 namespace TrafficPilot;
@@ -25,6 +26,7 @@ internal partial class MainForm : Form
 		InitializeComponent();
 		InitializeNotifyIcon();
 		LoadApplicationIcon();
+		LoadVersionLabel();
 		CenterToScreen();
 		LoadConfigToUI();
 	}
@@ -33,6 +35,13 @@ internal partial class MainForm : Form
 	{
 		_notifyIcon!.Icon = Resources.favicon;
 		Icon = Resources.favicon;
+	}
+
+	private void LoadVersionLabel()
+	{
+		var version = Assembly.GetEntryAssembly()?.GetName().Version?.ToString() ?? "Unknown";
+		versionLabel.Text = $"Version: {version}";
+		Text = $"TrafficPilot {version}";
 	}
 
 	private void InitializeNotifyIcon()
@@ -48,7 +57,7 @@ internal partial class MainForm : Form
 
 		_notifyIcon = new NotifyIcon
 		{
-			Text = "TrafficPilot - Proxy Manager",
+			Text = "TrafficPilot",
 			ContextMenuStrip = _contextMenu,
 			Visible = true
 		};

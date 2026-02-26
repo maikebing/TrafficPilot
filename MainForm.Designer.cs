@@ -657,9 +657,9 @@ partial class MainForm
         titleLabel.Location = new Point(10, 10);
         titleLabel.Margin = new Padding(0, 0, 0, 10);
         titleLabel.Name = "titleLabel";
-        titleLabel.Size = new Size(306, 30);
+        titleLabel.Size = new Size(126, 30);
         titleLabel.TabIndex = 0;
-        titleLabel.Text = "TrafficPilot - Proxy Manager";
+        titleLabel.Text = "TrafficPilot";
         // 
         // versionLabel
         // 
@@ -802,7 +802,7 @@ partial class MainForm
         MinimumSize = new Size(600, 400);
         Name = "MainForm";
         StartPosition = FormStartPosition.CenterScreen;
-        Text = "TrafficPilot - Proxy Manager";
+        Text = "TrafficPilot";
         _mainPanel.ResumeLayout(false);
         _tabControl.ResumeLayout(false);
         _configTab.ResumeLayout(false);
