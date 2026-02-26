@@ -232,9 +232,9 @@ partial class MainForm
         _configPanel.RowStyles.Add(new RowStyle());
         _configPanel.RowStyles.Add(new RowStyle());
         _configPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 25F));
-        _configPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 30F));
+        _configPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 44F));
         _configPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 25F));
-        _configPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 30F));
+        _configPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 42F));
         _configPanel.RowStyles.Add(new RowStyle());
         _configPanel.RowStyles.Add(new RowStyle());
         _configPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 20F));
@@ -328,7 +328,7 @@ partial class MainForm
         _procPanel.Name = "_procPanel";
         _procPanel.RowCount = 1;
         _procPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 20F));
-        _procPanel.Size = new Size(589, 72);
+        _procPanel.Size = new Size(589, 63);
         _procPanel.TabIndex = 7;
         // 
         // _lstProcesses
@@ -336,7 +336,7 @@ partial class MainForm
         _lstProcesses.Dock = DockStyle.Fill;
         _lstProcesses.Location = new Point(3, 3);
         _lstProcesses.Name = "_lstProcesses";
-        _lstProcesses.Size = new Size(513, 66);
+        _lstProcesses.Size = new Size(513, 57);
         _lstProcesses.TabIndex = 0;
         // 
         // _btnRemoveProcess
@@ -345,7 +345,7 @@ partial class MainForm
         _btnRemoveProcess.Location = new Point(521, 2);
         _btnRemoveProcess.Margin = new Padding(2);
         _btnRemoveProcess.Name = "_btnRemoveProcess";
-        _btnRemoveProcess.Size = new Size(66, 68);
+        _btnRemoveProcess.Size = new Size(66, 59);
         _btnRemoveProcess.TabIndex = 1;
         _btnRemoveProcess.Text = "Remove";
         _btnRemoveProcess.Click += BtnRemoveProcess_Click;
@@ -353,7 +353,7 @@ partial class MainForm
         // _lblAddProcess
         // 
         _lblAddProcess.Anchor = AnchorStyles.Left | AnchorStyles.Right;
-        _lblAddProcess.Location = new Point(13, 196);
+        _lblAddProcess.Location = new Point(13, 194);
         _lblAddProcess.Name = "_lblAddProcess";
         _lblAddProcess.Size = new Size(144, 23);
         _lblAddProcess.TabIndex = 8;
@@ -368,12 +368,12 @@ partial class MainForm
         _addProcPanel.Controls.Add(_txtNewProcess, 0, 0);
         _addProcPanel.Controls.Add(_btnAddProcess, 1, 0);
         _addProcPanel.Dock = DockStyle.Fill;
-        _addProcPanel.Location = new Point(165, 198);
+        _addProcPanel.Location = new Point(165, 189);
         _addProcPanel.Margin = new Padding(5);
         _addProcPanel.Name = "_addProcPanel";
         _addProcPanel.RowCount = 1;
         _addProcPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 20F));
-        _addProcPanel.Size = new Size(589, 20);
+        _addProcPanel.Size = new Size(589, 34);
         _addProcPanel.TabIndex = 9;
         // 
         // _txtNewProcess
@@ -390,7 +390,7 @@ partial class MainForm
         _btnAddProcess.Location = new Point(521, 2);
         _btnAddProcess.Margin = new Padding(2);
         _btnAddProcess.Name = "_btnAddProcess";
-        _btnAddProcess.Size = new Size(66, 16);
+        _btnAddProcess.Size = new Size(66, 30);
         _btnAddProcess.TabIndex = 1;
         _btnAddProcess.Text = "Add";
         _btnAddProcess.Click += BtnAddProcess_Click;
@@ -398,7 +398,7 @@ partial class MainForm
         // _lblExtraPids
         // 
         _lblExtraPids.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
-        _lblExtraPids.Location = new Point(13, 223);
+        _lblExtraPids.Location = new Point(13, 228);
         _lblExtraPids.Name = "_lblExtraPids";
         _lblExtraPids.Size = new Size(144, 23);
         _lblExtraPids.TabIndex = 10;
@@ -413,12 +413,12 @@ partial class MainForm
         _pidPanel.Controls.Add(_lstExtraPids, 0, 0);
         _pidPanel.Controls.Add(_btnRemovePid, 1, 0);
         _pidPanel.Dock = DockStyle.Fill;
-        _pidPanel.Location = new Point(165, 228);
+        _pidPanel.Location = new Point(165, 233);
         _pidPanel.Margin = new Padding(5);
         _pidPanel.Name = "_pidPanel";
         _pidPanel.RowCount = 1;
         _pidPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 20F));
-        _pidPanel.Size = new Size(589, 72);
+        _pidPanel.Size = new Size(589, 63);
         _pidPanel.TabIndex = 11;
         // 
         // _lstExtraPids
@@ -426,7 +426,7 @@ partial class MainForm
         _lstExtraPids.Dock = DockStyle.Fill;
         _lstExtraPids.Location = new Point(3, 3);
         _lstExtraPids.Name = "_lstExtraPids";
-        _lstExtraPids.Size = new Size(513, 66);
+        _lstExtraPids.Size = new Size(513, 57);
         _lstExtraPids.TabIndex = 0;
         // 
         // _btnRemovePid
@@ -435,7 +435,7 @@ partial class MainForm
         _btnRemovePid.Location = new Point(521, 2);
         _btnRemovePid.Margin = new Padding(2);
         _btnRemovePid.Name = "_btnRemovePid";
-        _btnRemovePid.Size = new Size(66, 68);
+        _btnRemovePid.Size = new Size(66, 59);
         _btnRemovePid.TabIndex = 1;
         _btnRemovePid.Text = "Remove";
         _btnRemovePid.Click += BtnRemovePid_Click;
@@ -443,7 +443,7 @@ partial class MainForm
         // _lblAddPid
         // 
         _lblAddPid.Anchor = AnchorStyles.Left | AnchorStyles.Right;
-        _lblAddPid.Location = new Point(13, 308);
+        _lblAddPid.Location = new Point(13, 310);
         _lblAddPid.Name = "_lblAddPid";
         _lblAddPid.Size = new Size(144, 23);
         _lblAddPid.TabIndex = 12;
@@ -458,12 +458,12 @@ partial class MainForm
         _addPidPanel.Controls.Add(_txtNewPid, 0, 0);
         _addPidPanel.Controls.Add(_btnAddPid, 1, 0);
         _addPidPanel.Dock = DockStyle.Fill;
-        _addPidPanel.Location = new Point(165, 310);
+        _addPidPanel.Location = new Point(165, 306);
         _addPidPanel.Margin = new Padding(5);
         _addPidPanel.Name = "_addPidPanel";
         _addPidPanel.RowCount = 1;
         _addPidPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 20F));
-        _addPidPanel.Size = new Size(589, 20);
+        _addPidPanel.Size = new Size(589, 32);
         _addPidPanel.TabIndex = 13;
         // 
         // _txtNewPid
@@ -480,7 +480,7 @@ partial class MainForm
         _btnAddPid.Location = new Point(521, 2);
         _btnAddPid.Margin = new Padding(2);
         _btnAddPid.Name = "_btnAddPid";
-        _btnAddPid.Size = new Size(66, 16);
+        _btnAddPid.Size = new Size(66, 28);
         _btnAddPid.TabIndex = 1;
         _btnAddPid.Text = "Add";
         _btnAddPid.Click += BtnAddPid_Click;
@@ -488,7 +488,7 @@ partial class MainForm
         // _lblConfigFile
         // 
         _lblConfigFile.Anchor = AnchorStyles.Left | AnchorStyles.Right;
-        _lblConfigFile.Location = new Point(13, 340);
+        _lblConfigFile.Location = new Point(13, 348);
         _lblConfigFile.Name = "_lblConfigFile";
         _lblConfigFile.Size = new Size(144, 23);
         _lblConfigFile.TabIndex = 14;
@@ -499,7 +499,7 @@ partial class MainForm
         // 
         _lblConfigFileValue.AutoEllipsis = true;
         _lblConfigFileValue.Dock = DockStyle.Fill;
-        _lblConfigFileValue.Location = new Point(165, 340);
+        _lblConfigFileValue.Location = new Point(165, 348);
         _lblConfigFileValue.Margin = new Padding(5);
         _lblConfigFileValue.Name = "_lblConfigFileValue";
         _lblConfigFileValue.Size = new Size(589, 23);
@@ -513,7 +513,7 @@ partial class MainForm
         _configBtnPanel.Controls.Add(_btnLoadConfig);
         _configBtnPanel.Dock = DockStyle.Top;
         _configBtnPanel.FlowDirection = FlowDirection.RightToLeft;
-        _configBtnPanel.Location = new Point(165, 373);
+        _configBtnPanel.Location = new Point(165, 381);
         _configBtnPanel.Margin = new Padding(5);
         _configBtnPanel.Name = "_configBtnPanel";
         _configBtnPanel.Size = new Size(589, 34);
