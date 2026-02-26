@@ -8,6 +8,9 @@ on:
       - 'v*'
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 env:
   DOTNET_VERSION: '10.0.x'
   PROJECT_NAME: 'TrafficPilot'
@@ -88,9 +91,9 @@ jobs:
           See the commit log for detailed changes.
           
           ## Installation
-          1. Download the \`TrafficPilot-$version.zip\` file below
+          1. Download the `TrafficPilot-$version.zip` file below
           2. Extract it to your preferred location
-          3. Run \`TrafficPilot.exe\`
+          3. Run `TrafficPilot.exe`
           
           ## Requirements
           - Windows 10 or later
@@ -110,7 +113,7 @@ jobs:
       
       - name: Upload Release
         if: steps.version.outputs.IS_RELEASE == 'true'
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           files: |
             TrafficPilot-*.zip
@@ -119,8 +122,6 @@ jobs:
           draft: false
           prerelease: false
           generate_release_notes: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       
       - name: Upload build artifacts (master)
         if: github.ref == 'refs/heads/master' && steps.version.outputs.IS_RELEASE == 'false'
