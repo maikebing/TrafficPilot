@@ -6,8 +6,8 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <UseWindowsForms>true</UseWindowsForms>
-    <ApplicationIcon>Resources\favicon.ico</ApplicationIcon>
-    <ApplicationManifest>Properties\app.manifest</ApplicationManifest>
+	  <ApplicationIcon>Resources\favicon.ico</ApplicationIcon>
+	  <ApplicationManifest>Properties\app.manifest</ApplicationManifest>
   </PropertyGroup>
 
 
