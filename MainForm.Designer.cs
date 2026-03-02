@@ -16,6 +16,7 @@ partial class MainForm
 	private TabControl? _tabControl;
 	private TabPage? _configTab;
 	private TabPage? _logsTab;
+	private TabPage? _hostsRedirectTab;
 	private TabPage? _aboutTab;
 
 	// Tray
@@ -76,6 +77,15 @@ partial class MainForm
 	private FlowLayoutPanel? _btnClearPanel;
 	private Button? _btnClearLogs;
 
+	// Hosts Redirect tab
+	private TableLayoutPanel? _hostsRedirectPanel;
+	private CheckBox? _chkHostsRedirectEnabled;
+	private Label? _lblHostsUrl;
+	private TextBox? _txtHostsUrl;
+	private FlowLayoutPanel? _hostsRedirectBtnPanel;
+	private Button? _btnRefreshHosts;
+	private Label? _lblHostsStatus;
+
 	// About tab
 	private Panel? _aboutScrollPanel;
 	private TableLayoutPanel? _aboutContentPanel;
@@ -124,6 +134,14 @@ partial class MainForm
         _rtbLogs = new RichTextBox();
         _btnClearPanel = new FlowLayoutPanel();
         _btnClearLogs = new Button();
+        _hostsRedirectTab = new TabPage();
+        _hostsRedirectPanel = new TableLayoutPanel();
+        _chkHostsRedirectEnabled = new CheckBox();
+        _lblHostsUrl = new Label();
+        _txtHostsUrl = new TextBox();
+        _hostsRedirectBtnPanel = new FlowLayoutPanel();
+        _btnRefreshHosts = new Button();
+        _lblHostsStatus = new Label();
         _aboutTab = new TabPage();
         _aboutScrollPanel = new Panel();
         _aboutContentPanel = new TableLayoutPanel();
@@ -153,6 +171,9 @@ partial class MainForm
         _logsTab.SuspendLayout();
         _logPanel.SuspendLayout();
         _btnClearPanel.SuspendLayout();
+        _hostsRedirectTab.SuspendLayout();
+        _hostsRedirectPanel.SuspendLayout();
+        _hostsRedirectBtnPanel.SuspendLayout();
         _aboutTab.SuspendLayout();
         _aboutScrollPanel.SuspendLayout();
         _aboutContentPanel.SuspendLayout();
@@ -183,6 +204,7 @@ partial class MainForm
         // 
         _tabControl.Controls.Add(_configTab);
         _tabControl.Controls.Add(_logsTab);
+        _tabControl.Controls.Add(_hostsRedirectTab);
         _tabControl.Controls.Add(_aboutTab);
         _tabControl.Dock = DockStyle.Fill;
         _tabControl.Location = new Point(5, 5);
@@ -598,13 +620,107 @@ partial class MainForm
         _btnClearLogs.Text = "Clear Logs";
         _btnClearLogs.Click += BtnClearLogs_Click;
         // 
+        // _hostsRedirectTab
+        // 
+        _hostsRedirectTab.Controls.Add(_hostsRedirectPanel);
+        _hostsRedirectTab.Location = new Point(4, 26);
+        _hostsRedirectTab.Name = "_hostsRedirectTab";
+        _hostsRedirectTab.Size = new Size(769, 530);
+        _hostsRedirectTab.TabIndex = 3;
+        _hostsRedirectTab.Text = "Hosts Redirect";
+        // 
+        // _hostsRedirectPanel
+        // 
+        _hostsRedirectPanel.ColumnCount = 2;
+        _hostsRedirectPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 150F));
+        _hostsRedirectPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+        _hostsRedirectPanel.Controls.Add(_chkHostsRedirectEnabled, 0, 0);
+        _hostsRedirectPanel.Controls.Add(_lblHostsUrl, 0, 1);
+        _hostsRedirectPanel.Controls.Add(_txtHostsUrl, 1, 1);
+        _hostsRedirectPanel.Controls.Add(_hostsRedirectBtnPanel, 1, 2);
+        _hostsRedirectPanel.Controls.Add(_lblHostsStatus, 0, 3);
+        _hostsRedirectPanel.SetColumnSpan(_chkHostsRedirectEnabled, 2);
+        _hostsRedirectPanel.SetColumnSpan(_lblHostsStatus, 2);
+        _hostsRedirectPanel.Dock = DockStyle.Fill;
+        _hostsRedirectPanel.Location = new Point(0, 0);
+        _hostsRedirectPanel.Name = "_hostsRedirectPanel";
+        _hostsRedirectPanel.Padding = new Padding(10);
+        _hostsRedirectPanel.RowCount = 5;
+        _hostsRedirectPanel.RowStyles.Add(new RowStyle());
+        _hostsRedirectPanel.RowStyles.Add(new RowStyle());
+        _hostsRedirectPanel.RowStyles.Add(new RowStyle());
+        _hostsRedirectPanel.RowStyles.Add(new RowStyle());
+        _hostsRedirectPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
+        _hostsRedirectPanel.Size = new Size(769, 530);
+        _hostsRedirectPanel.TabIndex = 0;
+        // 
+        // _chkHostsRedirectEnabled
+        // 
+        _chkHostsRedirectEnabled.AutoSize = true;
+        _chkHostsRedirectEnabled.Location = new Point(13, 13);
+        _chkHostsRedirectEnabled.Margin = new Padding(3, 3, 3, 10);
+        _chkHostsRedirectEnabled.Name = "_chkHostsRedirectEnabled";
+        _chkHostsRedirectEnabled.Size = new Size(300, 21);
+        _chkHostsRedirectEnabled.TabIndex = 0;
+        _chkHostsRedirectEnabled.Text = "Enable GitHub520 Hosts Redirect (DNS interception)";
+        // 
+        // _lblHostsUrl
+        // 
+        _lblHostsUrl.Anchor = AnchorStyles.Left | AnchorStyles.Right;
+        _lblHostsUrl.Location = new Point(13, 52);
+        _lblHostsUrl.Name = "_lblHostsUrl";
+        _lblHostsUrl.Size = new Size(144, 23);
+        _lblHostsUrl.TabIndex = 1;
+        _lblHostsUrl.Text = "Hosts URL:";
+        _lblHostsUrl.TextAlign = ContentAlignment.MiddleRight;
+        // 
+        // _txtHostsUrl
+        // 
+        _txtHostsUrl.Dock = DockStyle.Fill;
+        _txtHostsUrl.Location = new Point(165, 52);
+        _txtHostsUrl.Margin = new Padding(5);
+        _txtHostsUrl.Name = "_txtHostsUrl";
+        _txtHostsUrl.Size = new Size(589, 23);
+        _txtHostsUrl.TabIndex = 2;
+        _txtHostsUrl.Text = "https://raw.githubusercontent.com/521xueweihan/GitHub520/refs/heads/main/hosts";
+        // 
+        // _hostsRedirectBtnPanel
+        // 
+        _hostsRedirectBtnPanel.AutoSize = true;
+        _hostsRedirectBtnPanel.Dock = DockStyle.Fill;
+        _hostsRedirectBtnPanel.Location = new Point(165, 85);
+        _hostsRedirectBtnPanel.Margin = new Padding(5);
+        _hostsRedirectBtnPanel.Name = "_hostsRedirectBtnPanel";
+        _hostsRedirectBtnPanel.Size = new Size(589, 36);
+        _hostsRedirectBtnPanel.TabIndex = 3;
+        _hostsRedirectBtnPanel.Controls.Add(_btnRefreshHosts);
+        // 
+        // _btnRefreshHosts
+        // 
+        _btnRefreshHosts.Location = new Point(3, 3);
+        _btnRefreshHosts.Name = "_btnRefreshHosts";
+        _btnRefreshHosts.Size = new Size(120, 30);
+        _btnRefreshHosts.TabIndex = 0;
+        _btnRefreshHosts.Text = "Refresh Hosts Now";
+        _btnRefreshHosts.Click += BtnRefreshHosts_Click;
+        // 
+        // _lblHostsStatus
+        // 
+        _lblHostsStatus.AutoSize = true;
+        _lblHostsStatus.Location = new Point(13, 131);
+        _lblHostsStatus.Margin = new Padding(3, 5, 3, 3);
+        _lblHostsStatus.Name = "_lblHostsStatus";
+        _lblHostsStatus.Size = new Size(200, 17);
+        _lblHostsStatus.TabIndex = 4;
+        _lblHostsStatus.Text = "Status: Not loaded";
+        // 
         // _aboutTab
         // 
         _aboutTab.Controls.Add(_aboutScrollPanel);
         _aboutTab.Location = new Point(4, 26);
         _aboutTab.Name = "_aboutTab";
         _aboutTab.Size = new Size(769, 530);
-        _aboutTab.TabIndex = 2;
+        _aboutTab.TabIndex = 4;
         _aboutTab.Text = "About";
         // 
         // _aboutScrollPanel
@@ -819,6 +935,10 @@ partial class MainForm
         _logsTab.ResumeLayout(false);
         _logPanel.ResumeLayout(false);
         _btnClearPanel.ResumeLayout(false);
+        _hostsRedirectTab.ResumeLayout(false);
+        _hostsRedirectPanel.ResumeLayout(false);
+        _hostsRedirectPanel.PerformLayout();
+        _hostsRedirectBtnPanel.ResumeLayout(false);
         _aboutTab.ResumeLayout(false);
         _aboutScrollPanel.ResumeLayout(false);
         _aboutScrollPanel.PerformLayout();

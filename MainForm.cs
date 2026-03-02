@@ -195,6 +195,11 @@ internal partial class MainForm : Form
 			{
 				ProcessNames = _lstProcesses!.Items.Cast<string>().ToList(),
 				ExtraPids = _lstExtraPids!.Items.Cast<int>().ToList()
+			},
+			HostsRedirect = new HostsRedirectSettings
+			{
+				Enabled = _chkHostsRedirectEnabled!.Checked,
+				HostsUrl = _txtHostsUrl!.Text.Trim()
 			}
 		};
 	}
@@ -206,7 +211,9 @@ internal partial class MainForm : Form
 			_lstProcesses!.Items.Cast<string>().ToList(),
 			_txtProxyHost!.Text,
 			(ushort)_numProxyPort!.Value,
-			_cmbProxyScheme!.SelectedItem?.ToString() ?? "socks4"
+			_cmbProxyScheme!.SelectedItem?.ToString() ?? "socks4",
+			_chkHostsRedirectEnabled!.Checked,
+			_txtHostsUrl!.Text.Trim()
 		);
 	}
 
@@ -224,6 +231,9 @@ internal partial class MainForm : Form
 		_lstExtraPids!.Items.Clear();
 		foreach (var pid in _currentConfig.Targeting?.ExtraPids ?? [])
 			_lstExtraPids.Items.Add(pid);
+
+		_chkHostsRedirectEnabled!.Checked = _currentConfig.HostsRedirect?.Enabled ?? false;
+		_txtHostsUrl!.Text = _currentConfig.HostsRedirect?.HostsUrl ?? GitHub520HostsProvider.DefaultUrl;
 	}
 
 	private void AppendLog(string message)
@@ -343,5 +353,25 @@ internal partial class MainForm : Form
 	private void BtnClearLogs_Click(object? sender, EventArgs e)
 	{
 		_rtbLogs?.Clear();
+	}
+
+	private async void BtnRefreshHosts_Click(object? sender, EventArgs e)
+	{
+		_btnRefreshHosts!.Enabled = false;
+		_lblHostsStatus!.Text = "Status: Downloading...";
+		try
+		{
+			using var provider = new GitHub520HostsProvider(_txtHostsUrl!.Text.Trim());
+			await provider.RefreshAsync();
+			_lblHostsStatus.Text = $"Status: Loaded {provider.HostCount} entries (last updated {provider.LastRefresh.ToLocalTime():HH:mm:ss})";
+		}
+		catch (Exception ex)
+		{
+			_lblHostsStatus.Text = $"Status: Error - {ex.Message}";
+		}
+		finally
+		{
+			_btnRefreshHosts.Enabled = true;
+		}
 	}
 }
