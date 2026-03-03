@@ -26,6 +26,9 @@ partial class MainForm
 	// Config tab - main panel
 	private TableLayoutPanel? _configPanel;
 
+	// Config tab - Proxy Enable
+	private CheckBox? _chkProxyEnabled;
+
 	// Config tab - Proxy Host
 	private Label? _lblProxyHost;
 	private TextBox? _txtProxyHost;
@@ -102,6 +105,7 @@ partial class MainForm
         _tabControl = new TabControl();
         _configTab = new TabPage();
         _configPanel = new TableLayoutPanel();
+        _chkProxyEnabled = new CheckBox();
         _lblProxyHost = new Label();
         _txtProxyHost = new TextBox();
         _lblProxyPort = new Label();
@@ -228,28 +232,31 @@ partial class MainForm
         _configPanel.ColumnCount = 2;
         _configPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 150F));
         _configPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-        _configPanel.Controls.Add(_lblProxyHost, 0, 0);
-        _configPanel.Controls.Add(_txtProxyHost, 1, 0);
-        _configPanel.Controls.Add(_lblProxyPort, 0, 1);
-        _configPanel.Controls.Add(_numProxyPort, 1, 1);
-        _configPanel.Controls.Add(_lblProxyScheme, 0, 2);
-        _configPanel.Controls.Add(_cmbProxyScheme, 1, 2);
-        _configPanel.Controls.Add(_lblProcesses, 0, 3);
-        _configPanel.Controls.Add(_procPanel, 1, 3);
-        _configPanel.Controls.Add(_lblAddProcess, 0, 4);
-        _configPanel.Controls.Add(_addProcPanel, 1, 4);
-        _configPanel.Controls.Add(_lblExtraPids, 0, 5);
-        _configPanel.Controls.Add(_pidPanel, 1, 5);
-        _configPanel.Controls.Add(_lblAddPid, 0, 6);
-        _configPanel.Controls.Add(_addPidPanel, 1, 6);
-        _configPanel.Controls.Add(_lblConfigFile, 0, 7);
-        _configPanel.Controls.Add(_lblConfigFileValue, 1, 7);
-        _configPanel.Controls.Add(_configBtnPanel, 1, 8);
+        _configPanel.Controls.Add(_chkProxyEnabled, 0, 0);
+        _configPanel.Controls.Add(_lblProxyHost, 0, 1);
+        _configPanel.Controls.Add(_txtProxyHost, 1, 1);
+        _configPanel.Controls.Add(_lblProxyPort, 0, 2);
+        _configPanel.Controls.Add(_numProxyPort, 1, 2);
+        _configPanel.Controls.Add(_lblProxyScheme, 0, 3);
+        _configPanel.Controls.Add(_cmbProxyScheme, 1, 3);
+        _configPanel.Controls.Add(_lblProcesses, 0, 4);
+        _configPanel.Controls.Add(_procPanel, 1, 4);
+        _configPanel.Controls.Add(_lblAddProcess, 0, 5);
+        _configPanel.Controls.Add(_addProcPanel, 1, 5);
+        _configPanel.Controls.Add(_lblExtraPids, 0, 6);
+        _configPanel.Controls.Add(_pidPanel, 1, 6);
+        _configPanel.Controls.Add(_lblAddPid, 0, 7);
+        _configPanel.Controls.Add(_addPidPanel, 1, 7);
+        _configPanel.Controls.Add(_lblConfigFile, 0, 8);
+        _configPanel.Controls.Add(_lblConfigFileValue, 1, 8);
+        _configPanel.Controls.Add(_configBtnPanel, 1, 9);
+        _configPanel.SetColumnSpan(_chkProxyEnabled, 2);
         _configPanel.Dock = DockStyle.Fill;
         _configPanel.Location = new Point(0, 0);
         _configPanel.Name = "_configPanel";
         _configPanel.Padding = new Padding(10);
-        _configPanel.RowCount = 12;
+        _configPanel.RowCount = 13;
+        _configPanel.RowStyles.Add(new RowStyle());
         _configPanel.RowStyles.Add(new RowStyle());
         _configPanel.RowStyles.Add(new RowStyle());
         _configPanel.RowStyles.Add(new RowStyle());
@@ -264,6 +271,18 @@ partial class MainForm
         _configPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 20F));
         _configPanel.Size = new Size(769, 530);
         _configPanel.TabIndex = 0;
+        // 
+        // _chkProxyEnabled
+        // 
+        _chkProxyEnabled.AutoSize = true;
+        _chkProxyEnabled.Checked = true;
+        _chkProxyEnabled.CheckState = CheckState.Checked;
+        _chkProxyEnabled.Location = new Point(13, 13);
+        _chkProxyEnabled.Margin = new Padding(3, 3, 3, 6);
+        _chkProxyEnabled.Name = "_chkProxyEnabled";
+        _chkProxyEnabled.Size = new Size(200, 21);
+        _chkProxyEnabled.TabIndex = 0;
+        _chkProxyEnabled.Text = "Enable Proxy (TCP traffic redirect)";
         // 
         // _lblProxyHost
         // 

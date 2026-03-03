@@ -38,20 +38,17 @@ internal sealed class ProxyEngine : IDisposable
 	public ProxyEngine(ProxyOptions options)
 	{
 		_options = options;
-		_proxyIp = ResolveProxyIpv4(_options.ProxyHost);
+		_proxyIp = options.ProxyEnabled
+			? ResolveProxyIpv4(_options.ProxyHost)
+			: IPAddress.Loopback;
 	}
 
 	public async Task StartAsync()
 	{
 		if (_isRunning) return;
-		if (_proxyIp.AddressFamily != AddressFamily.InterNetwork)
-			throw new InvalidOperationException("Only IPv4 proxy address is supported.");
 
-		_processMatcher = new ProcessAllowListMatcher(_options.ProcessNames, _options.ExtraPids, TimeSpan.FromSeconds(1));
-		bool hasProcessRules = _processMatcher.HasAnyRule;
-
-		if (!hasProcessRules && !_options.HostsRedirectEnabled)
-			throw new InvalidOperationException("No target process rule found and Hosts Redirect is disabled.");
+		if (!_options.ProxyEnabled && !_options.HostsRedirectEnabled)
+			throw new InvalidOperationException("Both proxy and hosts redirect are disabled.");
 
 		// Start DNS interceptor if hosts redirect is enabled
 		if (_options.HostsRedirectEnabled)
@@ -65,6 +62,20 @@ internal sealed class ProxyEngine : IDisposable
 			await _dnsInterceptor.StartAsync();
 			LogInfo($"DNS redirect started ({_hostsProvider.HostCount} hosts)");
 		}
+
+		if (!_options.ProxyEnabled)
+		{
+			// Hosts redirect only mode: no TCP relay or packet loop needed.
+			// _processMatcher remains null intentionally.
+			_isRunning = true;
+			return;
+		}
+
+		if (_proxyIp.AddressFamily != AddressFamily.InterNetwork)
+			throw new InvalidOperationException("Only IPv4 proxy address is supported.");
+
+		_processMatcher = new ProcessAllowListMatcher(_options.ProcessNames, _options.ExtraPids, TimeSpan.FromSeconds(1));
+		bool hasProcessRules = _processMatcher.HasAnyRule;
 
 		if (!hasProcessRules)
 		{

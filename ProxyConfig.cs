@@ -24,6 +24,7 @@ internal class ProxyConfigModel
 	{
 		Proxy = new ProxySettings
 		{
+			Enabled = opts.ProxyEnabled,
 			Host = opts.ProxyHost,
 			Port = opts.ProxyPort,
 			Scheme = opts.ProxyScheme
@@ -43,6 +44,9 @@ internal class ProxyConfigModel
 
 internal class ProxySettings
 {
+	[JsonPropertyName("enabled")]
+	public bool Enabled { get; set; } = true;
+
 	[JsonPropertyName("host")]
 	public string Host { get; set; } = "host.docker.internal";
 

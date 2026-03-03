@@ -76,6 +76,15 @@ internal partial class MainForm : Form
 		{
 			if (_engine == null || !_engine.IsRunning)
 			{
+				if (!_chkProxyEnabled!.Checked && !_chkHostsRedirectEnabled!.Checked)
+				{
+					MessageBox.Show(
+						"Neither Proxy nor Hosts Redirect is enabled. Please enable at least one before starting.",
+						"Nothing to Start",
+						MessageBoxButtons.OK,
+						MessageBoxIcon.Warning);
+					return;
+				}
 				_btnStartStop.Text = "Starting...";
 				await StartProxyAsync();
 				_isStarting = true;
@@ -187,6 +196,7 @@ internal partial class MainForm : Form
 		{
 			Proxy = new ProxySettings
 			{
+				Enabled = _chkProxyEnabled!.Checked,
 				Host = _txtProxyHost!.Text,
 				Port = (ushort)_numProxyPort!.Value,
 				Scheme = _cmbProxyScheme!.SelectedItem?.ToString() ?? "socks4"
@@ -212,6 +222,7 @@ internal partial class MainForm : Form
 			_txtProxyHost!.Text,
 			(ushort)_numProxyPort!.Value,
 			_cmbProxyScheme!.SelectedItem?.ToString() ?? "socks4",
+			_chkProxyEnabled!.Checked,
 			_chkHostsRedirectEnabled!.Checked,
 			_txtHostsUrl!.Text.Trim()
 		);
@@ -219,6 +230,7 @@ internal partial class MainForm : Form
 
 	private void LoadConfigToUI()
 	{
+		_chkProxyEnabled!.Checked = _currentConfig.Proxy?.Enabled ?? true;
 		_txtProxyHost!.Text = _currentConfig.Proxy?.Host ?? "";
 		_numProxyPort!.Value = _currentConfig.Proxy?.Port ?? 7890;
 		_cmbProxyScheme!.SelectedItem = _currentConfig.Proxy?.Scheme ?? "socks4";
