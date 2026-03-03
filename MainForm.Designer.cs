@@ -16,7 +16,7 @@ partial class MainForm
 	private TabControl? _tabControl;
 	private TabPage? _configTab;
 	private TabPage? _logsTab;
-	private TabPage? _hostsRedirectTab;
+	private TabPage? _dnsRedirectTab;
 	private TabPage? _aboutTab;
 
 	// Tray
@@ -81,8 +81,8 @@ partial class MainForm
 	private Button? _btnClearLogs;
 
 	// Hosts Redirect tab
-	private TableLayoutPanel? _hostsRedirectPanel;
-	private CheckBox? _chkHostsRedirectEnabled;
+	private TableLayoutPanel? _dnsRedirectPanel;
+	private CheckBox? _chkDNSRedirectEnabled;
 	private Label? _lblHostsUrl;
 	private TextBox? _txtHostsUrl;
 	private FlowLayoutPanel? _hostsRedirectBtnPanel;
@@ -138,9 +138,9 @@ partial class MainForm
         _rtbLogs = new RichTextBox();
         _btnClearPanel = new FlowLayoutPanel();
         _btnClearLogs = new Button();
-        _hostsRedirectTab = new TabPage();
-        _hostsRedirectPanel = new TableLayoutPanel();
-        _chkHostsRedirectEnabled = new CheckBox();
+        _dnsRedirectTab = new TabPage();
+        _dnsRedirectPanel = new TableLayoutPanel();
+        _chkDNSRedirectEnabled = new CheckBox();
         _lblHostsUrl = new Label();
         _txtHostsUrl = new TextBox();
         _hostsRedirectBtnPanel = new FlowLayoutPanel();
@@ -175,8 +175,8 @@ partial class MainForm
         _logsTab.SuspendLayout();
         _logPanel.SuspendLayout();
         _btnClearPanel.SuspendLayout();
-        _hostsRedirectTab.SuspendLayout();
-        _hostsRedirectPanel.SuspendLayout();
+        _dnsRedirectTab.SuspendLayout();
+        _dnsRedirectPanel.SuspendLayout();
         _hostsRedirectBtnPanel.SuspendLayout();
         _aboutTab.SuspendLayout();
         _aboutScrollPanel.SuspendLayout();
@@ -207,8 +207,8 @@ partial class MainForm
         // _tabControl
         // 
         _tabControl.Controls.Add(_configTab);
+        _tabControl.Controls.Add(_dnsRedirectTab);
         _tabControl.Controls.Add(_logsTab);
-        _tabControl.Controls.Add(_hostsRedirectTab);
         _tabControl.Controls.Add(_aboutTab);
         _tabControl.Dock = DockStyle.Fill;
         _tabControl.Location = new Point(5, 5);
@@ -250,7 +250,6 @@ partial class MainForm
         _configPanel.Controls.Add(_lblConfigFile, 0, 8);
         _configPanel.Controls.Add(_lblConfigFileValue, 1, 8);
         _configPanel.Controls.Add(_configBtnPanel, 1, 9);
-        _configPanel.SetColumnSpan(_chkProxyEnabled, 2);
         _configPanel.Dock = DockStyle.Fill;
         _configPanel.Location = new Point(0, 0);
         _configPanel.Name = "_configPanel";
@@ -277,17 +276,18 @@ partial class MainForm
         _chkProxyEnabled.AutoSize = true;
         _chkProxyEnabled.Checked = true;
         _chkProxyEnabled.CheckState = CheckState.Checked;
+        _configPanel.SetColumnSpan(_chkProxyEnabled, 2);
         _chkProxyEnabled.Location = new Point(13, 13);
         _chkProxyEnabled.Margin = new Padding(3, 3, 3, 6);
         _chkProxyEnabled.Name = "_chkProxyEnabled";
-        _chkProxyEnabled.Size = new Size(200, 21);
+        _chkProxyEnabled.Size = new Size(222, 21);
         _chkProxyEnabled.TabIndex = 0;
         _chkProxyEnabled.Text = "Enable Proxy (TCP traffic redirect)";
         // 
         // _lblProxyHost
         // 
         _lblProxyHost.Anchor = AnchorStyles.Left | AnchorStyles.Right;
-        _lblProxyHost.Location = new Point(13, 15);
+        _lblProxyHost.Location = new Point(13, 45);
         _lblProxyHost.Name = "_lblProxyHost";
         _lblProxyHost.Size = new Size(144, 23);
         _lblProxyHost.TabIndex = 0;
@@ -297,7 +297,7 @@ partial class MainForm
         // _txtProxyHost
         // 
         _txtProxyHost.Dock = DockStyle.Fill;
-        _txtProxyHost.Location = new Point(165, 15);
+        _txtProxyHost.Location = new Point(165, 45);
         _txtProxyHost.Margin = new Padding(5);
         _txtProxyHost.Name = "_txtProxyHost";
         _txtProxyHost.Size = new Size(589, 23);
@@ -307,7 +307,7 @@ partial class MainForm
         // _lblProxyPort
         // 
         _lblProxyPort.Anchor = AnchorStyles.Left | AnchorStyles.Right;
-        _lblProxyPort.Location = new Point(13, 48);
+        _lblProxyPort.Location = new Point(13, 78);
         _lblProxyPort.Name = "_lblProxyPort";
         _lblProxyPort.Size = new Size(144, 23);
         _lblProxyPort.TabIndex = 2;
@@ -317,7 +317,7 @@ partial class MainForm
         // _numProxyPort
         // 
         _numProxyPort.Dock = DockStyle.Fill;
-        _numProxyPort.Location = new Point(165, 48);
+        _numProxyPort.Location = new Point(165, 78);
         _numProxyPort.Margin = new Padding(5);
         _numProxyPort.Maximum = new decimal(new int[] { 65535, 0, 0, 0 });
         _numProxyPort.Name = "_numProxyPort";
@@ -328,7 +328,7 @@ partial class MainForm
         // _lblProxyScheme
         // 
         _lblProxyScheme.Anchor = AnchorStyles.Left | AnchorStyles.Right;
-        _lblProxyScheme.Location = new Point(13, 82);
+        _lblProxyScheme.Location = new Point(13, 112);
         _lblProxyScheme.Name = "_lblProxyScheme";
         _lblProxyScheme.Size = new Size(144, 23);
         _lblProxyScheme.TabIndex = 4;
@@ -340,7 +340,7 @@ partial class MainForm
         _cmbProxyScheme.Dock = DockStyle.Fill;
         _cmbProxyScheme.DropDownStyle = ComboBoxStyle.DropDownList;
         _cmbProxyScheme.Items.AddRange(new object[] { "socks4", "socks5", "http", "https" });
-        _cmbProxyScheme.Location = new Point(165, 81);
+        _cmbProxyScheme.Location = new Point(165, 111);
         _cmbProxyScheme.Margin = new Padding(5);
         _cmbProxyScheme.Name = "_cmbProxyScheme";
         _cmbProxyScheme.Size = new Size(589, 25);
@@ -349,7 +349,7 @@ partial class MainForm
         // _lblProcesses
         // 
         _lblProcesses.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
-        _lblProcesses.Location = new Point(13, 111);
+        _lblProcesses.Location = new Point(13, 141);
         _lblProcesses.Name = "_lblProcesses";
         _lblProcesses.Size = new Size(144, 23);
         _lblProcesses.TabIndex = 6;
@@ -364,12 +364,12 @@ partial class MainForm
         _procPanel.Controls.Add(_lstProcesses, 0, 0);
         _procPanel.Controls.Add(_btnRemoveProcess, 1, 0);
         _procPanel.Dock = DockStyle.Fill;
-        _procPanel.Location = new Point(165, 116);
+        _procPanel.Location = new Point(165, 146);
         _procPanel.Margin = new Padding(5);
         _procPanel.Name = "_procPanel";
         _procPanel.RowCount = 1;
         _procPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 20F));
-        _procPanel.Size = new Size(589, 63);
+        _procPanel.Size = new Size(589, 52);
         _procPanel.TabIndex = 7;
         // 
         // _lstProcesses
@@ -377,7 +377,7 @@ partial class MainForm
         _lstProcesses.Dock = DockStyle.Fill;
         _lstProcesses.Location = new Point(3, 3);
         _lstProcesses.Name = "_lstProcesses";
-        _lstProcesses.Size = new Size(513, 57);
+        _lstProcesses.Size = new Size(513, 46);
         _lstProcesses.TabIndex = 0;
         // 
         // _btnRemoveProcess
@@ -386,7 +386,7 @@ partial class MainForm
         _btnRemoveProcess.Location = new Point(521, 2);
         _btnRemoveProcess.Margin = new Padding(2);
         _btnRemoveProcess.Name = "_btnRemoveProcess";
-        _btnRemoveProcess.Size = new Size(66, 59);
+        _btnRemoveProcess.Size = new Size(66, 48);
         _btnRemoveProcess.TabIndex = 1;
         _btnRemoveProcess.Text = "Remove";
         _btnRemoveProcess.Click += BtnRemoveProcess_Click;
@@ -394,7 +394,7 @@ partial class MainForm
         // _lblAddProcess
         // 
         _lblAddProcess.Anchor = AnchorStyles.Left | AnchorStyles.Right;
-        _lblAddProcess.Location = new Point(13, 194);
+        _lblAddProcess.Location = new Point(13, 213);
         _lblAddProcess.Name = "_lblAddProcess";
         _lblAddProcess.Size = new Size(144, 23);
         _lblAddProcess.TabIndex = 8;
@@ -409,7 +409,7 @@ partial class MainForm
         _addProcPanel.Controls.Add(_txtNewProcess, 0, 0);
         _addProcPanel.Controls.Add(_btnAddProcess, 1, 0);
         _addProcPanel.Dock = DockStyle.Fill;
-        _addProcPanel.Location = new Point(165, 189);
+        _addProcPanel.Location = new Point(165, 208);
         _addProcPanel.Margin = new Padding(5);
         _addProcPanel.Name = "_addProcPanel";
         _addProcPanel.RowCount = 1;
@@ -439,7 +439,7 @@ partial class MainForm
         // _lblExtraPids
         // 
         _lblExtraPids.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
-        _lblExtraPids.Location = new Point(13, 228);
+        _lblExtraPids.Location = new Point(13, 247);
         _lblExtraPids.Name = "_lblExtraPids";
         _lblExtraPids.Size = new Size(144, 23);
         _lblExtraPids.TabIndex = 10;
@@ -454,12 +454,12 @@ partial class MainForm
         _pidPanel.Controls.Add(_lstExtraPids, 0, 0);
         _pidPanel.Controls.Add(_btnRemovePid, 1, 0);
         _pidPanel.Dock = DockStyle.Fill;
-        _pidPanel.Location = new Point(165, 233);
+        _pidPanel.Location = new Point(165, 252);
         _pidPanel.Margin = new Padding(5);
         _pidPanel.Name = "_pidPanel";
         _pidPanel.RowCount = 1;
         _pidPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 20F));
-        _pidPanel.Size = new Size(589, 63);
+        _pidPanel.Size = new Size(589, 52);
         _pidPanel.TabIndex = 11;
         // 
         // _lstExtraPids
@@ -467,7 +467,7 @@ partial class MainForm
         _lstExtraPids.Dock = DockStyle.Fill;
         _lstExtraPids.Location = new Point(3, 3);
         _lstExtraPids.Name = "_lstExtraPids";
-        _lstExtraPids.Size = new Size(513, 57);
+        _lstExtraPids.Size = new Size(513, 46);
         _lstExtraPids.TabIndex = 0;
         // 
         // _btnRemovePid
@@ -476,7 +476,7 @@ partial class MainForm
         _btnRemovePid.Location = new Point(521, 2);
         _btnRemovePid.Margin = new Padding(2);
         _btnRemovePid.Name = "_btnRemovePid";
-        _btnRemovePid.Size = new Size(66, 59);
+        _btnRemovePid.Size = new Size(66, 48);
         _btnRemovePid.TabIndex = 1;
         _btnRemovePid.Text = "Remove";
         _btnRemovePid.Click += BtnRemovePid_Click;
@@ -484,7 +484,7 @@ partial class MainForm
         // _lblAddPid
         // 
         _lblAddPid.Anchor = AnchorStyles.Left | AnchorStyles.Right;
-        _lblAddPid.Location = new Point(13, 310);
+        _lblAddPid.Location = new Point(13, 318);
         _lblAddPid.Name = "_lblAddPid";
         _lblAddPid.Size = new Size(144, 23);
         _lblAddPid.TabIndex = 12;
@@ -499,7 +499,7 @@ partial class MainForm
         _addPidPanel.Controls.Add(_txtNewPid, 0, 0);
         _addPidPanel.Controls.Add(_btnAddPid, 1, 0);
         _addPidPanel.Dock = DockStyle.Fill;
-        _addPidPanel.Location = new Point(165, 306);
+        _addPidPanel.Location = new Point(165, 314);
         _addPidPanel.Margin = new Padding(5);
         _addPidPanel.Name = "_addPidPanel";
         _addPidPanel.RowCount = 1;
@@ -529,7 +529,7 @@ partial class MainForm
         // _lblConfigFile
         // 
         _lblConfigFile.Anchor = AnchorStyles.Left | AnchorStyles.Right;
-        _lblConfigFile.Location = new Point(13, 348);
+        _lblConfigFile.Location = new Point(13, 356);
         _lblConfigFile.Name = "_lblConfigFile";
         _lblConfigFile.Size = new Size(144, 23);
         _lblConfigFile.TabIndex = 14;
@@ -540,7 +540,7 @@ partial class MainForm
         // 
         _lblConfigFileValue.AutoEllipsis = true;
         _lblConfigFileValue.Dock = DockStyle.Fill;
-        _lblConfigFileValue.Location = new Point(165, 348);
+        _lblConfigFileValue.Location = new Point(165, 356);
         _lblConfigFileValue.Margin = new Padding(5);
         _lblConfigFileValue.Name = "_lblConfigFileValue";
         _lblConfigFileValue.Size = new Size(589, 23);
@@ -554,7 +554,7 @@ partial class MainForm
         _configBtnPanel.Controls.Add(_btnLoadConfig);
         _configBtnPanel.Dock = DockStyle.Top;
         _configBtnPanel.FlowDirection = FlowDirection.RightToLeft;
-        _configBtnPanel.Location = new Point(165, 381);
+        _configBtnPanel.Location = new Point(165, 389);
         _configBtnPanel.Margin = new Padding(5);
         _configBtnPanel.Name = "_configBtnPanel";
         _configBtnPanel.Size = new Size(589, 34);
@@ -639,54 +639,53 @@ partial class MainForm
         _btnClearLogs.Text = "Clear Logs";
         _btnClearLogs.Click += BtnClearLogs_Click;
         // 
-        // _hostsRedirectTab
+        // _dnsRedirectTab
         // 
-        _hostsRedirectTab.Controls.Add(_hostsRedirectPanel);
-        _hostsRedirectTab.Location = new Point(4, 26);
-        _hostsRedirectTab.Name = "_hostsRedirectTab";
-        _hostsRedirectTab.Size = new Size(769, 530);
-        _hostsRedirectTab.TabIndex = 3;
-        _hostsRedirectTab.Text = "Hosts Redirect";
+        _dnsRedirectTab.Controls.Add(_dnsRedirectPanel);
+        _dnsRedirectTab.Location = new Point(4, 26);
+        _dnsRedirectTab.Name = "_dnsRedirectTab";
+        _dnsRedirectTab.Size = new Size(769, 530);
+        _dnsRedirectTab.TabIndex = 3;
+        _dnsRedirectTab.Text = "DNS Redirect";
         // 
-        // _hostsRedirectPanel
+        // _dnsRedirectPanel
         // 
-        _hostsRedirectPanel.ColumnCount = 2;
-        _hostsRedirectPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 150F));
-        _hostsRedirectPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-        _hostsRedirectPanel.Controls.Add(_chkHostsRedirectEnabled, 0, 0);
-        _hostsRedirectPanel.Controls.Add(_lblHostsUrl, 0, 1);
-        _hostsRedirectPanel.Controls.Add(_txtHostsUrl, 1, 1);
-        _hostsRedirectPanel.Controls.Add(_hostsRedirectBtnPanel, 1, 2);
-        _hostsRedirectPanel.Controls.Add(_lblHostsStatus, 0, 3);
-        _hostsRedirectPanel.SetColumnSpan(_chkHostsRedirectEnabled, 2);
-        _hostsRedirectPanel.SetColumnSpan(_lblHostsStatus, 2);
-        _hostsRedirectPanel.Dock = DockStyle.Fill;
-        _hostsRedirectPanel.Location = new Point(0, 0);
-        _hostsRedirectPanel.Name = "_hostsRedirectPanel";
-        _hostsRedirectPanel.Padding = new Padding(10);
-        _hostsRedirectPanel.RowCount = 5;
-        _hostsRedirectPanel.RowStyles.Add(new RowStyle());
-        _hostsRedirectPanel.RowStyles.Add(new RowStyle());
-        _hostsRedirectPanel.RowStyles.Add(new RowStyle());
-        _hostsRedirectPanel.RowStyles.Add(new RowStyle());
-        _hostsRedirectPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
-        _hostsRedirectPanel.Size = new Size(769, 530);
-        _hostsRedirectPanel.TabIndex = 0;
+        _dnsRedirectPanel.ColumnCount = 2;
+        _dnsRedirectPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 150F));
+        _dnsRedirectPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+        _dnsRedirectPanel.Controls.Add(_chkDNSRedirectEnabled, 0, 0);
+        _dnsRedirectPanel.Controls.Add(_lblHostsUrl, 0, 1);
+        _dnsRedirectPanel.Controls.Add(_txtHostsUrl, 1, 1);
+        _dnsRedirectPanel.Controls.Add(_hostsRedirectBtnPanel, 1, 2);
+        _dnsRedirectPanel.Controls.Add(_lblHostsStatus, 0, 3);
+        _dnsRedirectPanel.Dock = DockStyle.Fill;
+        _dnsRedirectPanel.Location = new Point(0, 0);
+        _dnsRedirectPanel.Name = "_dnsRedirectPanel";
+        _dnsRedirectPanel.Padding = new Padding(10);
+        _dnsRedirectPanel.RowCount = 5;
+        _dnsRedirectPanel.RowStyles.Add(new RowStyle());
+        _dnsRedirectPanel.RowStyles.Add(new RowStyle());
+        _dnsRedirectPanel.RowStyles.Add(new RowStyle());
+        _dnsRedirectPanel.RowStyles.Add(new RowStyle());
+        _dnsRedirectPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
+        _dnsRedirectPanel.Size = new Size(769, 530);
+        _dnsRedirectPanel.TabIndex = 0;
         // 
-        // _chkHostsRedirectEnabled
+        // _chkDNSRedirectEnabled
         // 
-        _chkHostsRedirectEnabled.AutoSize = true;
-        _chkHostsRedirectEnabled.Location = new Point(13, 13);
-        _chkHostsRedirectEnabled.Margin = new Padding(3, 3, 3, 10);
-        _chkHostsRedirectEnabled.Name = "_chkHostsRedirectEnabled";
-        _chkHostsRedirectEnabled.Size = new Size(300, 21);
-        _chkHostsRedirectEnabled.TabIndex = 0;
-        _chkHostsRedirectEnabled.Text = "Enable GitHub520 Hosts Redirect (DNS interception)";
+        _chkDNSRedirectEnabled.AutoSize = true;
+        _dnsRedirectPanel.SetColumnSpan(_chkDNSRedirectEnabled, 2);
+        _chkDNSRedirectEnabled.Location = new Point(13, 13);
+        _chkDNSRedirectEnabled.Margin = new Padding(3, 3, 3, 10);
+        _chkDNSRedirectEnabled.Name = "_chkDNSRedirectEnabled";
+        _chkDNSRedirectEnabled.Size = new Size(263, 21);
+        _chkDNSRedirectEnabled.TabIndex = 0;
+        _chkDNSRedirectEnabled.Text = "Enable  DNS Redirect (DNS interception)";
         // 
         // _lblHostsUrl
         // 
         _lblHostsUrl.Anchor = AnchorStyles.Left | AnchorStyles.Right;
-        _lblHostsUrl.Location = new Point(13, 52);
+        _lblHostsUrl.Location = new Point(13, 49);
         _lblHostsUrl.Name = "_lblHostsUrl";
         _lblHostsUrl.Size = new Size(144, 23);
         _lblHostsUrl.TabIndex = 1;
@@ -696,23 +695,23 @@ partial class MainForm
         // _txtHostsUrl
         // 
         _txtHostsUrl.Dock = DockStyle.Fill;
-        _txtHostsUrl.Location = new Point(165, 52);
+        _txtHostsUrl.Location = new Point(165, 49);
         _txtHostsUrl.Margin = new Padding(5);
         _txtHostsUrl.Name = "_txtHostsUrl";
         _txtHostsUrl.Size = new Size(589, 23);
         _txtHostsUrl.TabIndex = 2;
-        _txtHostsUrl.Text = "https://raw.githubusercontent.com/521xueweihan/GitHub520/refs/heads/main/hosts";
+        _txtHostsUrl.Text = "https://raw.hellogithub.com/hosts";
         // 
         // _hostsRedirectBtnPanel
         // 
         _hostsRedirectBtnPanel.AutoSize = true;
+        _hostsRedirectBtnPanel.Controls.Add(_btnRefreshHosts);
         _hostsRedirectBtnPanel.Dock = DockStyle.Fill;
-        _hostsRedirectBtnPanel.Location = new Point(165, 85);
+        _hostsRedirectBtnPanel.Location = new Point(165, 82);
         _hostsRedirectBtnPanel.Margin = new Padding(5);
         _hostsRedirectBtnPanel.Name = "_hostsRedirectBtnPanel";
         _hostsRedirectBtnPanel.Size = new Size(589, 36);
         _hostsRedirectBtnPanel.TabIndex = 3;
-        _hostsRedirectBtnPanel.Controls.Add(_btnRefreshHosts);
         // 
         // _btnRefreshHosts
         // 
@@ -726,10 +725,11 @@ partial class MainForm
         // _lblHostsStatus
         // 
         _lblHostsStatus.AutoSize = true;
-        _lblHostsStatus.Location = new Point(13, 131);
+        _dnsRedirectPanel.SetColumnSpan(_lblHostsStatus, 2);
+        _lblHostsStatus.Location = new Point(13, 128);
         _lblHostsStatus.Margin = new Padding(3, 5, 3, 3);
         _lblHostsStatus.Name = "_lblHostsStatus";
-        _lblHostsStatus.Size = new Size(200, 17);
+        _lblHostsStatus.Size = new Size(117, 17);
         _lblHostsStatus.TabIndex = 4;
         _lblHostsStatus.Text = "Status: Not loaded";
         // 
@@ -954,9 +954,9 @@ partial class MainForm
         _logsTab.ResumeLayout(false);
         _logPanel.ResumeLayout(false);
         _btnClearPanel.ResumeLayout(false);
-        _hostsRedirectTab.ResumeLayout(false);
-        _hostsRedirectPanel.ResumeLayout(false);
-        _hostsRedirectPanel.PerformLayout();
+        _dnsRedirectTab.ResumeLayout(false);
+        _dnsRedirectPanel.ResumeLayout(false);
+        _dnsRedirectPanel.PerformLayout();
         _hostsRedirectBtnPanel.ResumeLayout(false);
         _aboutTab.ResumeLayout(false);
         _aboutScrollPanel.ResumeLayout(false);

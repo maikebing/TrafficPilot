@@ -76,7 +76,7 @@ internal partial class MainForm : Form
 		{
 			if (_engine == null || !_engine.IsRunning)
 			{
-				if (!_chkProxyEnabled!.Checked && !_chkHostsRedirectEnabled!.Checked)
+				if (!_chkProxyEnabled!.Checked && !_chkDNSRedirectEnabled!.Checked)
 				{
 					MessageBox.Show(
 						"Neither Proxy nor Hosts Redirect is enabled. Please enable at least one before starting.",
@@ -208,7 +208,7 @@ internal partial class MainForm : Form
 			},
 			HostsRedirect = new HostsRedirectSettings
 			{
-				Enabled = _chkHostsRedirectEnabled!.Checked,
+				Enabled = _chkDNSRedirectEnabled!.Checked,
 				HostsUrl = _txtHostsUrl!.Text.Trim()
 			}
 		};
@@ -223,7 +223,7 @@ internal partial class MainForm : Form
 			(ushort)_numProxyPort!.Value,
 			_cmbProxyScheme!.SelectedItem?.ToString() ?? "socks4",
 			_chkProxyEnabled!.Checked,
-			_chkHostsRedirectEnabled!.Checked,
+			_chkDNSRedirectEnabled!.Checked,
 			_txtHostsUrl!.Text.Trim()
 		);
 	}
@@ -244,7 +244,7 @@ internal partial class MainForm : Form
 		foreach (var pid in _currentConfig.Targeting?.ExtraPids ?? [])
 			_lstExtraPids.Items.Add(pid);
 
-		_chkHostsRedirectEnabled!.Checked = _currentConfig.HostsRedirect?.Enabled ?? false;
+		_chkDNSRedirectEnabled!.Checked = _currentConfig.HostsRedirect?.Enabled ?? false;
 		_txtHostsUrl!.Text = _currentConfig.HostsRedirect?.HostsUrl ?? GitHub520HostsProvider.DefaultUrl;
 	}
 

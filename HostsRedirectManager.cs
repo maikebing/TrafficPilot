@@ -13,7 +13,7 @@ namespace TrafficPilot;
 internal sealed class GitHub520HostsProvider : IDisposable
 {
 	public const string DefaultUrl =
-		"https://raw.githubusercontent.com/521xueweihan/GitHub520/refs/heads/main/hosts";
+        "https://raw.hellogithub.com/hosts";
 
 	private readonly string _url;
 	private readonly HttpClient _http;
