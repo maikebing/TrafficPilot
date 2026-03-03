@@ -15,12 +15,16 @@ internal class ProxyConfigModel
 	[JsonPropertyName("targeting")]
 	public TargetingSettings? Targeting { get; set; }
 
+	[JsonPropertyName("hostsRedirect")]
+	public HostsRedirectSettings? HostsRedirect { get; set; }
+
 	public ProxyConfigModel() { }
 
 	public ProxyConfigModel(ProxyOptions opts)
 	{
 		Proxy = new ProxySettings
 		{
+			Enabled = opts.ProxyEnabled,
 			Host = opts.ProxyHost,
 			Port = opts.ProxyPort,
 			Scheme = opts.ProxyScheme
@@ -30,11 +34,19 @@ internal class ProxyConfigModel
 			ProcessNames = opts.ProcessNames.ToList(),
 			ExtraPids = opts.ExtraPids.ToList()
 		};
+		HostsRedirect = new HostsRedirectSettings
+		{
+			Enabled = opts.HostsRedirectEnabled,
+			HostsUrl = opts.HostsRedirectUrl
+		};
 	}
 }
 
 internal class ProxySettings
 {
+	[JsonPropertyName("enabled")]
+	public bool Enabled { get; set; } = true;
+
 	[JsonPropertyName("host")]
 	public string Host { get; set; } = "host.docker.internal";
 
@@ -52,6 +64,15 @@ internal class TargetingSettings
 
 	[JsonPropertyName("extraPids")]
 	public List<int> ExtraPids { get; set; } = [];
+}
+
+internal class HostsRedirectSettings
+{
+	[JsonPropertyName("enabled")]
+	public bool Enabled { get; set; } = false;
+
+	[JsonPropertyName("hostsUrl")]
+	public string HostsUrl { get; set; } = GitHub520HostsProvider.DefaultUrl;
 }
 
 internal sealed class ProxyConfigManager

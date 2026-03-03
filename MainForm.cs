@@ -76,6 +76,15 @@ internal partial class MainForm : Form
 		{
 			if (_engine == null || !_engine.IsRunning)
 			{
+				if (!_chkProxyEnabled!.Checked && !_chkDNSRedirectEnabled!.Checked)
+				{
+					MessageBox.Show(
+						"Neither Proxy nor Hosts Redirect is enabled. Please enable at least one before starting.",
+						"Nothing to Start",
+						MessageBoxButtons.OK,
+						MessageBoxIcon.Warning);
+					return;
+				}
 				_btnStartStop.Text = "Starting...";
 				await StartProxyAsync();
 				_isStarting = true;
@@ -187,6 +196,7 @@ internal partial class MainForm : Form
 		{
 			Proxy = new ProxySettings
 			{
+				Enabled = _chkProxyEnabled!.Checked,
 				Host = _txtProxyHost!.Text,
 				Port = (ushort)_numProxyPort!.Value,
 				Scheme = _cmbProxyScheme!.SelectedItem?.ToString() ?? "socks4"
@@ -195,6 +205,11 @@ internal partial class MainForm : Form
 			{
 				ProcessNames = _lstProcesses!.Items.Cast<string>().ToList(),
 				ExtraPids = _lstExtraPids!.Items.Cast<int>().ToList()
+			},
+			HostsRedirect = new HostsRedirectSettings
+			{
+				Enabled = _chkDNSRedirectEnabled!.Checked,
+				HostsUrl = _txtHostsUrl!.Text.Trim()
 			}
 		};
 	}
@@ -206,12 +221,16 @@ internal partial class MainForm : Form
 			_lstProcesses!.Items.Cast<string>().ToList(),
 			_txtProxyHost!.Text,
 			(ushort)_numProxyPort!.Value,
-			_cmbProxyScheme!.SelectedItem?.ToString() ?? "socks4"
+			_cmbProxyScheme!.SelectedItem?.ToString() ?? "socks4",
+			_chkProxyEnabled!.Checked,
+			_chkDNSRedirectEnabled!.Checked,
+			_txtHostsUrl!.Text.Trim()
 		);
 	}
 
 	private void LoadConfigToUI()
 	{
+		_chkProxyEnabled!.Checked = _currentConfig.Proxy?.Enabled ?? true;
 		_txtProxyHost!.Text = _currentConfig.Proxy?.Host ?? "";
 		_numProxyPort!.Value = _currentConfig.Proxy?.Port ?? 7890;
 		_cmbProxyScheme!.SelectedItem = _currentConfig.Proxy?.Scheme ?? "socks4";
@@ -224,6 +243,9 @@ internal partial class MainForm : Form
 		_lstExtraPids!.Items.Clear();
 		foreach (var pid in _currentConfig.Targeting?.ExtraPids ?? [])
 			_lstExtraPids.Items.Add(pid);
+
+		_chkDNSRedirectEnabled!.Checked = _currentConfig.HostsRedirect?.Enabled ?? false;
+		_txtHostsUrl!.Text = _currentConfig.HostsRedirect?.HostsUrl ?? GitHub520HostsProvider.DefaultUrl;
 	}
 
 	private void AppendLog(string message)
@@ -343,5 +365,25 @@ internal partial class MainForm : Form
 	private void BtnClearLogs_Click(object? sender, EventArgs e)
 	{
 		_rtbLogs?.Clear();
+	}
+
+	private async void BtnRefreshHosts_Click(object? sender, EventArgs e)
+	{
+		_btnRefreshHosts!.Enabled = false;
+		_lblHostsStatus!.Text = "Status: Downloading...";
+		try
+		{
+			using var provider = new GitHub520HostsProvider(_txtHostsUrl!.Text.Trim());
+			await provider.RefreshAsync();
+			_lblHostsStatus.Text = $"Status: Loaded {provider.HostCount} entries (last updated {provider.LastRefresh.ToLocalTime():HH:mm:ss})";
+		}
+		catch (Exception ex)
+		{
+			_lblHostsStatus.Text = $"Status: Error - {ex.Message}";
+		}
+		finally
+		{
+			_btnRefreshHosts.Enabled = true;
+		}
 	}
 }

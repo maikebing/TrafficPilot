@@ -227,7 +227,10 @@ internal sealed class SkipLogDedup
 internal sealed record ProxyOptions(
 	IReadOnlyCollection<int> ExtraPids,
 	IReadOnlyCollection<string> ProcessNames,
-	string ProxyHost, ushort ProxyPort, string ProxyScheme)
+	string ProxyHost, ushort ProxyPort, string ProxyScheme,
+	bool ProxyEnabled = true,
+	bool HostsRedirectEnabled = false,
+	string HostsRedirectUrl = GitHub520HostsProvider.DefaultUrl)
 {
 	private static readonly string[] DefaultProcessNames =
 	[

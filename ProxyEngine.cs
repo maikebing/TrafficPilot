@@ -26,6 +26,8 @@ internal sealed class ProxyEngine : IDisposable
 	private CancellationTokenSource? _cts;
 	private Task? _packetLoopTask;
 	private bool _isRunning = false;
+	private GitHub520HostsProvider? _hostsProvider;
+	private DnsInterceptor? _dnsInterceptor;
 
 	public event Action<string>? OnLog;
 	public event Action<RedirectStats>? OnStatsUpdated;
@@ -36,18 +38,50 @@ internal sealed class ProxyEngine : IDisposable
 	public ProxyEngine(ProxyOptions options)
 	{
 		_options = options;
-		_proxyIp = ResolveProxyIpv4(_options.ProxyHost);
+		_proxyIp = options.ProxyEnabled
+			? ResolveProxyIpv4(_options.ProxyHost)
+			: IPAddress.Loopback;
 	}
 
 	public async Task StartAsync()
 	{
 		if (_isRunning) return;
+
+		if (!_options.ProxyEnabled && !_options.HostsRedirectEnabled)
+			throw new InvalidOperationException("Both proxy and hosts redirect are disabled.");
+
+		// Start DNS interceptor if hosts redirect is enabled
+		if (_options.HostsRedirectEnabled)
+		{
+			_hostsProvider = new GitHub520HostsProvider(_options.HostsRedirectUrl);
+			_hostsProvider.OnLog += (msg) => OnLog?.Invoke($"[{DateTime.Now:HH:mm:ss.fff}] {msg}");
+			await _hostsProvider.RefreshAsync();
+
+			_dnsInterceptor = new DnsInterceptor(_hostsProvider);
+			_dnsInterceptor.OnLog += (msg) => OnLog?.Invoke($"[{DateTime.Now:HH:mm:ss.fff}] {msg}");
+			await _dnsInterceptor.StartAsync();
+			LogInfo($"DNS redirect started ({_hostsProvider.HostCount} hosts)");
+		}
+
+		if (!_options.ProxyEnabled)
+		{
+			// Hosts redirect only mode: no TCP relay or packet loop needed.
+			// _processMatcher remains null intentionally.
+			_isRunning = true;
+			return;
+		}
+
 		if (_proxyIp.AddressFamily != AddressFamily.InterNetwork)
 			throw new InvalidOperationException("Only IPv4 proxy address is supported.");
 
 		_processMatcher = new ProcessAllowListMatcher(_options.ProcessNames, _options.ExtraPids, TimeSpan.FromSeconds(1));
-		if (!_processMatcher.HasAnyRule)
-			throw new InvalidOperationException("No target process rule found.");
+		bool hasProcessRules = _processMatcher.HasAnyRule;
+
+		if (!hasProcessRules)
+		{
+			_isRunning = true;
+			return;
+		}
 
 		_localBypass = LocalTrafficBypass.CreateDefault();
 		_skipLogDedup = new SkipLogDedup(TimeSpan.FromSeconds(30));
@@ -92,6 +126,8 @@ internal sealed class ProxyEngine : IDisposable
 				// Expected when cancelling
 			}
 		}
+		if (_dnsInterceptor != null)
+			await _dnsInterceptor.StopAsync();
 	}
 
 	public void Dispose()
@@ -104,6 +140,8 @@ internal sealed class ProxyEngine : IDisposable
 		_processNameResolver?.Dispose();
 		_redirectNat?.Dispose();
 		_connInfoCache?.Dispose();
+		_dnsInterceptor?.Dispose();
+		_hostsProvider?.Dispose();
 		if (_winDivertHandle != IntPtr.Zero && _winDivertHandle != new IntPtr(-1))
 			WinDivertNative.WinDivertClose(_winDivertHandle);
 	}
