@@ -15,20 +15,27 @@ internal sealed class TcpRelayServer
 	private readonly string _scheme;
 	private readonly RedirectNatTable _nat;
 	private readonly ConnectionInfoCache _connCache;
+	private readonly DomainRuleMatcher _domainRules;
 	private TcpListener? _listener;
 	private readonly CancellationTokenSource _cts = new();
 
 	public long ProxiedSuccess;
 	public long ProxiedFailed;
+	public event Action<string>? OnLog;
 
 	public TcpRelayServer(IPAddress proxyIp, ushort proxyPort, string scheme,
-		RedirectNatTable nat, ConnectionInfoCache connCache)
+		RedirectNatTable nat, ConnectionInfoCache connCache, DomainRuleMatcher domainRules)
 	{
+		ArgumentNullException.ThrowIfNull(nat);
+		ArgumentNullException.ThrowIfNull(connCache);
+		ArgumentNullException.ThrowIfNull(domainRules);
+
 		_proxyIp = proxyIp;
 		_proxyPort = proxyPort;
 		_scheme = scheme;
 		_nat = nat;
 		_connCache = connCache;
+		_domainRules = domainRules;
 	}
 
 	public int Start()
@@ -97,17 +104,31 @@ internal sealed class TcpRelayServer
 			}
 
 			proxy = new TcpClient { NoDelay = true };
-			await proxy.ConnectAsync(_proxyIp, _proxyPort, ct);
-			var proxyStream = proxy.GetStream();
+			var targetText = DescribeTarget(domain, origDstAddr, origDstPort);
+			var shouldProxy = !_domainRules.HasAnyRule || _domainRules.IsMatch(domain);
+			NetworkStream proxyStream;
 
-			if (_scheme == "socks5")
-				await Socks5ConnectAsync(proxyStream, domain, origDstAddr, origDstPort, ct);
-			else if (_scheme == "socks4")
-				await Socks4ConnectAsync(proxyStream, domain, origDstAddr, origDstPort, ct);
+			if (shouldProxy)
+			{
+				await proxy.ConnectAsync(_proxyIp, _proxyPort, ct);
+				proxyStream = proxy.GetStream();
+
+				if (_scheme == "socks5")
+					await Socks5ConnectAsync(proxyStream, domain, origDstAddr, origDstPort, ct);
+				else if (_scheme == "socks4")
+					await Socks4ConnectAsync(proxyStream, domain, origDstAddr, origDstPort, ct);
+				else
+					await HttpConnectAsync(proxyStream, domain, origDstAddr, origDstPort, ct);
+
+				LogInfo($"[proxy] {targetText} via {_scheme}://{_proxyIp}:{_proxyPort}");
+				Interlocked.Increment(ref ProxiedSuccess);
+			}
 			else
-				await HttpConnectAsync(proxyStream, domain, origDstAddr, origDstPort, ct);
-
-			Interlocked.Increment(ref ProxiedSuccess);
+			{
+				await proxy.ConnectAsync(new IPAddress(origDstAddr), origDstPort, ct);
+				proxyStream = proxy.GetStream();
+				LogInfo($"[direct] {targetText} (domain rule not matched)");
+			}
 
 			if (firstLen > 0)
 				await proxyStream.WriteAsync(firstBuf.AsMemory(0, firstLen), ct);
@@ -127,6 +148,16 @@ internal sealed class TcpRelayServer
 			try { client.Close(); } catch { }
 			try { proxy?.Close(); } catch { }
 		}
+	}
+
+	private void LogInfo(string message) => OnLog?.Invoke(message);
+
+	private static string DescribeTarget(string? domain, byte[] dstIp, ushort dstPort)
+	{
+		if (!string.IsNullOrWhiteSpace(domain))
+			return $"{domain}:{dstPort}";
+
+		return $"{dstIp[0]}.{dstIp[1]}.{dstIp[2]}.{dstIp[3]}:{dstPort}";
 	}
 
 	private static async Task Socks5ConnectAsync(NetworkStream s, string? domain,

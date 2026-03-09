@@ -16,10 +16,8 @@ internal sealed class ProxyEngine : IDisposable
 	private TcpRelayServer? _relay;
 	private ProcessAllowListMatcher? _processMatcher;
 	private LocalTrafficBypass? _localBypass;
-	private SkipLogDedup? _skipLogDedup;
 	private RedirectNatTable? _redirectNat;
 	private ConnectionInfoCache? _connInfoCache;
-	private ProcessNameResolver? _processNameResolver;
 	private TcpOwnerPidResolver? _tcpTableResolver;
 	private RedirectStats? _stats;
 	private IntPtr _winDivertHandle = IntPtr.Zero;
@@ -66,7 +64,6 @@ internal sealed class ProxyEngine : IDisposable
 		if (!_options.ProxyEnabled)
 		{
 			// Hosts redirect only mode: no TCP relay or packet loop needed.
-			// _processMatcher remains null intentionally.
 			_isRunning = true;
 			return;
 		}
@@ -74,26 +71,19 @@ internal sealed class ProxyEngine : IDisposable
 		if (_proxyIp.AddressFamily != AddressFamily.InterNetwork)
 			throw new InvalidOperationException("Only IPv4 proxy address is supported.");
 
-		_processMatcher = new ProcessAllowListMatcher(_options.ProcessNames, _options.ExtraPids, TimeSpan.FromSeconds(1));
-		bool hasProcessRules = _processMatcher.HasAnyRule;
-
-		if (!hasProcessRules)
-		{
-			_isRunning = true;
-			return;
-		}
-
+		_processMatcher = new ProcessAllowListMatcher(_options.ProcessNames, TimeSpan.FromSeconds(1));
+		var domainRules = new DomainRuleMatcher(_options.DomainRules);
 		_localBypass = LocalTrafficBypass.CreateDefault();
-		_skipLogDedup = new SkipLogDedup(TimeSpan.FromSeconds(30));
 		_redirectNat = new RedirectNatTable(TimeSpan.FromMinutes(10));
 		_connInfoCache = new ConnectionInfoCache(TimeSpan.FromMinutes(5));
-		_processNameResolver = new ProcessNameResolver(TimeSpan.FromSeconds(3));
-		_relay = new TcpRelayServer(_proxyIp, _options.ProxyPort, _options.ProxyScheme, _redirectNat, _connInfoCache);
+		_relay = new TcpRelayServer(_proxyIp, _options.ProxyPort, _options.ProxyScheme, _redirectNat, _connInfoCache, domainRules);
+		_relay.OnLog += LogInfo;
 		RelayPort = (ushort)_relay.Start();
 
 		LogInfo($"Relay started at 0.0.0.0:{RelayPort}");
 		LogInfo($"Proxy target: {_proxyIp}:{_options.ProxyPort} ({_options.ProxyScheme})");
 		LogInfo($"Process rules: {_processMatcher.Describe()}");
+		LogInfo($"Domain rules: {domainRules.Describe()}");
 
 		_winDivertHandle = WinDivertNative.WinDivertOpen("ip and tcp", WinDivertLayer.Network, 0, 0UL);
 		if (_winDivertHandle == IntPtr.Zero || _winDivertHandle == new IntPtr(-1))
@@ -135,9 +125,8 @@ internal sealed class ProxyEngine : IDisposable
 		_packetLoopTask?.Dispose();
 		_cts?.Dispose();
 		_relay?.Stop();
-		_tcpTableResolver?.Dispose();
 		_processMatcher?.Dispose();
-		_processNameResolver?.Dispose();
+		_tcpTableResolver?.Dispose();
 		_redirectNat?.Dispose();
 		_connInfoCache?.Dispose();
 		_dnsInterceptor?.Dispose();
@@ -204,23 +193,16 @@ internal sealed class ProxyEngine : IDisposable
 					continue;
 				}
 
-				if (pid is null || !_processMatcher!.ContainsPid(pid.Value))
+				if (pid is null)
 				{
-					if (pid is null) _stats.PidMiss++;
-					else _stats.ProcessSkipped++;
+					_stats.PidMiss++;
+					WinDivertNative.WinDivertSend(_winDivertHandle, packet, recvLen, out _, ref addr);
+					continue;
+				}
 
-					bool isSyn = PacketInspector.IsSyn(packet, pkt);
-					if (isSyn)
-					{
-						var dstIpStr = FormatIp(pkt.DstAddr);
-						if (_skipLogDedup!.ShouldLog(dstIpStr, pkt.DstPort))
-						{
-							var skipProcName = pid is not null ? _processNameResolver!.Resolve(pid.Value) : "?";
-							var reason = pid is null ? "PID not found" : "Process not in allow-list";
-							LogInfo($"[skip] {skipProcName}({pid?.ToString() ?? "?"}) {FormatIp(pkt.SrcAddr)}:{pkt.SrcPort} -> {dstIpStr}:{pkt.DstPort} ({reason})");
-						}
-					}
-
+				if (_processMatcher!.HasAnyRule && !_processMatcher.ContainsPid(pid.Value))
+				{
+					_stats.ProcessSkipped++;
 					WinDivertNative.WinDivertSend(_winDivertHandle, packet, recvLen, out _, ref addr);
 					continue;
 				}
@@ -230,20 +212,6 @@ internal sealed class ProxyEngine : IDisposable
 					_stats.AlreadyProxy++;
 					WinDivertNative.WinDivertSend(_winDivertHandle, packet, recvLen, out _, ref addr);
 					continue;
-				}
-
-				var connKey = (ToU32(pkt.SrcAddr), pkt.SrcPort, ToU32(pkt.DstAddr), pkt.DstPort);
-				var httpInfo = PayloadExtractor.TryExtract(packet, (int)recvLen, pkt);
-				if (httpInfo is not null)
-					_connInfoCache!.Record(connKey, httpInfo);
-
-				bool isSynForLog = PacketInspector.IsSyn(packet, pkt);
-				if (isSynForLog || httpInfo is not null)
-				{
-					var displayInfo = httpInfo ?? _connInfoCache!.TryGet(connKey);
-					var procName = _processNameResolver!.Resolve(pid.Value);
-					var infoTag = displayInfo is not null ? $"  [{displayInfo}]" : "";
-					LogInfo($"{procName}({pid.Value}) {FormatIp(pkt.SrcAddr)}:{pkt.SrcPort} -> {FormatIp(pkt.DstAddr)}:{pkt.DstPort} >> relay >> {_options.ProxyScheme}://{_proxyIp}:{_options.ProxyPort}{infoTag}");
 				}
 
 				_redirectNat!.RecordRedirect(pkt.SrcAddr, pkt.SrcPort, pkt.DstAddr, pkt.DstPort);
@@ -283,6 +251,5 @@ internal sealed class ProxyEngine : IDisposable
 			?? throw new InvalidOperationException($"Cannot resolve IPv4 for '{host}'.");
 	}
 
-	private static string FormatIp(byte[] a) => a.Length == 4 ? $"{a[0]}.{a[1]}.{a[2]}.{a[3]}" : "?";
 	private static uint ToU32(byte[] a) => (uint)(a[0] | (a[1] << 8) | (a[2] << 16) | (a[3] << 24));
 }

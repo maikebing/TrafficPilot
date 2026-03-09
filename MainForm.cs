@@ -246,8 +246,8 @@ internal partial class MainForm : Form
 			},
 			Targeting = new TargetingSettings
 			{
-				ProcessNames = _lstProcesses!.Items.Cast<string>().ToList(),
-				ExtraPids = _lstExtraPids!.Items.Cast<int>().ToList()
+				ProcessNames = GetProcessNamesFromUi(),
+				DomainRules = GetDomainRulesFromUi()
 			},
 			HostsRedirect = new HostsRedirectSettings
 			{
@@ -262,8 +262,8 @@ internal partial class MainForm : Form
 	private ProxyOptions BuildProxyOptions()
 	{
 		return new ProxyOptions(
-			_lstExtraPids!.Items.Cast<int>().ToList(),
-			_lstProcesses!.Items.Cast<string>().ToList(),
+			GetProcessNamesFromUi(),
+			GetDomainRulesFromUi(),
 			_txtProxyHost!.Text,
 			(ushort)_numProxyPort!.Value,
 			_cmbProxyScheme!.SelectedItem?.ToString() ?? "socks4",
@@ -281,19 +281,54 @@ internal partial class MainForm : Form
 		_cmbProxyScheme!.SelectedItem = _currentConfig.Proxy?.Scheme ?? "socks4";
 		_lblConfigFileValue!.Text = _activeConfigPath;
 
-		_lstProcesses!.Items.Clear();
-		foreach (var proc in _currentConfig.Targeting?.ProcessNames ?? [])
-			_lstProcesses.Items.Add(proc);
-
-		_lstExtraPids!.Items.Clear();
-		foreach (var pid in _currentConfig.Targeting?.ExtraPids ?? [])
-			_lstExtraPids.Items.Add(pid);
+		SetProcessNamesToUi(_currentConfig.Targeting?.ProcessNames);
+		SetDomainRulesToUi(_currentConfig.Targeting?.DomainRules);
 
 		_chkDNSRedirectEnabled!.Checked = _currentConfig.HostsRedirect?.Enabled ?? false;
 		_txtHostsUrl!.Text = _currentConfig.HostsRedirect?.HostsUrl ?? GitHub520HostsProvider.DefaultUrl;
 		_chkStartOnBoot!.Checked = StartupManager.IsEnabled();
 		_chkAutoStartProxy!.Checked = _currentConfig.AutoStartProxy;
 		_txtConfigName!.Text = _currentConfig.ConfigName;
+	}
+
+	private List<string> GetProcessNamesFromUi()
+	{
+		return _txtProcesses!.Lines
+			.Select(static line => TargetRuleNormalizer.NormalizeProcessName(line))
+			.Where(static line => !string.IsNullOrWhiteSpace(line))
+			.Distinct(StringComparer.OrdinalIgnoreCase)
+			.ToList();
+	}
+
+	private void SetProcessNamesToUi(IEnumerable<string>? rules)
+	{
+		_txtProcesses!.Lines = rules is null
+			? []
+			: rules
+				.Select(static line => TargetRuleNormalizer.NormalizeProcessName(line))
+				.Where(static line => !string.IsNullOrWhiteSpace(line))
+				.Distinct(StringComparer.OrdinalIgnoreCase)
+				.ToArray();
+	}
+
+	private List<string> GetDomainRulesFromUi()
+	{
+		return _txtDomainRules!.Lines
+			.Select(static line => TargetRuleNormalizer.NormalizeDomain(line))
+			.Where(static line => !string.IsNullOrWhiteSpace(line))
+			.Distinct(StringComparer.OrdinalIgnoreCase)
+			.ToList();
+	}
+
+	private void SetDomainRulesToUi(IEnumerable<string>? rules)
+	{
+		_txtDomainRules!.Lines = rules is null
+			? []
+			: rules
+				.Select(static line => TargetRuleNormalizer.NormalizeDomain(line))
+				.Where(static line => !string.IsNullOrWhiteSpace(line))
+				.Distinct(StringComparer.OrdinalIgnoreCase)
+				.ToArray();
 	}
 
 	private void LoadConfigFromPath(string configPath, string dialogTitle)
@@ -702,36 +737,6 @@ internal partial class MainForm : Form
 		finally
 		{
 			_btnCheckUpdate.Enabled = true;
-		}
-	}
-
-	private void BtnRemoveProcess_Click(object? sender, EventArgs e)
-	{
-		if (_lstProcesses?.SelectedIndex >= 0)
-			_lstProcesses.Items.RemoveAt(_lstProcesses.SelectedIndex);
-	}
-
-	private void BtnAddProcess_Click(object? sender, EventArgs e)
-	{
-		if (!string.IsNullOrWhiteSpace(_txtNewProcess?.Text))
-		{
-			_lstProcesses?.Items.Add(_txtNewProcess.Text);
-			_txtNewProcess.Clear();
-		}
-	}
-
-	private void BtnRemovePid_Click(object? sender, EventArgs e)
-	{
-		if (_lstExtraPids?.SelectedIndex >= 0)
-			_lstExtraPids.Items.RemoveAt(_lstExtraPids.SelectedIndex);
-	}
-
-	private void BtnAddPid_Click(object? sender, EventArgs e)
-	{
-		if (int.TryParse(_txtNewPid?.Text, out int pid))
-		{
-			_lstExtraPids?.Items.Add(pid);
-			_txtNewPid!.Clear();
 		}
 	}
 

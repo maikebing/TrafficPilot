@@ -60,29 +60,15 @@ partial class MainForm
 	private Label? _lblProxyScheme;
 	private ComboBox? _cmbProxyScheme;
 
-	// Config tab - Process Names
+	// Config tab - Process Rules
 	private Label? _lblProcesses;
 	private TableLayoutPanel? _procPanel;
-	private ListBox? _lstProcesses;
-	private Button? _btnRemoveProcess;
+	private TextBox? _txtProcesses;
 
-	// Config tab - Add Process
-	private Label? _lblAddProcess;
-	private TableLayoutPanel? _addProcPanel;
-	private TextBox? _txtNewProcess;
-	private Button? _btnAddProcess;
-
-	// Config tab - Extra PIDs
-	private Label? _lblExtraPids;
-	private TableLayoutPanel? _pidPanel;
-	private ListBox? _lstExtraPids;
-	private Button? _btnRemovePid;
-
-	// Config tab - Add PID
-	private Label? _lblAddPid;
-	private TableLayoutPanel? _addPidPanel;
-	private TextBox? _txtNewPid;
-	private Button? _btnAddPid;
+	// Config tab - Domain Rules
+	private Label? _lblDomainRules;
+	private TableLayoutPanel? _domainRulesPanel;
+	private TextBox? _txtDomainRules;
 
 	// Config tab - Config File
 	private Label? _lblConfigFile;
@@ -145,20 +131,10 @@ partial class MainForm
         _cmbProxyScheme = new ComboBox();
         _lblProcesses = new Label();
         _procPanel = new TableLayoutPanel();
-        _lstProcesses = new ListBox();
-        _btnRemoveProcess = new Button();
-        _lblAddProcess = new Label();
-        _addProcPanel = new TableLayoutPanel();
-        _txtNewProcess = new TextBox();
-        _btnAddProcess = new Button();
-        _lblExtraPids = new Label();
-        _pidPanel = new TableLayoutPanel();
-        _lstExtraPids = new ListBox();
-        _btnRemovePid = new Button();
-        _lblAddPid = new Label();
-        _addPidPanel = new TableLayoutPanel();
-        _txtNewPid = new TextBox();
-        _btnAddPid = new Button();
+        _txtProcesses = new TextBox();
+        _lblDomainRules = new Label();
+        _domainRulesPanel = new TableLayoutPanel();
+        _txtDomainRules = new TextBox();
         _lblConfigFile = new Label();
         _lblConfigFileValue = new Label();
         _startupOptionsPanel = new FlowLayoutPanel();
@@ -228,9 +204,7 @@ partial class MainForm
         _proxyHeaderPanel.SuspendLayout();
         ((ISupportInitialize)_numProxyPort).BeginInit();
         _procPanel.SuspendLayout();
-        _addProcPanel.SuspendLayout();
-        _pidPanel.SuspendLayout();
-        _addPidPanel.SuspendLayout();
+        _domainRulesPanel.SuspendLayout();
         _startupOptionsPanel.SuspendLayout();
         _configActionPanel.SuspendLayout();
         _configBtnPanel.SuspendLayout();
@@ -305,29 +279,23 @@ partial class MainForm
         _configPanel.Controls.Add(_cmbProxyScheme, 1, 3);
         _configPanel.Controls.Add(_lblProcesses, 0, 4);
         _configPanel.Controls.Add(_procPanel, 1, 4);
-        _configPanel.Controls.Add(_lblAddProcess, 0, 5);
-        _configPanel.Controls.Add(_addProcPanel, 1, 5);
-        _configPanel.Controls.Add(_lblExtraPids, 0, 6);
-        _configPanel.Controls.Add(_pidPanel, 1, 6);
-        _configPanel.Controls.Add(_lblAddPid, 0, 7);
-        _configPanel.Controls.Add(_addPidPanel, 1, 7);
-        _configPanel.Controls.Add(_lblConfigFile, 0, 8);
-        _configPanel.Controls.Add(_lblConfigFileValue, 1, 8);
-        _configPanel.Controls.Add(_startupOptionsPanel, 0, 9);
-        _configPanel.Controls.Add(_configActionPanel, 0, 10);
+        _configPanel.Controls.Add(_lblDomainRules, 0, 5);
+        _configPanel.Controls.Add(_domainRulesPanel, 1, 5);
+        _configPanel.Controls.Add(_lblConfigFile, 0, 6);
+        _configPanel.Controls.Add(_lblConfigFileValue, 1, 6);
+        _configPanel.Controls.Add(_startupOptionsPanel, 0, 7);
+        _configPanel.Controls.Add(_configActionPanel, 0, 8);
         _configPanel.Dock = DockStyle.Fill;
         _configPanel.Location = new Point(0, 0);
         _configPanel.Name = "_configPanel";
         _configPanel.Padding = new Padding(10);
-        _configPanel.RowCount = 11;
+        _configPanel.RowCount = 9;
         _configPanel.RowStyles.Add(new RowStyle());
         _configPanel.RowStyles.Add(new RowStyle());
         _configPanel.RowStyles.Add(new RowStyle());
         _configPanel.RowStyles.Add(new RowStyle());
         _configPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 50F));
-        _configPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 39F));
         _configPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 50F));
-        _configPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 42F));
         _configPanel.RowStyles.Add(new RowStyle());
         _configPanel.RowStyles.Add(new RowStyle());
         _configPanel.RowStyles.Add(new RowStyle());
@@ -447,178 +415,74 @@ partial class MainForm
         _lblProcesses.Name = "_lblProcesses";
         _lblProcesses.Size = new Size(144, 23);
         _lblProcesses.TabIndex = 6;
-        _lblProcesses.Text = "Process Names:";
+		_lblProcesses.Text = "Process Name List:";
         _lblProcesses.TextAlign = ContentAlignment.TopRight;
         // 
         // _procPanel
         // 
-        _procPanel.ColumnCount = 2;
+        _procPanel.ColumnCount = 1;
         _procPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-        _procPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 70F));
-        _procPanel.Controls.Add(_lstProcesses, 0, 0);
-        _procPanel.Controls.Add(_btnRemoveProcess, 1, 0);
+        _procPanel.Controls.Add(_txtProcesses, 0, 0);
         _procPanel.Dock = DockStyle.Fill;
         _procPanel.Location = new Point(165, 151);
         _procPanel.Margin = new Padding(5);
         _procPanel.Name = "_procPanel";
         _procPanel.RowCount = 1;
-        _procPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 20F));
+        _procPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
         _procPanel.Size = new Size(589, 80);
         _procPanel.TabIndex = 7;
         // 
-        // _lstProcesses
+        // _txtProcesses
         // 
-        _lstProcesses.Dock = DockStyle.Fill;
-        _lstProcesses.Location = new Point(3, 3);
-        _lstProcesses.Name = "_lstProcesses";
-        _lstProcesses.Size = new Size(513, 74);
-        _lstProcesses.TabIndex = 0;
+		_txtProcesses.AcceptsReturn = true;
+		_txtProcesses.AcceptsTab = true;
+		_txtProcesses.Dock = DockStyle.Fill;
+		_txtProcesses.Location = new Point(3, 3);
+		_txtProcesses.Multiline = true;
+		_txtProcesses.Name = "_txtProcesses";
+		_txtProcesses.PlaceholderText = "每行一个进程名，例如:\r\ndevenv.exe\r\nservicehub*.exe";
+		_txtProcesses.ScrollBars = ScrollBars.Vertical;
+		_txtProcesses.Size = new Size(583, 74);
+		_txtProcesses.TabIndex = 0;
+		_txtProcesses.WordWrap = false;
         // 
-        // _btnRemoveProcess
+        // _lblDomainRules
         // 
-        _btnRemoveProcess.Dock = DockStyle.Fill;
-        _btnRemoveProcess.Location = new Point(521, 2);
-        _btnRemoveProcess.Margin = new Padding(2);
-        _btnRemoveProcess.Name = "_btnRemoveProcess";
-        _btnRemoveProcess.Size = new Size(66, 76);
-        _btnRemoveProcess.TabIndex = 1;
-        _btnRemoveProcess.Text = "Remove";
-        _btnRemoveProcess.Click += BtnRemoveProcess_Click;
+		_lblDomainRules.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+		_lblDomainRules.Location = new Point(13, 277);
+		_lblDomainRules.Name = "_lblDomainRules";
+		_lblDomainRules.Size = new Size(144, 23);
+		_lblDomainRules.TabIndex = 8;
+		_lblDomainRules.Text = "Domain Rule List:";
+		_lblDomainRules.TextAlign = ContentAlignment.TopRight;
         // 
-        // _lblAddProcess
+        // _domainRulesPanel
         // 
-        _lblAddProcess.Anchor = AnchorStyles.Left | AnchorStyles.Right;
-        _lblAddProcess.Location = new Point(13, 244);
-        _lblAddProcess.Name = "_lblAddProcess";
-        _lblAddProcess.Size = new Size(144, 23);
-        _lblAddProcess.TabIndex = 8;
-        _lblAddProcess.Text = "Add Process:";
-        _lblAddProcess.TextAlign = ContentAlignment.MiddleRight;
+		_domainRulesPanel.ColumnCount = 1;
+		_domainRulesPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+		_domainRulesPanel.Controls.Add(_txtDomainRules, 0, 0);
+		_domainRulesPanel.Dock = DockStyle.Fill;
+		_domainRulesPanel.Location = new Point(165, 282);
+		_domainRulesPanel.Margin = new Padding(5);
+		_domainRulesPanel.Name = "_domainRulesPanel";
+		_domainRulesPanel.RowCount = 1;
+		_domainRulesPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
+		_domainRulesPanel.Size = new Size(589, 80);
+		_domainRulesPanel.TabIndex = 9;
         // 
-        // _addProcPanel
+        // _txtDomainRules
         // 
-        _addProcPanel.ColumnCount = 2;
-        _addProcPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-        _addProcPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 70F));
-        _addProcPanel.Controls.Add(_txtNewProcess, 0, 0);
-        _addProcPanel.Controls.Add(_btnAddProcess, 1, 0);
-        _addProcPanel.Dock = DockStyle.Fill;
-        _addProcPanel.Location = new Point(165, 241);
-        _addProcPanel.Margin = new Padding(5);
-        _addProcPanel.Name = "_addProcPanel";
-        _addProcPanel.RowCount = 1;
-        _addProcPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 20F));
-        _addProcPanel.Size = new Size(589, 29);
-        _addProcPanel.TabIndex = 9;
-        // 
-        // _txtNewProcess
-        // 
-        _txtNewProcess.Dock = DockStyle.Fill;
-        _txtNewProcess.Location = new Point(3, 3);
-        _txtNewProcess.Name = "_txtNewProcess";
-        _txtNewProcess.Size = new Size(513, 23);
-        _txtNewProcess.TabIndex = 0;
-        // 
-        // _btnAddProcess
-        // 
-        _btnAddProcess.Dock = DockStyle.Fill;
-        _btnAddProcess.Location = new Point(521, 2);
-        _btnAddProcess.Margin = new Padding(2);
-        _btnAddProcess.Name = "_btnAddProcess";
-        _btnAddProcess.Size = new Size(66, 25);
-        _btnAddProcess.TabIndex = 1;
-        _btnAddProcess.Text = "Add";
-        _btnAddProcess.Click += BtnAddProcess_Click;
-        // 
-        // _lblExtraPids
-        // 
-        _lblExtraPids.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
-        _lblExtraPids.Location = new Point(13, 275);
-        _lblExtraPids.Name = "_lblExtraPids";
-        _lblExtraPids.Size = new Size(144, 23);
-        _lblExtraPids.TabIndex = 10;
-        _lblExtraPids.Text = "Extra PIDs:";
-        _lblExtraPids.TextAlign = ContentAlignment.TopRight;
-        // 
-        // _pidPanel
-        // 
-        _pidPanel.ColumnCount = 2;
-        _pidPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-        _pidPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 70F));
-        _pidPanel.Controls.Add(_lstExtraPids, 0, 0);
-        _pidPanel.Controls.Add(_btnRemovePid, 1, 0);
-        _pidPanel.Dock = DockStyle.Fill;
-        _pidPanel.Location = new Point(165, 280);
-        _pidPanel.Margin = new Padding(5);
-        _pidPanel.Name = "_pidPanel";
-        _pidPanel.RowCount = 1;
-        _pidPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 20F));
-        _pidPanel.Size = new Size(589, 80);
-        _pidPanel.TabIndex = 11;
-        // 
-        // _lstExtraPids
-        // 
-        _lstExtraPids.Dock = DockStyle.Fill;
-        _lstExtraPids.Location = new Point(3, 3);
-        _lstExtraPids.Name = "_lstExtraPids";
-        _lstExtraPids.Size = new Size(513, 74);
-        _lstExtraPids.TabIndex = 0;
-        // 
-        // _btnRemovePid
-        // 
-        _btnRemovePid.Dock = DockStyle.Fill;
-        _btnRemovePid.Location = new Point(521, 2);
-        _btnRemovePid.Margin = new Padding(2);
-        _btnRemovePid.Name = "_btnRemovePid";
-        _btnRemovePid.Size = new Size(66, 76);
-        _btnRemovePid.TabIndex = 1;
-        _btnRemovePid.Text = "Remove";
-        _btnRemovePid.Click += BtnRemovePid_Click;
-        // 
-        // _lblAddPid
-        // 
-        _lblAddPid.Anchor = AnchorStyles.Left | AnchorStyles.Right;
-        _lblAddPid.Location = new Point(13, 374);
-        _lblAddPid.Name = "_lblAddPid";
-        _lblAddPid.Size = new Size(144, 23);
-        _lblAddPid.TabIndex = 12;
-        _lblAddPid.Text = "Add PID:";
-        _lblAddPid.TextAlign = ContentAlignment.MiddleRight;
-        // 
-        // _addPidPanel
-        // 
-        _addPidPanel.ColumnCount = 2;
-        _addPidPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-        _addPidPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 70F));
-        _addPidPanel.Controls.Add(_txtNewPid, 0, 0);
-        _addPidPanel.Controls.Add(_btnAddPid, 1, 0);
-        _addPidPanel.Dock = DockStyle.Fill;
-        _addPidPanel.Location = new Point(165, 370);
-        _addPidPanel.Margin = new Padding(5);
-        _addPidPanel.Name = "_addPidPanel";
-        _addPidPanel.RowCount = 1;
-        _addPidPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 20F));
-        _addPidPanel.Size = new Size(589, 32);
-        _addPidPanel.TabIndex = 13;
-        // 
-        // _txtNewPid
-        // 
-        _txtNewPid.Dock = DockStyle.Fill;
-        _txtNewPid.Location = new Point(3, 3);
-        _txtNewPid.Name = "_txtNewPid";
-        _txtNewPid.Size = new Size(513, 23);
-        _txtNewPid.TabIndex = 0;
-        // 
-        // _btnAddPid
-        // 
-        _btnAddPid.Dock = DockStyle.Fill;
-        _btnAddPid.Location = new Point(521, 2);
-        _btnAddPid.Margin = new Padding(2);
-        _btnAddPid.Name = "_btnAddPid";
-        _btnAddPid.Size = new Size(66, 28);
-        _btnAddPid.TabIndex = 1;
-        _btnAddPid.Text = "Add";
-        _btnAddPid.Click += BtnAddPid_Click;
+        _txtDomainRules.AcceptsReturn = true;
+        _txtDomainRules.AcceptsTab = true;
+        _txtDomainRules.Dock = DockStyle.Fill;
+        _txtDomainRules.Location = new Point(3, 3);
+        _txtDomainRules.Multiline = true;
+        _txtDomainRules.Name = "_txtDomainRules";
+        _txtDomainRules.PlaceholderText = "每行一个域名规则，例如:\r\n*.github.com\r\nraw.githubusercontent.com";
+        _txtDomainRules.ScrollBars = ScrollBars.Vertical;
+        _txtDomainRules.Size = new Size(583, 74);
+        _txtDomainRules.TabIndex = 0;
+        _txtDomainRules.WordWrap = false;
         // 
         // _lblConfigFile
         // 
@@ -1148,51 +1012,51 @@ partial class MainForm
         // 
         _contextMenu.Items.AddRange(new ToolStripItem[] { _trayShowMenuItem, _trayHideMenuItem, _trayTopSeparator, _trayStartProxyMenuItem, _trayStopProxyMenuItem, _trayMiddleSeparator, _trayOptionsMenuItem, _trayConfigMenuItem, _trayBottomSeparator, _trayExitMenuItem });
         _contextMenu.Name = "_contextMenu";
-        _contextMenu.Size = new Size(181, 198);
+        _contextMenu.Size = new Size(140, 176);
         // 
         // _trayShowMenuItem
         // 
         _trayShowMenuItem.Name = "_trayShowMenuItem";
-        _trayShowMenuItem.Size = new Size(180, 22);
+        _trayShowMenuItem.Size = new Size(139, 22);
         _trayShowMenuItem.Text = "Show";
         _trayShowMenuItem.Click += TrayShowMenuItem_Click;
         // 
         // _trayHideMenuItem
         // 
         _trayHideMenuItem.Name = "_trayHideMenuItem";
-        _trayHideMenuItem.Size = new Size(180, 22);
+        _trayHideMenuItem.Size = new Size(139, 22);
         _trayHideMenuItem.Text = "Hide";
         _trayHideMenuItem.Click += TrayHideMenuItem_Click;
         // 
         // _trayTopSeparator
         // 
         _trayTopSeparator.Name = "_trayTopSeparator";
-        _trayTopSeparator.Size = new Size(177, 6);
+        _trayTopSeparator.Size = new Size(136, 6);
         // 
         // _trayStartProxyMenuItem
         // 
         _trayStartProxyMenuItem.Name = "_trayStartProxyMenuItem";
-        _trayStartProxyMenuItem.Size = new Size(180, 22);
+        _trayStartProxyMenuItem.Size = new Size(139, 22);
         _trayStartProxyMenuItem.Text = "Start Proxy";
         _trayStartProxyMenuItem.Click += TrayStartProxyMenuItem_Click;
         // 
         // _trayStopProxyMenuItem
         // 
         _trayStopProxyMenuItem.Name = "_trayStopProxyMenuItem";
-        _trayStopProxyMenuItem.Size = new Size(180, 22);
+        _trayStopProxyMenuItem.Size = new Size(139, 22);
         _trayStopProxyMenuItem.Text = "Stop Proxy";
         _trayStopProxyMenuItem.Click += TrayStopProxyMenuItem_Click;
         // 
         // _trayMiddleSeparator
         // 
         _trayMiddleSeparator.Name = "_trayMiddleSeparator";
-        _trayMiddleSeparator.Size = new Size(177, 6);
+        _trayMiddleSeparator.Size = new Size(136, 6);
         // 
         // _trayOptionsMenuItem
         // 
         _trayOptionsMenuItem.DropDownItems.AddRange(new ToolStripItem[] { _trayStartOnBootMenuItem, _trayAutoStartProxyMenuItem });
         _trayOptionsMenuItem.Name = "_trayOptionsMenuItem";
-        _trayOptionsMenuItem.Size = new Size(180, 22);
+        _trayOptionsMenuItem.Size = new Size(139, 22);
         _trayOptionsMenuItem.Text = "Options";
         // 
         // _trayStartOnBootMenuItem
@@ -1215,7 +1079,7 @@ partial class MainForm
         // 
         _trayConfigMenuItem.DropDownItems.AddRange(new ToolStripItem[] { _trayLoadConfigMenuItem, _traySaveConfigAsMenuItem, _traySaveConfigMenuItem, _trayConfigSeparator });
         _trayConfigMenuItem.Name = "_trayConfigMenuItem";
-        _trayConfigMenuItem.Size = new Size(180, 22);
+        _trayConfigMenuItem.Size = new Size(139, 22);
         _trayConfigMenuItem.Text = "Config";
         // 
         // _trayLoadConfigMenuItem
@@ -1247,12 +1111,12 @@ partial class MainForm
         // _trayBottomSeparator
         // 
         _trayBottomSeparator.Name = "_trayBottomSeparator";
-        _trayBottomSeparator.Size = new Size(177, 6);
+        _trayBottomSeparator.Size = new Size(136, 6);
         // 
         // _trayExitMenuItem
         // 
         _trayExitMenuItem.Name = "_trayExitMenuItem";
-        _trayExitMenuItem.Size = new Size(180, 22);
+        _trayExitMenuItem.Size = new Size(139, 22);
         _trayExitMenuItem.Text = "Exit";
         _trayExitMenuItem.Click += TrayExitMenuItem_Click;
         // 
@@ -1281,11 +1145,9 @@ partial class MainForm
         _proxyHeaderPanel.PerformLayout();
         ((ISupportInitialize)_numProxyPort).EndInit();
         _procPanel.ResumeLayout(false);
-        _addProcPanel.ResumeLayout(false);
-        _addProcPanel.PerformLayout();
-        _pidPanel.ResumeLayout(false);
-        _addPidPanel.ResumeLayout(false);
-        _addPidPanel.PerformLayout();
+        _procPanel.PerformLayout();
+		_domainRulesPanel.ResumeLayout(false);
+		_domainRulesPanel.PerformLayout();
         _startupOptionsPanel.ResumeLayout(false);
         _startupOptionsPanel.PerformLayout();
         _configActionPanel.ResumeLayout(false);

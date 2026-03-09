@@ -43,7 +43,7 @@ internal class ProxyConfigModel
 		Targeting = new TargetingSettings
 		{
 			ProcessNames = opts.ProcessNames.ToList(),
-			ExtraPids = opts.ExtraPids.ToList()
+			DomainRules = opts.DomainRules.ToList()
 		};
 		HostsRedirect = new HostsRedirectSettings
 		{
@@ -73,8 +73,8 @@ internal class TargetingSettings
 	[JsonPropertyName("processNames")]
 	public List<string> ProcessNames { get; set; } = [];
 
-	[JsonPropertyName("extraPids")]
-	public List<int> ExtraPids { get; set; } = [];
+	[JsonPropertyName("domainRules")]
+	public List<string> DomainRules { get; set; } = [];
 }
 
 internal class HostsRedirectSettings
@@ -232,8 +232,8 @@ internal sealed class ProxyConfigManager
 			Proxy = new ProxySettings(),
 			Targeting = new TargetingSettings
 			{
-				ProcessNames = new List<string>
-				{
+				ProcessNames =
+				[
 					"devenv.exe",
 					"blend.exe",
 					"servicehub*.exe",
@@ -246,8 +246,10 @@ internal sealed class ProxyConfigManager
 					"vstest*.exe",
 					"m365copilot.exe",
 					"m365copilot_autostarter.exe",
-					"m365copilot_widget.exe"
-				}
+					"m365copilot_widget.exe",
+					"webviewhost.exe"
+				],
+				DomainRules = [.. ProxyOptions.DefaultDomainRules]
 			}
 		};
 	}

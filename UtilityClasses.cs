@@ -4,56 +4,102 @@ using System.Text.RegularExpressions;
 namespace TrafficPilot;
 
 // ════════════════════════════════════════════════════════════════
+//  Rule normalizers
+// ════════════════════════════════════════════════════════════════
+
+internal static class TargetRuleNormalizer
+{
+	public static string NormalizeProcessName(string s)
+	{
+		if (string.IsNullOrWhiteSpace(s))
+			return string.Empty;
+
+		s = s.Trim().ToLowerInvariant();
+		return s.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) ? s : $"{s}.exe";
+	}
+
+	public static string NormalizeDomain(string s)
+	{
+		if (string.IsNullOrWhiteSpace(s))
+			return string.Empty;
+
+		s = s.Trim();
+		if (s.Contains("://", StringComparison.Ordinal) && Uri.TryCreate(s, UriKind.Absolute, out var uri) && !string.IsNullOrWhiteSpace(uri.Host))
+			s = uri.Host;
+		else
+		{
+			int slashIndex = s.IndexOf('/');
+			if (slashIndex >= 0)
+				s = s[..slashIndex];
+
+			if (!s.Contains('*') && !s.Contains('?'))
+			{
+				int colonIndex = s.LastIndexOf(':');
+				if (colonIndex > 0 && s.IndexOf(':') == colonIndex)
+					s = s[..colonIndex];
+			}
+		}
+
+		return s.Trim().TrimEnd('.').ToLowerInvariant();
+	}
+}
+
+// ════════════════════════════════════════════════════════════════
 //  Process allow-list matcher
 // ════════════════════════════════════════════════════════════════
 
 internal sealed class ProcessAllowListMatcher : IDisposable
 {
-	private readonly HashSet<string> _exactNames;
-	private readonly List<Regex> _namePatterns;
-	private readonly HashSet<int> _extraPids;
-	private readonly HashSet<int> _activePids = new();
+	private readonly HashSet<string> _exactNames = new(StringComparer.OrdinalIgnoreCase);
+	private readonly List<Regex> _namePatterns = [];
 	private readonly TimeSpan _refresh;
 	private readonly object _lock = new();
+	private readonly HashSet<int> _activePids = [];
 	private DateTime _lastRefresh = DateTime.MinValue;
 
-	public ProcessAllowListMatcher(IEnumerable<string> names, IEnumerable<int> pids, TimeSpan refresh)
+	public ProcessAllowListMatcher(IEnumerable<string> names, TimeSpan refresh)
 	{
-		_exactNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-		_namePatterns = new List<Regex>();
+		ArgumentNullException.ThrowIfNull(names);
+
 		foreach (var raw in names)
 		{
-			var normalized = Norm(raw);
+			var normalized = TargetRuleNormalizer.NormalizeProcessName(raw);
+			if (string.IsNullOrWhiteSpace(normalized))
+				continue;
+
 			if (normalized.Contains('*') || normalized.Contains('?'))
 				_namePatterns.Add(WildcardToRegex(normalized));
 			else
 				_exactNames.Add(normalized);
 		}
-		_extraPids = new HashSet<int>(pids);
+
 		_refresh = refresh;
 	}
 
-	public bool HasAnyRule => _exactNames.Count > 0 || _namePatterns.Count > 0 || _extraPids.Count > 0;
+	public bool HasAnyRule => _exactNames.Count > 0 || _namePatterns.Count > 0;
 
 	public bool ContainsPid(int pid)
 	{
 		lock (_lock)
 		{
-			if (_extraPids.Contains(pid)) return true;
-			if (DateTime.UtcNow - _lastRefresh > _refresh) RefreshPids();
+			if (DateTime.UtcNow - _lastRefresh > _refresh)
+				RefreshPids();
+
 			return _activePids.Contains(pid);
 		}
 	}
 
 	public string Describe()
 	{
-		var allRules = _exactNames.Concat(_namePatterns.Select(p => RegexToWildcardText(p))).OrderBy(x => x).ToArray();
-		var n = allRules.Length == 0 ? "none" : string.Join(", ", allRules);
-		var p = _extraPids.Count == 0 ? "none" : string.Join(", ", _extraPids.OrderBy(x => x));
-		return $"names=[{n}] pids=[{p}]";
+		var allRules = _exactNames.Concat(_namePatterns.Select(RegexToWildcardText)).OrderBy(x => x).ToArray();
+		return allRules.Length == 0 ? "none" : string.Join(", ", allRules);
 	}
 
-	public void Dispose() { lock (_lock) _activePids.Clear(); }
+	public void Dispose()
+	{
+		lock (_lock)
+			_activePids.Clear();
+	}
 
 	private void RefreshPids()
 	{
@@ -62,21 +108,31 @@ internal sealed class ProcessAllowListMatcher : IDisposable
 		{
 			try
 			{
-				var exeName = $"{proc.ProcessName}.exe";
+				var exeName = TargetRuleNormalizer.NormalizeProcessName(proc.ProcessName);
 				if (IsNameMatched(exeName))
 					_activePids.Add(proc.Id);
 			}
-			catch { }
-			finally { proc.Dispose(); }
+			catch
+			{
+			}
+			finally
+			{
+				proc.Dispose();
+			}
 		}
+
 		_lastRefresh = DateTime.UtcNow;
 	}
 
 	private bool IsNameMatched(string exeName)
 	{
-		if (_exactNames.Contains(exeName)) return true;
+		if (_exactNames.Contains(exeName))
+			return true;
+
 		foreach (var pattern in _namePatterns)
-			if (pattern.IsMatch(exeName)) return true;
+			if (pattern.IsMatch(exeName))
+				return true;
+
 		return false;
 	}
 
@@ -90,45 +146,72 @@ internal sealed class ProcessAllowListMatcher : IDisposable
 	{
 		return regex.ToString().Replace("^", "").Replace("$", "").Replace(".*", "*").Replace(".", "?").Replace("\\", "");
 	}
-
-	private static string Norm(string s)
-	{
-		s = s.Trim();
-		return s.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) ? s : $"{s}.exe";
-	}
 }
 
 // ════════════════════════════════════════════════════════════════
-//  Process name resolver (PID → name cache)
+//  Domain rule matcher
 // ════════════════════════════════════════════════════════════════
 
-internal sealed class ProcessNameResolver : IDisposable
+internal sealed class DomainRuleMatcher
 {
-	private readonly TimeSpan _ttl;
-	private readonly Dictionary<int, (string Name, DateTime Expire)> _cache = new();
-	private readonly object _lock = new();
+	private readonly HashSet<string> _exactDomains = new(StringComparer.OrdinalIgnoreCase);
+	private readonly List<Regex> _domainPatterns = [];
 
-	public ProcessNameResolver(TimeSpan ttl) => _ttl = ttl;
-
-	public string Resolve(int pid)
+	public DomainRuleMatcher(IEnumerable<string> rules)
 	{
-		lock (_lock)
+		ArgumentNullException.ThrowIfNull(rules);
+
+		foreach (var raw in rules)
 		{
-			if (_cache.TryGetValue(pid, out var c) && c.Expire > DateTime.UtcNow)
-				return c.Name;
-			var name = GetName(pid);
-			_cache[pid] = (name, DateTime.UtcNow.Add(_ttl));
-			return name;
+			var normalized = TargetRuleNormalizer.NormalizeDomain(raw);
+			if (string.IsNullOrWhiteSpace(normalized))
+				continue;
+
+			if (normalized.Contains('*') || normalized.Contains('?'))
+				_domainPatterns.Add(WildcardToRegex(normalized));
+			else
+				_exactDomains.Add(normalized);
 		}
 	}
 
-	public void Dispose() { lock (_lock) _cache.Clear(); }
+	public bool HasAnyRule => _exactDomains.Count > 0 || _domainPatterns.Count > 0;
 
-	private static string GetName(int pid)
+	public bool IsMatch(string? domain)
 	{
-		try { using var p = Process.GetProcessById(pid); return $"{p.ProcessName}.exe"; }
-		catch { return "unknown.exe"; }
+		if (string.IsNullOrWhiteSpace(domain))
+			return false;
+
+		var normalized = TargetRuleNormalizer.NormalizeDomain(domain);
+		if (normalized.Length == 0)
+			return false;
+
+		if (_exactDomains.Contains(normalized))
+			return true;
+
+		foreach (var pattern in _domainPatterns)
+			if (pattern.IsMatch(normalized))
+				return true;
+
+		return false;
 	}
+
+	public string Describe()
+	{
+		var allRules = _exactDomains.Concat(_domainPatterns.Select(RegexToWildcardText)).OrderBy(x => x).ToArray();
+		return allRules.Length == 0 ? "none" : string.Join(", ", allRules);
+	}
+
+	private static Regex WildcardToRegex(string wildcard)
+	{
+		var pattern = "^" + Regex.Escape(wildcard).Replace("\\*", ".*").Replace("\\?", ".") + "$";
+		return new Regex(pattern, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
+	}
+
+	private static string RegexToWildcardText(Regex regex)
+	{
+		return regex.ToString().Replace("^", "").Replace("$", "").Replace(".*", "*").Replace(".", "?").Replace("\\", "");
+	}
+
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -259,8 +342,8 @@ internal sealed class SkipLogDedup
 // ════════════════════════════════════════════════════════════════
 
 internal sealed record ProxyOptions(
-	IReadOnlyCollection<int> ExtraPids,
 	IReadOnlyCollection<string> ProcessNames,
+	IReadOnlyCollection<string> DomainRules,
 	string ProxyHost, ushort ProxyPort, string ProxyScheme,
 	bool ProxyEnabled = true,
 	bool HostsRedirectEnabled = false,
@@ -284,10 +367,26 @@ internal sealed record ProxyOptions(
 		"webviewhost.exe"
 	];
 
+	internal static readonly string[] DefaultDomainRules =
+	[
+		"github.com",
+		"*.github.com",
+		"github.io",
+		"github.blog",
+		"githubstatus.com",
+		"github.community",
+		"*.githubusercontent.com",
+		"*.githubassets.com",
+		"*.githubcopilot.com",
+		"*.s3.amazonaws.com",
+		"*.fastly.net",
+		"vscode.dev"
+	];
+
 	public static ProxyOptions? Parse(string[] args)
 	{
-		var pids = new HashSet<int>();
-		var names = new HashSet<string>(DefaultProcessNames.Select(Norm), StringComparer.OrdinalIgnoreCase);
+		var processNames = new HashSet<string>(DefaultProcessNames.Select(TargetRuleNormalizer.NormalizeProcessName), StringComparer.OrdinalIgnoreCase);
+		var domains = new HashSet<string>(DefaultDomainRules.Select(TargetRuleNormalizer.NormalizeDomain), StringComparer.OrdinalIgnoreCase);
 		string host = "host.docker.internal";
 		ushort port = 7890;
 		string scheme = "socks4";
@@ -296,19 +395,25 @@ internal sealed record ProxyOptions(
 		{
 			switch (args[i])
 			{
-				case "--pid":
-					if (i + 1 >= args.Length || !int.TryParse(args[++i], out var p)) return null;
-					pids.Add(p);
-					break;
 				case "--process":
 					if (i + 1 >= args.Length) return null;
-					names.Add(Norm(args[++i]));
+					processNames.Add(TargetRuleNormalizer.NormalizeProcessName(args[++i]));
 					break;
 				case "--process-list":
 					if (i + 1 >= args.Length) return null;
-					names.Clear();
+					processNames.Clear();
 					foreach (var s in args[++i].Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-						names.Add(Norm(s));
+						processNames.Add(TargetRuleNormalizer.NormalizeProcessName(s));
+					break;
+				case "--domain":
+					if (i + 1 >= args.Length) return null;
+					domains.Add(TargetRuleNormalizer.NormalizeDomain(args[++i]));
+					break;
+				case "--domain-list":
+					if (i + 1 >= args.Length) return null;
+					domains.Clear();
+					foreach (var s in args[++i].Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+						domains.Add(TargetRuleNormalizer.NormalizeDomain(s));
 					break;
 				case "--proxy":
 					if (i + 1 >= args.Length) return null;
@@ -326,12 +431,11 @@ internal sealed record ProxyOptions(
 			}
 		}
 
-		return new ProxyOptions(pids.ToArray(), names.ToArray(), host, port, scheme);
-	}
-
-	private static string Norm(string s)
-	{
-		s = s.Trim();
-		return s.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) ? s : $"{s}.exe";
+		return new ProxyOptions(
+			processNames.Where(static x => x.Length > 0).ToArray(),
+			domains.Where(static x => x.Length > 0).ToArray(),
+			host,
+			port,
+			scheme);
 	}
 }
