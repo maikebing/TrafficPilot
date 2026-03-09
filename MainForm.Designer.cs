@@ -154,7 +154,11 @@ partial class MainForm
         _aboutScrollPanel = new Panel();
         _aboutContentPanel = new TableLayoutPanel();
         titleLabel = new Label();
+        _versionPanel = new FlowLayoutPanel();
         versionLabel = new Label();
+        _lblLatestVersion = new Label();
+        _btnCheckUpdate = new Button();
+        _lblUpdateStatus = new Label();
         descLabel = new Label();
         descContentLabel = new Label();
         contribLabel = new Label();
@@ -185,6 +189,7 @@ partial class MainForm
         _aboutTab.SuspendLayout();
         _aboutScrollPanel.SuspendLayout();
         _aboutContentPanel.SuspendLayout();
+        _versionPanel.SuspendLayout();
         _statusPanel.SuspendLayout();
         _controlPanel.SuspendLayout();
         SuspendLayout();
@@ -776,7 +781,7 @@ partial class MainForm
         _aboutContentPanel.ColumnCount = 1;
         _aboutContentPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
         _aboutContentPanel.Controls.Add(titleLabel, 0, 0);
-        _aboutContentPanel.Controls.Add(versionLabel, 0, 1);
+        _aboutContentPanel.Controls.Add(_versionPanel, 0, 1);
         _aboutContentPanel.Controls.Add(descLabel, 0, 2);
         _aboutContentPanel.Controls.Add(descContentLabel, 0, 3);
         _aboutContentPanel.Controls.Add(contribLabel, 0, 4);
@@ -797,7 +802,7 @@ partial class MainForm
         _aboutContentPanel.RowStyles.Add(new RowStyle());
         _aboutContentPanel.RowStyles.Add(new RowStyle());
         _aboutContentPanel.RowStyles.Add(new RowStyle());
-        _aboutContentPanel.Size = new Size(732, 537);
+        _aboutContentPanel.Size = new Size(732, 531);
         _aboutContentPanel.TabIndex = 0;
         // 
         // titleLabel
@@ -811,22 +816,68 @@ partial class MainForm
         titleLabel.TabIndex = 0;
         titleLabel.Text = "TrafficPilot";
         // 
+        // _versionPanel
+        // 
+        _versionPanel.AutoSize = true;
+        _versionPanel.Controls.Add(versionLabel);
+        _versionPanel.Controls.Add(_lblLatestVersion);
+        _versionPanel.Controls.Add(_btnCheckUpdate);
+        _versionPanel.Controls.Add(_lblUpdateStatus);
+        _versionPanel.Location = new Point(10, 50);
+        _versionPanel.Margin = new Padding(0, 0, 0, 15);
+        _versionPanel.Name = "_versionPanel";
+        _versionPanel.Size = new Size(210, 28);
+        _versionPanel.TabIndex = 1;
+        _versionPanel.WrapContents = false;
+        // 
         // versionLabel
         // 
         versionLabel.AutoSize = true;
         versionLabel.ForeColor = SystemColors.GrayText;
-        versionLabel.Location = new Point(10, 50);
-        versionLabel.Margin = new Padding(0, 0, 0, 15);
+        versionLabel.Location = new Point(0, 0);
+        versionLabel.Margin = new Padding(0);
         versionLabel.Name = "versionLabel";
-        versionLabel.Size = new Size(119, 34);
+        versionLabel.Size = new Size(86, 17);
         versionLabel.TabIndex = 1;
-        versionLabel.Text = "Version: 1.0.0\nRelease Date: 2024";
+        versionLabel.Text = "Version: 1.0.0";
+        // 
+        // _lblLatestVersion
+        // 
+        _lblLatestVersion.AutoSize = true;
+        _lblLatestVersion.ForeColor = SystemColors.GrayText;
+        _lblLatestVersion.Location = new Point(86, 0);
+        _lblLatestVersion.Margin = new Padding(0, 0, 8, 0);
+        _lblLatestVersion.Name = "_lblLatestVersion";
+        _lblLatestVersion.Size = new Size(12, 17);
+        _lblLatestVersion.TabIndex = 2;
+        _lblLatestVersion.Text = " ";
+        // 
+        // _btnCheckUpdate
+        // 
+        _btnCheckUpdate.Location = new Point(106, 0);
+        _btnCheckUpdate.Margin = new Padding(0, 0, 8, 0);
+        _btnCheckUpdate.Name = "_btnCheckUpdate";
+        _btnCheckUpdate.Size = new Size(96, 28);
+        _btnCheckUpdate.TabIndex = 8;
+        _btnCheckUpdate.Text = "Update Now";
+        _btnCheckUpdate.Visible = false;
+        _btnCheckUpdate.Click += BtnCheckUpdate_Click;
+        // 
+        // _lblUpdateStatus
+        // 
+        _lblUpdateStatus.AutoSize = true;
+        _lblUpdateStatus.ForeColor = SystemColors.GrayText;
+        _lblUpdateStatus.Location = new Point(210, 5);
+        _lblUpdateStatus.Margin = new Padding(0, 5, 0, 0);
+        _lblUpdateStatus.Name = "_lblUpdateStatus";
+        _lblUpdateStatus.Size = new Size(0, 17);
+        _lblUpdateStatus.TabIndex = 9;
         // 
         // descLabel
         // 
         descLabel.AutoSize = true;
         descLabel.Font = new Font("Segoe UI", 11F, FontStyle.Bold);
-        descLabel.Location = new Point(10, 99);
+        descLabel.Location = new Point(10, 93);
         descLabel.Margin = new Padding(0, 0, 0, 5);
         descLabel.Name = "descLabel";
         descLabel.Size = new Size(142, 20);
@@ -836,7 +887,7 @@ partial class MainForm
         // descContentLabel
         // 
         descContentLabel.AutoSize = true;
-        descContentLabel.Location = new Point(20, 124);
+        descContentLabel.Location = new Point(20, 118);
         descContentLabel.Margin = new Padding(10, 0, 0, 15);
         descContentLabel.MaximumSize = new Size(450, 0);
         descContentLabel.Name = "descContentLabel";
@@ -848,7 +899,7 @@ partial class MainForm
         // 
         contribLabel.AutoSize = true;
         contribLabel.Font = new Font("Segoe UI", 11F, FontStyle.Bold);
-        contribLabel.Location = new Point(10, 309);
+        contribLabel.Location = new Point(10, 303);
         contribLabel.Margin = new Padding(0, 0, 0, 5);
         contribLabel.Name = "contribLabel";
         contribLabel.Size = new Size(236, 20);
@@ -858,7 +909,7 @@ partial class MainForm
         // contribContentLabel
         // 
         contribContentLabel.AutoSize = true;
-        contribContentLabel.Location = new Point(20, 334);
+        contribContentLabel.Location = new Point(20, 328);
         contribContentLabel.Margin = new Padding(10, 0, 0, 15);
         contribContentLabel.MaximumSize = new Size(450, 0);
         contribContentLabel.Name = "contribContentLabel";
@@ -870,7 +921,7 @@ partial class MainForm
         // 
         techLabel.AutoSize = true;
         techLabel.Font = new Font("Segoe UI", 11F, FontStyle.Bold);
-        techLabel.Location = new Point(10, 417);
+        techLabel.Location = new Point(10, 411);
         techLabel.Margin = new Padding(0, 0, 0, 5);
         techLabel.Name = "techLabel";
         techLabel.Size = new Size(162, 20);
@@ -880,7 +931,7 @@ partial class MainForm
         // techContentLabel
         // 
         techContentLabel.AutoSize = true;
-        techContentLabel.Location = new Point(20, 442);
+        techContentLabel.Location = new Point(20, 436);
         techContentLabel.Margin = new Padding(10, 0, 0, 0);
         techContentLabel.MaximumSize = new Size(450, 0);
         techContentLabel.Name = "techContentLabel";
@@ -978,18 +1029,24 @@ partial class MainForm
         _aboutScrollPanel.PerformLayout();
         _aboutContentPanel.ResumeLayout(false);
         _aboutContentPanel.PerformLayout();
+        _versionPanel.ResumeLayout(false);
+        _versionPanel.PerformLayout();
         _statusPanel.ResumeLayout(false);
         _statusPanel.PerformLayout();
         _controlPanel.ResumeLayout(false);
         ResumeLayout(false);
     }
 
+    private FlowLayoutPanel? _versionPanel;
     private Label titleLabel;
     private Label versionLabel;
+    private Label? _lblLatestVersion;
     private Label descLabel;
     private Label descContentLabel;
     private Label contribLabel;
     private Label contribContentLabel;
     private Label techLabel;
     private Label techContentLabel;
+    private Button? _btnCheckUpdate;
+    private Label? _lblUpdateStatus;
 }

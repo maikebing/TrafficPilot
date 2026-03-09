@@ -15,6 +15,8 @@ internal partial class MainForm : Form
 	private ProxyConfigModel _currentConfig;
 
 	private LogBuffer? _logBuffer;
+	private readonly AutoUpdater _autoUpdater;
+	private ReleaseInfo? _availableRelease;
 
 	private bool _isStarting = false;
 
@@ -23,6 +25,7 @@ internal partial class MainForm : Form
 		_configManager = new ProxyConfigManager();
 		_currentConfig = _configManager.Load();
 		_logBuffer = new LogBuffer(BatchAppendLogs);
+		_autoUpdater = new AutoUpdater();
 		InitializeComponent();
 		InitializeNotifyIcon();
 		LoadApplicationIcon();
@@ -41,7 +44,39 @@ internal partial class MainForm : Form
 	{
 		var version = Assembly.GetEntryAssembly()?.GetName().Version?.ToString() ?? "Unknown";
 		versionLabel.Text = $"Version: {version}";
+		_lblLatestVersion!.Text = " | Online latest: querying...";
+		_btnCheckUpdate!.Visible = false;
+		_lblUpdateStatus!.Text = string.Empty;
 		Text = $"TrafficPilot {version}";
+	}
+
+	private static Version GetCurrentVersion()
+	{
+		var version = Assembly.GetEntryAssembly()?.GetName().Version;
+		if (version is null)
+			return new Version(0, 0, 0);
+
+		return new Version(version.Major, Math.Max(0, version.Minor), Math.Max(0, version.Build));
+	}
+
+	private void ShowLatestVersion(ReleaseInfo? latestRelease)
+	{
+		_availableRelease = latestRelease;
+		_lblLatestVersion!.Text = latestRelease is null
+			? " | Online latest: unavailable"
+			: $" | Online latest: {latestRelease.Version}";
+
+		var hasUpdate = latestRelease is not null && latestRelease.Version > GetCurrentVersion();
+		_btnCheckUpdate!.Visible = hasUpdate;
+		_lblUpdateStatus!.Text = hasUpdate ? $" | Update available from {latestRelease!.Source}" : string.Empty;
+	}
+
+	private async Task<ReleaseInfo?> RefreshLatestVersionAsync()
+	{
+		var latestRelease = await _autoUpdater.GetLatestReleaseAsync();
+
+		ShowLatestVersion(latestRelease);
+		return latestRelease;
 	}
 
 	private void InitializeNotifyIcon()
@@ -330,8 +365,101 @@ internal partial class MainForm : Form
 			_engine?.Dispose();
 			_notifyIcon?.Dispose();
 			_contextMenu?.Dispose();
+			_autoUpdater.Dispose();
 		}
 		base.Dispose(disposing);
+	}
+
+	protected override async void OnLoad(EventArgs e)
+	{
+		base.OnLoad(e);
+
+		try
+		{
+			await RefreshLatestVersionAsync();
+		}
+		catch (HttpRequestException)
+		{
+			ShowLatestVersion(null);
+			_lblUpdateStatus!.Text = string.Empty;
+		}
+	}
+
+	private async void BtnCheckUpdate_Click(object? sender, EventArgs e)
+	{
+		_btnCheckUpdate!.Enabled = false;
+		_lblUpdateStatus!.Text = "Checking for updates...";
+
+		try
+		{
+			_lblUpdateStatus.Text = " | Checking for updates...";
+
+			var latestRelease = _availableRelease ?? await RefreshLatestVersionAsync();
+			var current = GetCurrentVersion();
+
+			if (latestRelease is null)
+			{
+				_lblUpdateStatus.Text = " | Unable to determine the online latest version.";
+				return;
+			}
+
+			if (latestRelease.Version <= current)
+			{
+				_btnCheckUpdate.Visible = false;
+				_lblUpdateStatus.Text = string.Empty;
+				return;
+			}
+
+			_lblUpdateStatus.Text = $" | Update available from {latestRelease.Source}";
+
+			var confirm = MessageBox.Show(
+				$"Version {latestRelease.Version} is available from {latestRelease.Source}.\n\nDownload and install it now?",
+				"Update Available",
+				MessageBoxButtons.YesNo,
+				MessageBoxIcon.Information);
+
+			if (confirm != DialogResult.Yes)
+			{
+				_lblUpdateStatus.Text = $" | Update {latestRelease.Version} available";
+				return;
+			}
+
+			var progress = new Progress<(int Percent, string Message)>(report =>
+				_lblUpdateStatus.Text = $" | {report.Message} ({report.Percent}%)");
+
+			await _autoUpdater.DownloadAndApplyUpdateAsync(latestRelease, progress);
+
+			MessageBox.Show(
+				"The update has been downloaded. The application will now close and restart to apply it.",
+				"Restart Required",
+				MessageBoxButtons.OK,
+				MessageBoxIcon.Information);
+
+			_engine?.Dispose();
+			_notifyIcon?.Dispose();
+			Application.Exit();
+		}
+		catch (HttpRequestException ex)
+		{
+			ShowLatestVersion(null);
+			_lblUpdateStatus.Text = $" | Update failed: {ex.Message}";
+		}
+		catch (InvalidOperationException ex)
+		{
+			_lblUpdateStatus.Text = $" | Update failed: {ex.Message}";
+		}
+		catch (IOException ex)
+		{
+			_lblUpdateStatus.Text = $" | Update failed: {ex.Message}";
+		}
+		catch (UnauthorizedAccessException ex)
+		{
+			_lblUpdateStatus.Text = $" | Update failed: {ex.Message}";
+		}
+		finally
+		{
+			_btnCheckUpdate.Enabled = true;
+		}
 	}
 
 	private void BtnRemoveProcess_Click(object? sender, EventArgs e)
