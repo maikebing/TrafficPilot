@@ -120,6 +120,10 @@ internal sealed class ProxyEngine : IDisposable
 			await _dnsInterceptor.StopAsync();
 	}
 
+	/// <summary>Pushes freshly resolved IPs into the live DNS interceptor without restarting it.</summary>
+	public void UpdateHostsEntries(IReadOnlyDictionary<string, byte[]> updates)
+		=> _hostsProvider?.BatchUpdate(updates);
+
 	public void Dispose()
 	{
 		_packetLoopTask?.Dispose();

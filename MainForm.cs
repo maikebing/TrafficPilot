@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.Net;
 using System.Reflection;
 using TrafficPilot.Properties;
 
@@ -21,6 +22,10 @@ internal partial class MainForm : Form
 
 	private bool _isStarting = false;
 	private bool _initialAutoStartHandled;
+
+	private CancellationTokenSource? _ipFetchCts;
+	private CancellationTokenSource? _autoFetchCts;
+	private Task? _autoFetchTask;
 
 	public MainForm()
 	{
@@ -252,7 +257,8 @@ internal partial class MainForm : Form
 			HostsRedirect = new HostsRedirectSettings
 			{
 				Enabled = _chkDNSRedirectEnabled!.Checked,
-				HostsUrl = _txtHostsUrl!.Text.Trim()
+				HostsUrl = _txtHostsUrl!.Text.Trim(),
+				RefreshDomains = GetRefreshDomainsFromUi()
 			},
 			StartOnBoot = _chkStartOnBoot!.Checked,
 			AutoStartProxy = _chkAutoStartProxy!.Checked
@@ -286,6 +292,7 @@ internal partial class MainForm : Form
 
 		_chkDNSRedirectEnabled!.Checked = _currentConfig.HostsRedirect?.Enabled ?? false;
 		_txtHostsUrl!.Text = _currentConfig.HostsRedirect?.HostsUrl ?? GitHub520HostsProvider.DefaultUrl;
+		SetRefreshDomainsToUi(_currentConfig.HostsRedirect?.RefreshDomains);
 		_chkStartOnBoot!.Checked = StartupManager.IsEnabled();
 		_chkAutoStartProxy!.Checked = _currentConfig.AutoStartProxy;
 		_txtConfigName!.Text = _currentConfig.ConfigName;
@@ -325,6 +332,28 @@ internal partial class MainForm : Form
 		_txtDomainRules!.Lines = rules is null
 			? []
 			: rules
+				.Select(static line => TargetRuleNormalizer.NormalizeDomain(line))
+				.Where(static line => !string.IsNullOrWhiteSpace(line))
+				.Distinct(StringComparer.OrdinalIgnoreCase)
+				.ToArray();
+	}
+
+	private List<string> GetRefreshDomainsFromUi()
+	{
+		return _txtRefreshDomains!.Lines
+			.Select(static line => TargetRuleNormalizer.NormalizeDomain(line))
+			.Where(static line => !string.IsNullOrWhiteSpace(line)
+							   && !line.Contains('*') && !line.Contains('?'))
+			.Distinct(StringComparer.OrdinalIgnoreCase)
+			.ToList();
+	}
+
+	private void SetRefreshDomainsToUi(IEnumerable<string>? domains)
+	{
+		var list = domains?.ToList();
+		_txtRefreshDomains!.Lines = list is null || list.Count == 0
+			? [.. ProxyOptions.DefaultRefreshDomains]
+			: list
 				.Select(static line => TargetRuleNormalizer.NormalizeDomain(line))
 				.Where(static line => !string.IsNullOrWhiteSpace(line))
 				.Distinct(StringComparer.OrdinalIgnoreCase)
@@ -617,6 +646,9 @@ internal partial class MainForm : Form
 			_engine?.Dispose();
 			components?.Dispose();
 			_autoUpdater.Dispose();
+			_ipFetchCts?.Cancel();
+			_ipFetchCts?.Dispose();
+			StopAutoFetch();
 		}
 		base.Dispose(disposing);
 	}
@@ -740,7 +772,111 @@ internal partial class MainForm : Form
 		}
 	}
 
-	private void BtnClearLogs_Click(object? sender, EventArgs e)
+	private async void BtnFetchIps_Click(object? sender, EventArgs e)
+	{
+		// Toggle: clicking again cancels an in-progress fetch
+		if (_ipFetchCts is not null)
+		{
+			_ipFetchCts.Cancel();
+			_btnFetchIps!.Text = "Fetch IPs via DoH";
+			return;
+		}
+
+		var domains = GetRefreshDomainsFromUi();
+
+		if (domains.Count == 0)
+		{
+			MessageBox.Show(
+				"No domains in the Refresh Domains list.",
+				"No Domains", MessageBoxButtons.OK, MessageBoxIcon.Information);
+			return;
+		}
+
+		_ipFetchCts = new CancellationTokenSource();
+		_btnFetchIps!.Text = "Cancel";
+
+		try
+		{
+			await RunFetchCycleAsync(_ipFetchCts.Token);
+		}
+		catch (OperationCanceledException)
+		{
+			_lblHostsStatus!.Text = "Cancelled.";
+		}
+		finally
+		{
+			_btnFetchIps!.Text = "Fetch IPs via DoH";
+			_ipFetchCts.Dispose();
+			_ipFetchCts = null;
+		}
+	}
+
+	/// <summary>Resolves concrete domain IPs via DoH, updates the ListView, and pushes results to the running engine.</summary>
+	private async Task RunFetchCycleAsync(CancellationToken ct)
+	{
+		var domains = GetRefreshDomainsFromUi();
+
+		if (domains.Count == 0)
+			return;
+
+		_lvIpResults!.Items.Clear();
+		_lblHostsStatus!.Text = $"Resolving {domains.Count} domains...";
+
+		var updates = new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase);
+		int resolved = 0, failed = 0;
+
+		using var service = new IpFetchService();
+		_lvIpResults.BeginUpdate();
+		try
+		{
+			await foreach (var result in service.FetchAllAsync(domains, ct))
+			{
+				if (result.Ip is not null && IPAddress.TryParse(result.Ip, out var addr))
+					updates[result.Domain] = addr.GetAddressBytes();
+
+				_lvIpResults.Items.Add(CreateIpListViewItem(result));
+
+				if (result.Ip is not null && result.LatencyMs is >= 0 and < 800)
+					resolved++;
+				else
+					failed++;
+
+				_lblHostsStatus.Text = $"Resolved: {resolved} | Failed: {failed} | Remaining: {domains.Count - resolved - failed}";
+			}
+		}
+		finally
+		{
+			_lvIpResults.EndUpdate();
+		}
+
+		_lblHostsStatus.Text = $"Done \u2014 Resolved: {resolved} | Failed: {failed} | Total: {domains.Count}";
+		_engine?.UpdateHostsEntries(updates);
+	}
+
+	private static ListViewItem CreateIpListViewItem(DomainIpResult result)
+	{
+		var latencyText = result.LatencyMs >= 0
+			? $"{result.LatencyMs} ms"
+			: result.Error ?? "Failed";
+
+		var item = new ListViewItem(result.Domain);
+		item.SubItems.Add(result.Ip ?? "-");
+		item.SubItems.Add(latencyText);
+		item.SubItems.Add(result.DohSource ?? "-");
+
+		if (result.Ip is null)
+			item.ForeColor = Color.Red;
+		else if (result.LatencyMs is >= 0 and < 200)
+			item.ForeColor = Color.Green;
+		else if (result.LatencyMs is >= 200 and < 800)
+			item.ForeColor = Color.DarkOrange;
+		else
+			item.ForeColor = Color.Red;
+
+		return item;
+	}
+
+		private void BtnClearLogs_Click(object? sender, EventArgs e)
 	{
 		_rtbLogs?.Clear();
 	}
@@ -789,5 +925,43 @@ internal partial class MainForm : Form
 		{
 			_btnRefreshHosts.Enabled = true;
 		}
+	}
+
+	private void ChkAutoFetch_CheckedChanged(object? sender, EventArgs e)
+	{
+		if (_chkAutoFetch!.Checked)
+			StartAutoFetch();
+		else
+			StopAutoFetch();
+	}
+
+	private void StartAutoFetch()
+	{
+		StopAutoFetch();
+		_autoFetchCts = new CancellationTokenSource();
+		_autoFetchTask = RunAutoFetchLoopAsync((int)_numAutoFetchInterval!.Value, _autoFetchCts.Token);
+	}
+
+	private void StopAutoFetch()
+	{
+		_autoFetchCts?.Cancel();
+		_autoFetchCts?.Dispose();
+		_autoFetchCts = null;
+		_autoFetchTask = null;
+	}
+
+	private async Task RunAutoFetchLoopAsync(int intervalMinutes, CancellationToken ct)
+	{
+		try
+		{
+			using var timer = new PeriodicTimer(TimeSpan.FromMinutes(intervalMinutes));
+			while (true)
+			{
+				await _lvIpResults!.InvokeAsync(async ct2 => await RunFetchCycleAsync(ct2), ct);
+				if (!await timer.WaitForNextTickAsync(ct).ConfigureAwait(false))
+					break;
+			}
+		}
+		catch (OperationCanceledException) { }
 	}
 }

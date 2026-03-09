@@ -100,7 +100,15 @@ partial class MainForm
 	private TextBox? _txtHostsUrl;
 	private FlowLayoutPanel? _hostsRedirectBtnPanel;
 	private Button? _btnRefreshHosts;
+	private Button? _btnFetchIps;
 	private Label? _lblHostsStatus;
+	private ListView? _lvIpResults;
+	private Label? _lblRefreshDomains;
+	private TextBox? _txtRefreshDomains;
+	private FlowLayoutPanel? _autoFetchPanel;
+	private CheckBox? _chkAutoFetch;
+	private NumericUpDown? _numAutoFetchInterval;
+	private Label? _lblAutoFetchMinutes;
 
 	// About tab
 	private Panel? _aboutScrollPanel;
@@ -153,7 +161,15 @@ partial class MainForm
         _txtHostsUrl = new TextBox();
         _hostsRedirectBtnPanel = new FlowLayoutPanel();
         _btnRefreshHosts = new Button();
+        _btnFetchIps = new Button();
         _lblHostsStatus = new Label();
+        _autoFetchPanel = new FlowLayoutPanel();
+        _chkAutoFetch = new CheckBox();
+        _numAutoFetchInterval = new NumericUpDown();
+        _lblAutoFetchMinutes = new Label();
+        _lblRefreshDomains = new Label();
+        _txtRefreshDomains = new TextBox();
+        _lvIpResults = new ListView();
         _logsTab = new TabPage();
         _logPanel = new TableLayoutPanel();
         _rtbLogs = new RichTextBox();
@@ -211,6 +227,8 @@ partial class MainForm
         _dnsRedirectTab.SuspendLayout();
         _dnsRedirectPanel.SuspendLayout();
         _hostsRedirectBtnPanel.SuspendLayout();
+        _autoFetchPanel.SuspendLayout();
+        ((ISupportInitialize)_numAutoFetchInterval).BeginInit();
         _logsTab.SuspendLayout();
         _logPanel.SuspendLayout();
         _btnClearPanel.SuspendLayout();
@@ -342,7 +360,7 @@ partial class MainForm
         // 
         _txtConfigName.Location = new Point(340, 3);
         _txtConfigName.Name = "_txtConfigName";
-        _txtConfigName.PlaceholderText = "默认";
+        _txtConfigName.PlaceholderText = "Default";
         _txtConfigName.Size = new Size(220, 23);
         _txtConfigName.TabIndex = 2;
         // 
@@ -415,7 +433,7 @@ partial class MainForm
         _lblProcesses.Name = "_lblProcesses";
         _lblProcesses.Size = new Size(144, 23);
         _lblProcesses.TabIndex = 6;
-		_lblProcesses.Text = "Process Name List:";
+        _lblProcesses.Text = "Process Name List:";
         _lblProcesses.TextAlign = ContentAlignment.TopRight;
         // 
         // _procPanel
@@ -429,46 +447,46 @@ partial class MainForm
         _procPanel.Name = "_procPanel";
         _procPanel.RowCount = 1;
         _procPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
-        _procPanel.Size = new Size(589, 80);
+        _procPanel.Size = new Size(589, 120);
         _procPanel.TabIndex = 7;
         // 
         // _txtProcesses
         // 
-		_txtProcesses.AcceptsReturn = true;
-		_txtProcesses.AcceptsTab = true;
-		_txtProcesses.Dock = DockStyle.Fill;
-		_txtProcesses.Location = new Point(3, 3);
-		_txtProcesses.Multiline = true;
-		_txtProcesses.Name = "_txtProcesses";
-		_txtProcesses.PlaceholderText = "每行一个进程名，例如:\r\ndevenv.exe\r\nservicehub*.exe";
-		_txtProcesses.ScrollBars = ScrollBars.Vertical;
-		_txtProcesses.Size = new Size(583, 74);
-		_txtProcesses.TabIndex = 0;
-		_txtProcesses.WordWrap = false;
+        _txtProcesses.AcceptsReturn = true;
+        _txtProcesses.AcceptsTab = true;
+        _txtProcesses.Dock = DockStyle.Fill;
+        _txtProcesses.Location = new Point(3, 3);
+        _txtProcesses.Multiline = true;
+        _txtProcesses.Name = "_txtProcesses";
+        _txtProcesses.PlaceholderText = "每行一个进程名，例如:\r\ndevenv.exe\r\nservicehub*.exe";
+        _txtProcesses.ScrollBars = ScrollBars.Vertical;
+        _txtProcesses.Size = new Size(583, 114);
+        _txtProcesses.TabIndex = 0;
+        _txtProcesses.WordWrap = false;
         // 
         // _lblDomainRules
         // 
-		_lblDomainRules.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
-		_lblDomainRules.Location = new Point(13, 277);
-		_lblDomainRules.Name = "_lblDomainRules";
-		_lblDomainRules.Size = new Size(144, 23);
-		_lblDomainRules.TabIndex = 8;
-		_lblDomainRules.Text = "Domain Rule List:";
-		_lblDomainRules.TextAlign = ContentAlignment.TopRight;
+        _lblDomainRules.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+        _lblDomainRules.Location = new Point(13, 276);
+        _lblDomainRules.Name = "_lblDomainRules";
+        _lblDomainRules.Size = new Size(144, 23);
+        _lblDomainRules.TabIndex = 8;
+        _lblDomainRules.Text = "Domain Rule List:";
+        _lblDomainRules.TextAlign = ContentAlignment.TopRight;
         // 
         // _domainRulesPanel
         // 
-		_domainRulesPanel.ColumnCount = 1;
-		_domainRulesPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-		_domainRulesPanel.Controls.Add(_txtDomainRules, 0, 0);
-		_domainRulesPanel.Dock = DockStyle.Fill;
-		_domainRulesPanel.Location = new Point(165, 282);
-		_domainRulesPanel.Margin = new Padding(5);
-		_domainRulesPanel.Name = "_domainRulesPanel";
-		_domainRulesPanel.RowCount = 1;
-		_domainRulesPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
-		_domainRulesPanel.Size = new Size(589, 80);
-		_domainRulesPanel.TabIndex = 9;
+        _domainRulesPanel.ColumnCount = 1;
+        _domainRulesPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+        _domainRulesPanel.Controls.Add(_txtDomainRules, 0, 0);
+        _domainRulesPanel.Dock = DockStyle.Fill;
+        _domainRulesPanel.Location = new Point(165, 281);
+        _domainRulesPanel.Margin = new Padding(5);
+        _domainRulesPanel.Name = "_domainRulesPanel";
+        _domainRulesPanel.RowCount = 1;
+        _domainRulesPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
+        _domainRulesPanel.Size = new Size(589, 120);
+        _domainRulesPanel.TabIndex = 9;
         // 
         // _txtDomainRules
         // 
@@ -480,14 +498,14 @@ partial class MainForm
         _txtDomainRules.Name = "_txtDomainRules";
         _txtDomainRules.PlaceholderText = "每行一个域名规则，例如:\r\n*.github.com\r\nraw.githubusercontent.com";
         _txtDomainRules.ScrollBars = ScrollBars.Vertical;
-        _txtDomainRules.Size = new Size(583, 74);
+        _txtDomainRules.Size = new Size(583, 114);
         _txtDomainRules.TabIndex = 0;
         _txtDomainRules.WordWrap = false;
         // 
         // _lblConfigFile
         // 
         _lblConfigFile.Anchor = AnchorStyles.Left | AnchorStyles.Right;
-        _lblConfigFile.Location = new Point(13, 412);
+        _lblConfigFile.Location = new Point(13, 411);
         _lblConfigFile.Name = "_lblConfigFile";
         _lblConfigFile.Size = new Size(144, 23);
         _lblConfigFile.TabIndex = 14;
@@ -498,7 +516,7 @@ partial class MainForm
         // 
         _lblConfigFileValue.AutoEllipsis = true;
         _lblConfigFileValue.Dock = DockStyle.Fill;
-        _lblConfigFileValue.Location = new Point(165, 412);
+        _lblConfigFileValue.Location = new Point(165, 411);
         _lblConfigFileValue.Margin = new Padding(5);
         _lblConfigFileValue.Name = "_lblConfigFileValue";
         _lblConfigFileValue.Size = new Size(589, 23);
@@ -512,7 +530,7 @@ partial class MainForm
         _startupOptionsPanel.Controls.Add(_chkStartOnBoot);
         _startupOptionsPanel.Controls.Add(_chkAutoStartProxy);
         _startupOptionsPanel.Dock = DockStyle.Top;
-        _startupOptionsPanel.Location = new Point(13, 443);
+        _startupOptionsPanel.Location = new Point(13, 442);
         _startupOptionsPanel.Name = "_startupOptionsPanel";
         _startupOptionsPanel.Size = new Size(743, 27);
         _startupOptionsPanel.TabIndex = 17;
@@ -549,7 +567,7 @@ partial class MainForm
         _configActionPanel.Controls.Add(_quickConfigPanel, 0, 0);
         _configActionPanel.Controls.Add(_configBtnPanel, 1, 0);
         _configActionPanel.Dock = DockStyle.Top;
-        _configActionPanel.Location = new Point(13, 473);
+        _configActionPanel.Location = new Point(13, 472);
         _configActionPanel.Margin = new Padding(3, 0, 3, 3);
         _configActionPanel.Name = "_configActionPanel";
         _configActionPanel.RowCount = 1;
@@ -632,16 +650,22 @@ partial class MainForm
         _dnsRedirectPanel.Controls.Add(_txtHostsUrl, 1, 1);
         _dnsRedirectPanel.Controls.Add(_hostsRedirectBtnPanel, 1, 2);
         _dnsRedirectPanel.Controls.Add(_lblHostsStatus, 0, 3);
+        _dnsRedirectPanel.Controls.Add(_autoFetchPanel, 0, 4);
+        _dnsRedirectPanel.Controls.Add(_lblRefreshDomains, 0, 5);
+        _dnsRedirectPanel.Controls.Add(_txtRefreshDomains, 1, 5);
+        _dnsRedirectPanel.Controls.Add(_lvIpResults, 0, 6);
         _dnsRedirectPanel.Dock = DockStyle.Fill;
         _dnsRedirectPanel.Location = new Point(0, 0);
         _dnsRedirectPanel.Name = "_dnsRedirectPanel";
         _dnsRedirectPanel.Padding = new Padding(10);
-        _dnsRedirectPanel.RowCount = 5;
+        _dnsRedirectPanel.RowCount = 7;
         _dnsRedirectPanel.RowStyles.Add(new RowStyle());
         _dnsRedirectPanel.RowStyles.Add(new RowStyle());
         _dnsRedirectPanel.RowStyles.Add(new RowStyle());
         _dnsRedirectPanel.RowStyles.Add(new RowStyle());
-        _dnsRedirectPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
+        _dnsRedirectPanel.RowStyles.Add(new RowStyle());
+        _dnsRedirectPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 35F));
+        _dnsRedirectPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 65F));
         _dnsRedirectPanel.Size = new Size(769, 530);
         _dnsRedirectPanel.TabIndex = 0;
         // 
@@ -680,6 +704,7 @@ partial class MainForm
         // 
         _hostsRedirectBtnPanel.AutoSize = true;
         _hostsRedirectBtnPanel.Controls.Add(_btnRefreshHosts);
+        _hostsRedirectBtnPanel.Controls.Add(_btnFetchIps);
         _hostsRedirectBtnPanel.Dock = DockStyle.Fill;
         _hostsRedirectBtnPanel.Location = new Point(165, 82);
         _hostsRedirectBtnPanel.Margin = new Padding(5);
@@ -696,6 +721,15 @@ partial class MainForm
         _btnRefreshHosts.Text = "Refresh Hosts Now";
         _btnRefreshHosts.Click += BtnRefreshHosts_Click;
         // 
+        // _btnFetchIps
+        // 
+        _btnFetchIps.Location = new Point(129, 3);
+        _btnFetchIps.Name = "_btnFetchIps";
+        _btnFetchIps.Size = new Size(130, 30);
+        _btnFetchIps.TabIndex = 1;
+        _btnFetchIps.Text = "Fetch IPs via DoH";
+        _btnFetchIps.Click += BtnFetchIps_Click;
+        // 
         // _lblHostsStatus
         // 
         _lblHostsStatus.AutoSize = true;
@@ -706,6 +740,88 @@ partial class MainForm
         _lblHostsStatus.Size = new Size(117, 17);
         _lblHostsStatus.TabIndex = 4;
         _lblHostsStatus.Text = "Status: Not loaded";
+        // 
+        // _autoFetchPanel
+        // 
+        _autoFetchPanel.AutoSize = true;
+        _dnsRedirectPanel.SetColumnSpan(_autoFetchPanel, 2);
+        _autoFetchPanel.Controls.Add(_chkAutoFetch);
+        _autoFetchPanel.Controls.Add(_numAutoFetchInterval);
+        _autoFetchPanel.Controls.Add(_lblAutoFetchMinutes);
+        _autoFetchPanel.Dock = DockStyle.Fill;
+        _autoFetchPanel.Location = new Point(13, 151);
+        _autoFetchPanel.Name = "_autoFetchPanel";
+        _autoFetchPanel.Size = new Size(743, 29);
+        _autoFetchPanel.TabIndex = 6;
+        _autoFetchPanel.WrapContents = false;
+        // 
+        // _chkAutoFetch
+        // 
+        _chkAutoFetch.AutoSize = true;
+        _chkAutoFetch.Location = new Point(3, 5);
+        _chkAutoFetch.Margin = new Padding(3, 5, 5, 3);
+        _chkAutoFetch.Name = "_chkAutoFetch";
+        _chkAutoFetch.Size = new Size(135, 21);
+        _chkAutoFetch.TabIndex = 0;
+        _chkAutoFetch.Text = "Auto-refresh every";
+        _chkAutoFetch.CheckedChanged += ChkAutoFetch_CheckedChanged;
+        // 
+        // _numAutoFetchInterval
+        // 
+        _numAutoFetchInterval.Location = new Point(146, 3);
+        _numAutoFetchInterval.Maximum = new decimal(new int[] { 1440, 0, 0, 0 });
+        _numAutoFetchInterval.Minimum = new decimal(new int[] { 1, 0, 0, 0 });
+        _numAutoFetchInterval.Name = "_numAutoFetchInterval";
+        _numAutoFetchInterval.Size = new Size(65, 23);
+        _numAutoFetchInterval.TabIndex = 1;
+        _numAutoFetchInterval.Value = new decimal(new int[] { 60, 0, 0, 0 });
+        // 
+        // _lblAutoFetchMinutes
+        // 
+        _lblAutoFetchMinutes.AutoSize = true;
+        _lblAutoFetchMinutes.Location = new Point(217, 6);
+        _lblAutoFetchMinutes.Margin = new Padding(3, 6, 3, 0);
+        _lblAutoFetchMinutes.Name = "_lblAutoFetchMinutes";
+        _lblAutoFetchMinutes.Size = new Size(53, 17);
+        _lblAutoFetchMinutes.TabIndex = 2;
+        _lblAutoFetchMinutes.Text = "minutes";
+        // 
+        // _lblRefreshDomains
+        // 
+        _lblRefreshDomains.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+        _lblRefreshDomains.Location = new Point(13, 183);
+        _lblRefreshDomains.Name = "_lblRefreshDomains";
+        _lblRefreshDomains.Size = new Size(144, 23);
+        _lblRefreshDomains.TabIndex = 6;
+        _lblRefreshDomains.Text = "Refresh Domains:";
+        _lblRefreshDomains.TextAlign = ContentAlignment.TopRight;
+        // 
+        // _txtRefreshDomains
+        // 
+        _txtRefreshDomains.AcceptsReturn = true;
+        _txtRefreshDomains.Dock = DockStyle.Fill;
+        _txtRefreshDomains.Location = new Point(165, 188);
+        _txtRefreshDomains.Margin = new Padding(5);
+        _txtRefreshDomains.Multiline = true;
+        _txtRefreshDomains.Name = "_txtRefreshDomains";
+        _txtRefreshDomains.PlaceholderText = "每行一个域名，例如:\nalive.github.com\ngithub.com";
+        _txtRefreshDomains.ScrollBars = ScrollBars.Vertical;
+        _txtRefreshDomains.Size = new Size(589, 107);
+        _txtRefreshDomains.TabIndex = 7;
+        _txtRefreshDomains.WordWrap = false;
+        // 
+        // _lvIpResults
+        // 
+        _dnsRedirectPanel.SetColumnSpan(_lvIpResults, 2);
+        _lvIpResults.Dock = DockStyle.Fill;
+        _lvIpResults.FullRowSelect = true;
+        _lvIpResults.GridLines = true;
+        _lvIpResults.Location = new Point(13, 303);
+        _lvIpResults.Name = "_lvIpResults";
+        _lvIpResults.Size = new Size(743, 214);
+        _lvIpResults.TabIndex = 8;
+        _lvIpResults.UseCompatibleStateImageBehavior = false;
+        _lvIpResults.View = View.Details;
         // 
         // _logsTab
         // 
@@ -1146,8 +1262,8 @@ partial class MainForm
         ((ISupportInitialize)_numProxyPort).EndInit();
         _procPanel.ResumeLayout(false);
         _procPanel.PerformLayout();
-		_domainRulesPanel.ResumeLayout(false);
-		_domainRulesPanel.PerformLayout();
+        _domainRulesPanel.ResumeLayout(false);
+        _domainRulesPanel.PerformLayout();
         _startupOptionsPanel.ResumeLayout(false);
         _startupOptionsPanel.PerformLayout();
         _configActionPanel.ResumeLayout(false);
@@ -1157,6 +1273,9 @@ partial class MainForm
         _dnsRedirectPanel.ResumeLayout(false);
         _dnsRedirectPanel.PerformLayout();
         _hostsRedirectBtnPanel.ResumeLayout(false);
+        _autoFetchPanel.ResumeLayout(false);
+        _autoFetchPanel.PerformLayout();
+        ((ISupportInitialize)_numAutoFetchInterval).EndInit();
         _logsTab.ResumeLayout(false);
         _logPanel.ResumeLayout(false);
         _btnClearPanel.ResumeLayout(false);

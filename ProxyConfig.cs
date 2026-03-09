@@ -84,6 +84,9 @@ internal class HostsRedirectSettings
 
 	[JsonPropertyName("hostsUrl")]
 	public string HostsUrl { get; set; } = GitHub520HostsProvider.DefaultUrl;
+
+	[JsonPropertyName("refreshDomains")]
+	public List<string> RefreshDomains { get; set; } = [];
 }
 
 internal sealed class ProxyConfigManager
@@ -229,27 +232,15 @@ internal sealed class ProxyConfigManager
 	{
 		return new ProxyConfigModel
 		{
-			Proxy = new ProxySettings(),
-			Targeting = new TargetingSettings
-			{
-				ProcessNames =
-				[
-					"devenv.exe",
-					"blend.exe",
-					"servicehub*.exe",
-					"microsoft.servicehub*.exe",
-					"copilot*.exe",
-					"onedrive.exe",
-					"perfwatson2.exe",
-					"devhub.exe",
-					"msbuild*.exe",
-					"vstest*.exe",
-					"m365copilot.exe",
-					"m365copilot_autostarter.exe",
-					"m365copilot_widget.exe",
-					"webviewhost.exe"
-				],
-				DomainRules = [.. ProxyOptions.DefaultDomainRules]
+            Proxy = new ProxySettings(),
+            Targeting = new TargetingSettings
+            {
+                ProcessNames = [.. ProxyOptions.DefaultProcessNames],
+                DomainRules = [.. ProxyOptions.DefaultDomainRules]
+            },
+            HostsRedirect = new HostsRedirectSettings
+            {
+                RefreshDomains = [.. ProxyOptions.DefaultRefreshDomains]
 			}
 		};
 	}
