@@ -298,7 +298,9 @@ internal sealed record DomainIpResult(
 	string? Ip,
 	long LatencyMs,
 	string? DohSource,
-	string? Error = null);
+	string? Error = null,
+	long ProxyLatencyMs = -1,
+	string? ProxyError = null);
 
 // ════════════════════════════════════════════════════════════════
 //  IP Fetch Service  (GitHub520-style: multi-DoH + TCP latency)
@@ -331,12 +333,19 @@ internal sealed class IpFetchService : IDisposable
 
 	private readonly HttpClient _http;
 	private readonly int _tcpTimeoutMs;
+	private readonly string? _proxyHost;
+	private readonly int _proxyPort;
+	private readonly string _proxyScheme;
+	private const int LatencyRounds = 2;  // TCP tests per candidate; best (min) result is kept
 
-	public IpFetchService(int tcpTimeoutMs = 1500)
+	public IpFetchService(int tcpTimeoutMs = 1500, string? proxyHost = null, int proxyPort = 0, string proxyScheme = "socks4")
 	{
 		_http = new HttpClient { Timeout = TimeSpan.FromSeconds(8) };
 		_http.DefaultRequestHeaders.Add("Accept", "application/dns-json");
 		_tcpTimeoutMs = tcpTimeoutMs;
+		_proxyHost = string.IsNullOrWhiteSpace(proxyHost) ? null : proxyHost;
+		_proxyPort = proxyPort;
+		_proxyScheme = proxyScheme;
 	}
 
 	/// <summary>
@@ -383,42 +392,107 @@ internal sealed class IpFetchService : IDisposable
 	{
 		try
 		{
-			// Query all DoH providers concurrently
-			var dohTasks = DoHProviders
-				.Select(p => QueryDoHAsync(p.Name, string.Format(p.UrlTemplate, domain), ct))
-				.ToArray();
+			// Round 1: query all providers concurrently
+			var candidates = await ResolveAsync(domain, DoHProviders, ct);
 
-			var dohResults = await Task.WhenAll(dohTasks).ConfigureAwait(false);
-
-			var candidates = dohResults
-				.Where(static x => x.Ip is not null)
-				.DistinctBy(static x => x.Ip, StringComparer.OrdinalIgnoreCase)
-				.ToArray();
+			// Round 2: if nothing resolved, retry with IP-based providers only.
+			// IP-based DoH bypasses local DNS hijacking and is the most reliable fallback.
+			if (candidates.Length == 0)
+			{
+				await Task.Delay(500, ct).ConfigureAwait(false);
+				var ipProviders = DoHProviders
+					.Where(static p => IsIpBasedUrl(p.UrlTemplate))
+					.ToArray();
+				candidates = await ResolveAsync(domain, ipProviders, ct);
+			}
 
 			if (candidates.Length == 0)
 				return new DomainIpResult(domain, null, -1, null, "No IPs resolved");
 
-			// Test TCP latency for each candidate concurrently
+			// Test TCP latency across LatencyRounds rounds per candidate; return minimum
 			var latencyTasks = candidates
-				.Select(c => TestLatencyAsync(domain, c.Ip!, c.Source, ct))
+				.Select(c => TestBestLatencyAsync(domain, c.Ip, c.Source, ct))
 				.ToArray();
 
 			var latencyResults = await Task.WhenAll(latencyTasks).ConfigureAwait(false);
 
-			var best = latencyResults
-				.Where(static r => r.LatencyMs >= 0)
-				.OrderBy(static r => r.LatencyMs)
-				.FirstOrDefault();
+					var best = latencyResults
+						.Where(static r => r.LatencyMs >= 0)
+						.OrderBy(static r => r.LatencyMs)
+						.FirstOrDefault() ?? latencyResults[0];
 
-			return best ?? latencyResults[0];
-		}
-		catch (OperationCanceledException)
+					if (best.Ip is not null && _proxyHost is not null && _proxyPort > 0)
+					{
+						var (proxyMs, proxyErr) = await TestProxyLatencyAsync(best.Ip, ct).ConfigureAwait(false);
+						return best with { ProxyLatencyMs = proxyMs, ProxyError = proxyErr };
+					}
+
+					return best;
+				}
+				catch (OperationCanceledException)
+				{
+					throw;
+				}
+				catch (Exception ex)
+				{
+					return new DomainIpResult(domain, null, -1, null, ex.Message);
+				}
+			}
+
+	/// <summary>Queries a set of DoH providers concurrently and returns distinct resolved IPs.</summary>
+	private async Task<(string Ip, string Source)[]> ResolveAsync(
+		string domain,
+		IEnumerable<(string Name, string UrlTemplate)> providers,
+		CancellationToken ct)
+	{
+		var tasks = providers
+			.Select(p => QueryDoHAsync(p.Name, string.Format(p.UrlTemplate, domain), ct))
+			.ToArray();
+
+		var results = await Task.WhenAll(tasks).ConfigureAwait(false);
+
+		return results
+			.Where(static x => x.Ip is not null)
+			.DistinctBy(static x => x.Ip, StringComparer.OrdinalIgnoreCase)
+			.Select(static x => (x.Ip!, x.Source))
+			.ToArray();
+	}
+
+	/// <summary>
+	/// Runs <see cref="LatencyRounds"/> TCP tests against a candidate IP
+	/// and returns the result with the lowest observed latency.
+	/// </summary>
+	private async Task<DomainIpResult> TestBestLatencyAsync(
+		string domain, string ip, string source, CancellationToken ct)
+	{
+		long bestMs = long.MaxValue;
+		string? lastError = null;
+
+		for (int i = 0; i < LatencyRounds; i++)
 		{
-			throw;
+			var r = await TestLatencyAsync(domain, ip, source, ct).ConfigureAwait(false);
+			if (r.LatencyMs >= 0)
+				bestMs = Math.Min(bestMs, r.LatencyMs);
+			else
+				lastError ??= r.Error;
 		}
-		catch (Exception ex)
+
+		return bestMs != long.MaxValue
+			? new DomainIpResult(domain, ip, bestMs, source)
+			: new DomainIpResult(domain, ip, -1, source, lastError);
+	}
+
+	/// <summary>Returns true when the DoH URL template uses a bare IP address as host (bypasses DNS hijacking).</summary>
+	private static bool IsIpBasedUrl(string urlTemplate)
+	{
+		try
 		{
-			return new DomainIpResult(domain, null, -1, null, ex.Message);
+			var host = new Uri(string.Format(urlTemplate, "test")).Host;
+			return IPAddress.TryParse(host, out _);
+		}
+		catch
+		{
+			return false;
 		}
 	}
 
@@ -453,6 +527,82 @@ internal sealed class IpFetchService : IDisposable
 		{
 			return (null, providerName);
 		}
+	}
+
+	private async Task<(long LatencyMs, string? Error)> TestProxyLatencyAsync(string targetIp, CancellationToken ct)
+	{
+		try
+		{
+			using var tcp = new TcpClient();
+			using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+			cts.CancelAfter(_tcpTimeoutMs * 2);
+
+			var sw = Stopwatch.StartNew();
+			await tcp.ConnectAsync(_proxyHost!, _proxyPort, cts.Token).ConfigureAwait(false);
+			var stream = tcp.GetStream();
+
+			bool ok = _proxyScheme.ToLowerInvariant() switch
+			{
+				"socks5"          => await Socks5ConnectAsync(stream, targetIp, 443, cts.Token).ConfigureAwait(false),
+				"http" or "https" => await HttpConnectAsync(stream, targetIp, 443, cts.Token).ConfigureAwait(false),
+				_                 => await Socks4ConnectAsync(stream, targetIp, 443, cts.Token).ConfigureAwait(false)
+			};
+
+			sw.Stop();
+
+			return ok ? (sw.ElapsedMilliseconds, null) : (-1L, "Proxy CONNECT failed");
+		}
+		catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+		{
+			return (-1, "Proxy timeout");
+		}
+		catch (OperationCanceledException)
+		{
+			throw;
+		}
+		catch (Exception ex)
+		{
+			return (-1, ex.Message);
+		}
+	}
+
+	private static async Task<bool> Socks4ConnectAsync(NetworkStream s, string ip, int port, CancellationToken ct)
+	{
+		if (!IPAddress.TryParse(ip, out var addr)) return false;
+		var b = addr.GetAddressBytes();
+		byte[] req = [4, 1, (byte)(port >> 8), (byte)(port & 0xFF), b[0], b[1], b[2], b[3], 0];
+		await s.WriteAsync(req, ct).ConfigureAwait(false);
+		var resp = new byte[8];
+		await s.ReadAsync(resp.AsMemory(0, 8), ct).ConfigureAwait(false);
+
+		return resp[1] == 90;
+	}
+
+	private static async Task<bool> Socks5ConnectAsync(NetworkStream s, string ip, int port, CancellationToken ct)
+	{
+		if (!IPAddress.TryParse(ip, out var addr)) return false;
+		await s.WriteAsync((byte[])[5, 1, 0], ct).ConfigureAwait(false);
+		var auth = new byte[2];
+		await s.ReadAsync(auth.AsMemory(0, 2), ct).ConfigureAwait(false);
+		if (auth[0] != 5 || auth[1] != 0) return false;
+
+		var b = addr.GetAddressBytes();
+		byte[] req = [5, 1, 0, 1, b[0], b[1], b[2], b[3], (byte)(port >> 8), (byte)(port & 0xFF)];
+		await s.WriteAsync(req, ct).ConfigureAwait(false);
+		var resp = new byte[10];
+		await s.ReadAsync(resp.AsMemory(0, 10), ct).ConfigureAwait(false);
+
+		return resp[0] == 5 && resp[1] == 0;
+	}
+
+	private static async Task<bool> HttpConnectAsync(NetworkStream s, string ip, int port, CancellationToken ct)
+	{
+		var req = Encoding.ASCII.GetBytes($"CONNECT {ip}:{port} HTTP/1.1\r\nHost: {ip}:{port}\r\n\r\n");
+		await s.WriteAsync(req, ct).ConfigureAwait(false);
+		var buf = new byte[256];
+		int n = await s.ReadAsync(buf.AsMemory(0, 256), ct).ConfigureAwait(false);
+
+		return Encoding.ASCII.GetString(buf, 0, n).Contains("200");
 	}
 
 	private async Task<DomainIpResult> TestLatencyAsync(

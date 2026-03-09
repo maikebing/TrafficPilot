@@ -55,6 +55,7 @@ internal partial class MainForm : Form
 		_lvIpResults.Columns.Add("Domain",     220, HorizontalAlignment.Left);
 		_lvIpResults.Columns.Add("IP Address", 130, HorizontalAlignment.Left);
 		_lvIpResults.Columns.Add("Latency",     90, HorizontalAlignment.Right);
+		_lvIpResults.Columns.Add("Via Proxy",  100, HorizontalAlignment.Right);
 		_lvIpResults.Columns.Add("Source",     100, HorizontalAlignment.Left);
 	}
 
@@ -841,10 +842,11 @@ internal partial class MainForm : Form
 		foreach (var domain in domains)
 		{
 			var pending = new ListViewItem(domain);
-			pending.SubItems.Add("-");
-			pending.SubItems.Add("Pending...");
-			pending.SubItems.Add("-");
-			pending.ForeColor = SystemColors.GrayText;
+				pending.SubItems.Add("-");
+				pending.SubItems.Add("Pending...");
+				pending.SubItems.Add("-");
+				pending.SubItems.Add("-");
+				pending.ForeColor = SystemColors.GrayText;
 			_lvIpResults.Items.Add(pending);
 			itemMap[domain] = pending;
 		}
@@ -855,8 +857,11 @@ internal partial class MainForm : Form
 		int resolved = 0, failed = 0;
 
 		// No BeginUpdate/EndUpdate — each result streams in immediately as it completes
-		using var service = new IpFetchService();
-		await foreach (var result in service.FetchAllAsync(domains, ct))
+		using var service = new IpFetchService(
+				proxyHost: _currentConfig.Proxy?.Host,
+				proxyPort: (int)(_currentConfig.Proxy?.Port ?? 0),
+				proxyScheme: _currentConfig.Proxy?.Scheme ?? "socks4");
+			await foreach (var result in service.FetchAllAsync(domains, ct))
 		{
 			if (result.Ip is not null && IPAddress.TryParse(result.Ip, out var addr))
 				updates[result.Domain] = addr.GetAddressBytes();
@@ -885,6 +890,7 @@ internal partial class MainForm : Form
 		item.SubItems.Add("-");
 		item.SubItems.Add("-");
 		item.SubItems.Add("-");
+		item.SubItems.Add("-");
 		ApplyIpResultToItem(item, result);
 
 		return item;
@@ -894,7 +900,10 @@ internal partial class MainForm : Form
 	{
 		item.SubItems[1].Text = result.Ip ?? "-";
 		item.SubItems[2].Text = result.LatencyMs >= 0 ? $"{result.LatencyMs} ms" : result.Error ?? "Failed";
-		item.SubItems[3].Text = result.DohSource ?? "-";
+		item.SubItems[3].Text = result.ProxyLatencyMs >= 0
+			? $"{result.ProxyLatencyMs} ms"
+			: result.ProxyError ?? "-";
+		item.SubItems[4].Text = result.DohSource ?? "-";
 
 		if (result.Ip is null)
 			item.ForeColor = Color.Red;
