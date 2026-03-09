@@ -13,6 +13,7 @@ internal partial class MainForm : Form
 	private readonly ProxyConfigManager _configManager;
 	private ProxyEngine? _engine;
 	private ProxyConfigModel _currentConfig;
+	private string _activeConfigPath;
 
 	private LogBuffer? _logBuffer;
 	private readonly AutoUpdater _autoUpdater;
@@ -24,15 +25,17 @@ internal partial class MainForm : Form
 	public MainForm()
 	{
 		_configManager = new ProxyConfigManager();
-		_currentConfig = _configManager.Load();
+		_activeConfigPath = _configManager.GetConfigPath();
+		_currentConfig = _configManager.Load(_activeConfigPath);
 		_logBuffer = new LogBuffer(BatchAppendLogs);
 		_autoUpdater = new AutoUpdater();
 		InitializeComponent();
-		InitializeNotifyIcon();
 		LoadApplicationIcon();
 		LoadVersionLabel();
 		CenterToScreen();
 		LoadConfigToUI();
+		RefreshConfigShortcutButtons();
+		UpdateTrayMenuState();
 	}
 
 	private void LoadApplicationIcon()
@@ -78,28 +81,6 @@ internal partial class MainForm : Form
 
 		ShowLatestVersion(latestRelease);
 		return latestRelease;
-	}
-
-	private void InitializeNotifyIcon()
-	{
-		_contextMenu = new ContextMenuStrip();
-		_contextMenu.Items.Add("Show", null, (s, e) => ShowWindow());
-		_contextMenu.Items.Add("Hide", null, (s, e) => HideWindow());
-		_contextMenu.Items.Add("-");
-		_contextMenu.Items.Add("Start Proxy", null, async (s, e) => await StartProxyAsync());
-		_contextMenu.Items.Add("Stop Proxy", null, async (s, e) => await StopProxyAsync());
-		_contextMenu.Items.Add("-");
-		_contextMenu.Items.Add("Exit", null, (s, e) => ExitApplication());
-
-		_notifyIcon = new NotifyIcon
-		{
-			Text = "TrafficPilot",
-			ContextMenuStrip = _contextMenu,
-			Visible = true
-		};
-		_notifyIcon.DoubleClick += (s, e) => ShowWindow();
-		
-		UpdateTrayMenuState();
 	}
 
 	private async void BtnStartStop_Click(object? sender, EventArgs e)
@@ -151,12 +132,18 @@ internal partial class MainForm : Form
 
 	private void UpdateTrayMenuState()
 	{
-		if (_contextMenu?.Items.Count < 7)
+		if (_trayStartProxyMenuItem is null || _trayStopProxyMenuItem is null)
 			return;
 
-		bool isRunning = _engine?.IsRunning ?? false;
-		_contextMenu?.Items[3].Enabled = !isRunning;  // Start Proxy
-		_contextMenu?.Items[4].Enabled = isRunning;   // Stop Proxy
+		var isRunning = _engine?.IsRunning ?? false;
+		_trayStartProxyMenuItem.Enabled = !isRunning;
+		_trayStopProxyMenuItem.Enabled = isRunning;
+
+		if (_trayStartOnBootMenuItem is not null && _chkStartOnBoot is not null)
+			_trayStartOnBootMenuItem.Checked = _chkStartOnBoot.Checked;
+
+		if (_trayAutoStartProxyMenuItem is not null && _chkAutoStartProxy is not null)
+			_trayAutoStartProxyMenuItem.Checked = _chkAutoStartProxy.Checked;
 	}
 
 	private async Task StartProxyAsync()
@@ -214,22 +201,42 @@ internal partial class MainForm : Form
 
 	private void BtnSaveConfig_Click(object? sender, EventArgs e)
 	{
-		_currentConfig = BuildConfigModel();
-		_configManager.Save(_currentConfig);
-		MessageBox.Show("Configuration saved successfully.", "Save Config", MessageBoxButtons.OK, MessageBoxIcon.Information);
+		SaveConfig(_activeConfigPath, "Save Config");
 	}
 
 	private void BtnLoadConfig_Click(object? sender, EventArgs e)
 	{
-		_currentConfig = _configManager.Load();
-		LoadConfigToUI();
-		MessageBox.Show("Configuration loaded successfully.", "Load Config", MessageBoxButtons.OK, MessageBoxIcon.Information);
+		using OpenFileDialog dialog = new();
+		dialog.InitialDirectory = GetConfigDialogDirectory();
+		dialog.FileName = Path.GetFileName(_activeConfigPath);
+		dialog.DefaultExt = "json";
+		dialog.Filter = "JSON files (*.json)|*.json|All files (*.*)|*.*";
+
+		if (dialog.ShowDialog(this) != DialogResult.OK)
+			return;
+
+		LoadConfigFromPath(dialog.FileName, "Load Config");
+	}
+
+	private void BtnSaveConfigAs_Click(object? sender, EventArgs e)
+	{
+		using SaveFileDialog dialog = new();
+		dialog.InitialDirectory = GetConfigDialogDirectory();
+		dialog.FileName = Path.GetFileName(_activeConfigPath);
+		dialog.DefaultExt = "json";
+		dialog.Filter = "JSON files (*.json)|*.json|All files (*.*)|*.*";
+
+		if (dialog.ShowDialog(this) != DialogResult.OK)
+			return;
+
+		SaveConfig(dialog.FileName, "Save Config");
 	}
 
 	private ProxyConfigModel BuildConfigModel()
 	{
 		return new ProxyConfigModel
 		{
+			ConfigName = _txtConfigName!.Text.Trim(),
 			Proxy = new ProxySettings
 			{
 				Enabled = _chkProxyEnabled!.Checked,
@@ -272,7 +279,7 @@ internal partial class MainForm : Form
 		_txtProxyHost!.Text = _currentConfig.Proxy?.Host ?? "";
 		_numProxyPort!.Value = _currentConfig.Proxy?.Port ?? 7890;
 		_cmbProxyScheme!.SelectedItem = _currentConfig.Proxy?.Scheme ?? "socks4";
-		_lblConfigFileValue!.Text = _configManager.GetConfigPath();
+		_lblConfigFileValue!.Text = _activeConfigPath;
 
 		_lstProcesses!.Items.Clear();
 		foreach (var proc in _currentConfig.Targeting?.ProcessNames ?? [])
@@ -286,6 +293,144 @@ internal partial class MainForm : Form
 		_txtHostsUrl!.Text = _currentConfig.HostsRedirect?.HostsUrl ?? GitHub520HostsProvider.DefaultUrl;
 		_chkStartOnBoot!.Checked = StartupManager.IsEnabled();
 		_chkAutoStartProxy!.Checked = _currentConfig.AutoStartProxy;
+		_txtConfigName!.Text = _currentConfig.ConfigName;
+	}
+
+	private void LoadConfigFromPath(string configPath, string dialogTitle)
+	{
+		if (string.IsNullOrWhiteSpace(configPath))
+			throw new ArgumentException("Config path cannot be empty.", nameof(configPath));
+
+		_activeConfigPath = Path.GetFullPath(configPath);
+		_currentConfig = _configManager.Load(_activeConfigPath);
+		LoadConfigToUI();
+		RefreshConfigShortcutButtons();
+
+		MessageBox.Show(
+			$"Configuration loaded successfully.\n{_activeConfigPath}",
+			dialogTitle,
+			MessageBoxButtons.OK,
+			MessageBoxIcon.Information);
+	}
+
+	private void SaveConfig(string configPath, string dialogTitle)
+	{
+		if (string.IsNullOrWhiteSpace(configPath))
+			throw new ArgumentException("Config path cannot be empty.", nameof(configPath));
+
+		_currentConfig = BuildConfigModel();
+		_activeConfigPath = Path.GetFullPath(configPath);
+		_configManager.Save(_currentConfig, _activeConfigPath);
+		LoadConfigToUI();
+		RefreshConfigShortcutButtons();
+
+		MessageBox.Show(
+			$"Configuration saved successfully.\n{_activeConfigPath}",
+			dialogTitle,
+			MessageBoxButtons.OK,
+			MessageBoxIcon.Information);
+	}
+
+	private void RefreshConfigShortcutButtons()
+	{
+		_quickConfigPanel!.Controls.Clear();
+
+		foreach (var configPath in GetQuickConfigPaths())
+		{
+			_quickConfigPanel.Controls.Add(CreateQuickConfigButton(configPath));
+		}
+
+		RefreshTrayConfigMenuItems();
+	}
+
+	private void RefreshTrayConfigMenuItems()
+	{
+		if (_trayConfigMenuItem is null || _trayConfigSeparator is null)
+			return;
+
+		var separatorIndex = _trayConfigMenuItem.DropDownItems.IndexOf(_trayConfigSeparator);
+		if (separatorIndex < 0)
+			return;
+
+		while (_trayConfigMenuItem.DropDownItems.Count > separatorIndex + 1)
+		{
+			var lastIndex = _trayConfigMenuItem.DropDownItems.Count - 1;
+			_trayConfigMenuItem.DropDownItems.RemoveAt(lastIndex);
+		}
+
+		var configPaths = GetQuickConfigPaths();
+		_trayConfigSeparator.Visible = configPaths.Count > 0;
+
+		foreach (var configPath in configPaths)
+		{
+			ToolStripMenuItem quickConfigMenuItem = new();
+			quickConfigMenuItem.Name = $"_trayQuickConfig{_trayConfigMenuItem.DropDownItems.Count - separatorIndex}";
+			quickConfigMenuItem.Tag = configPath;
+			quickConfigMenuItem.Text = GetQuickConfigButtonText(configPath);
+			quickConfigMenuItem.Click += TrayQuickConfigMenuItem_Click;
+			_trayConfigMenuItem.DropDownItems.Add(quickConfigMenuItem);
+		}
+	}
+
+	private IReadOnlyList<string> GetQuickConfigPaths()
+	{
+		List<string> configPaths = [];
+
+		if (File.Exists(_activeConfigPath))
+			configPaths.Add(_activeConfigPath);
+
+		foreach (var configPath in _configManager.GetConfigPaths(5))
+		{
+			if (configPaths.Contains(configPath, StringComparer.OrdinalIgnoreCase))
+				continue;
+
+			configPaths.Add(configPath);
+			if (configPaths.Count == 5)
+				break;
+		}
+
+		return configPaths;
+	}
+
+	private Button CreateQuickConfigButton(string configPath)
+	{
+		Button button = new();
+		button.Margin = new Padding(2);
+		button.Name = $"_btnQuickConfig{_quickConfigPanel!.Controls.Count + 1}";
+		button.Size = new Size(72, 30);
+		button.TabIndex = _quickConfigPanel.Controls.Count;
+		button.Tag = configPath;
+		button.AutoEllipsis = true;
+		button.Text = GetQuickConfigButtonText(configPath);
+		button.UseVisualStyleBackColor = true;
+		button.Click += BtnQuickConfig_Click;
+ 
+		return button;
+	}
+
+	private string GetQuickConfigButtonText(string configPath)
+	{
+		return _configManager.GetConfigDisplayName(configPath);
+	}
+
+	private string GetConfigDialogDirectory()
+	{
+		if (!string.IsNullOrWhiteSpace(_activeConfigPath))
+		{
+			var activeConfigDirectory = Path.GetDirectoryName(_activeConfigPath);
+			if (!string.IsNullOrWhiteSpace(activeConfigDirectory) && Directory.Exists(activeConfigDirectory))
+				return activeConfigDirectory;
+		}
+
+		return _configManager.GetConfigDirectory();
+	}
+
+	private void BtnQuickConfig_Click(object? sender, EventArgs e)
+	{
+		if (sender is not Button button || button.Tag is not string configPath || string.IsNullOrWhiteSpace(configPath))
+			return;
+
+		LoadConfigFromPath(configPath, "Load Config");
 	}
 
 	private void AppendLog(string message)
@@ -338,6 +483,75 @@ internal partial class MainForm : Form
 		WindowState = FormWindowState.Minimized;
 	}
 
+	private void NotifyIcon_DoubleClick(object? sender, EventArgs e)
+	{
+		ShowWindow();
+	}
+
+	private void TrayShowMenuItem_Click(object? sender, EventArgs e)
+	{
+		ShowWindow();
+	}
+
+	private void TrayHideMenuItem_Click(object? sender, EventArgs e)
+	{
+		HideWindow();
+	}
+
+	private void TrayStartProxyMenuItem_Click(object? sender, EventArgs e)
+	{
+		BtnStartStop_Click(_btnStartStop, e);
+	}
+
+	private void TrayStopProxyMenuItem_Click(object? sender, EventArgs e)
+	{
+		BtnStartStop_Click(_btnStartStop, e);
+	}
+
+	private void TrayStartOnBootMenuItem_Click(object? sender, EventArgs e)
+	{
+		if (_trayStartOnBootMenuItem is null || _chkStartOnBoot is null)
+			return;
+
+		_chkStartOnBoot.Checked = _trayStartOnBootMenuItem.Checked;
+	}
+
+	private void TrayAutoStartProxyMenuItem_Click(object? sender, EventArgs e)
+	{
+		if (_trayAutoStartProxyMenuItem is null || _chkAutoStartProxy is null)
+			return;
+
+		_chkAutoStartProxy.Checked = _trayAutoStartProxyMenuItem.Checked;
+	}
+
+	private void TrayLoadConfigMenuItem_Click(object? sender, EventArgs e)
+	{
+		BtnLoadConfig_Click(_btnLoadConfig, e);
+	}
+
+	private void TraySaveConfigAsMenuItem_Click(object? sender, EventArgs e)
+	{
+		BtnSaveConfigAs_Click(_btnSaveConfigAs, e);
+	}
+
+	private void TraySaveConfigMenuItem_Click(object? sender, EventArgs e)
+	{
+		BtnSaveConfig_Click(_btnSaveConfig, e);
+	}
+
+	private void TrayQuickConfigMenuItem_Click(object? sender, EventArgs e)
+	{
+		if (sender is not ToolStripMenuItem menuItem || menuItem.Tag is not string configPath || string.IsNullOrWhiteSpace(configPath))
+			return;
+
+		LoadConfigFromPath(configPath, "Load Config");
+	}
+
+	private void TrayExitMenuItem_Click(object? sender, EventArgs e)
+	{
+		ExitApplication();
+	}
+
 	private void ExitApplication()
 	{
 		if (_engine?.IsRunning == true)
@@ -366,8 +580,7 @@ internal partial class MainForm : Form
 		{
 			_logBuffer?.Dispose();
 			_engine?.Dispose();
-			_notifyIcon?.Dispose();
-			_contextMenu?.Dispose();
+			components?.Dispose();
 			_autoUpdater.Dispose();
 		}
 		base.Dispose(disposing);
@@ -535,6 +748,8 @@ internal partial class MainForm : Form
 				StartupManager.Enable();
 			else
 				StartupManager.Disable();
+
+			UpdateTrayMenuState();
 		}
 		catch (Exception ex)
 		{
@@ -542,7 +757,13 @@ internal partial class MainForm : Form
 			_chkStartOnBoot!.CheckedChanged -= ChkStartOnBoot_CheckedChanged;
 			_chkStartOnBoot.Checked = StartupManager.IsEnabled();
 			_chkStartOnBoot.CheckedChanged += ChkStartOnBoot_CheckedChanged;
+			UpdateTrayMenuState();
 		}
+	}
+
+	private void ChkAutoStartProxy_CheckedChanged(object? sender, EventArgs e)
+	{
+		UpdateTrayMenuState();
 	}
 
 	private async void BtnRefreshHosts_Click(object? sender, EventArgs e)

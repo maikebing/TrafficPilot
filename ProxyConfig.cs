@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Diagnostics;
 
 namespace TrafficPilot;
 
@@ -9,6 +10,9 @@ namespace TrafficPilot;
 
 internal class ProxyConfigModel
 {
+	[JsonPropertyName("configName")]
+	public string ConfigName { get; set; } = string.Empty;
+
 	[JsonPropertyName("proxy")]
 	public ProxySettings? Proxy { get; set; }
 
@@ -28,6 +32,7 @@ internal class ProxyConfigModel
 
 	public ProxyConfigModel(ProxyOptions opts)
 	{
+		ConfigName = string.Empty;
 		Proxy = new ProxySettings
 		{
 			Enabled = opts.ProxyEnabled,
@@ -93,52 +98,50 @@ internal sealed class ProxyConfigManager
 			"config.json");
 	}
 
-	public ProxyConfigModel Load()
+	public ProxyConfigModel Load(string? configPath = null)
 	{
-		if (!File.Exists(_configPath))
-			return new ProxyConfigModel
-			{
-				Proxy = new ProxySettings(),
-				Targeting = new TargetingSettings
-				{
-					ProcessNames = new List<string>
-					{
-						"devenv.exe",
-						"blend.exe",
-						"servicehub*.exe",
-						"microsoft.servicehub*.exe",
-						"copilot*.exe",
-						"onedrive.exe",
-						"perfwatson2.exe",
-						"devhub.exe",
-						"msbuild*.exe",
-						"vstest*.exe",
-						"m365copilot.exe",
-						"m365copilot_autostarter.exe",
-						"m365copilot_widget.exe",
-						"webviewhost.exe"
-					}
-				}
-			};
+		var path = Path.GetFullPath(configPath ?? _configPath);
+
+		if (!File.Exists(path))
+			return CreateDefaultConfig();
 
 		try
 		{
-			var json = File.ReadAllText(_configPath);
+			var json = File.ReadAllText(path);
 			var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
 			return JsonSerializer.Deserialize<ProxyConfigModel>(json, options) ?? new ProxyConfigModel();
 		}
-		catch (Exception ex)
+		catch (IOException ex)
+		{
+			MessageBox.Show($"Failed to load config: {ex.Message}", "Load Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+			return new ProxyConfigModel();
+		}
+		catch (UnauthorizedAccessException ex)
+		{
+			MessageBox.Show($"Failed to load config: {ex.Message}", "Load Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+			return new ProxyConfigModel();
+		}
+		catch (JsonException ex)
+		{
+			MessageBox.Show($"Failed to load config: {ex.Message}", "Load Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+			return new ProxyConfigModel();
+		}
+		catch (NotSupportedException ex)
 		{
 			MessageBox.Show($"Failed to load config: {ex.Message}", "Load Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
 			return new ProxyConfigModel();
 		}
 	}
 
-	public void Save(ProxyConfigModel config)
+	public void Save(ProxyConfigModel config, string? configPath = null)
 	{
+		ArgumentNullException.ThrowIfNull(config);
+
+		var path = Path.GetFullPath(configPath ?? _configPath);
+		var dir = Path.GetDirectoryName(path);
+
 		try
 		{
-			var dir = Path.GetDirectoryName(_configPath);
 			if (!Directory.Exists(dir))
 				Directory.CreateDirectory(dir!);
 
@@ -148,13 +151,116 @@ internal sealed class ProxyConfigManager
 				PropertyNamingPolicy = JsonNamingPolicy.CamelCase
 			};
 			var json = JsonSerializer.Serialize(config, options);
-			File.WriteAllText(_configPath, json);
+			File.WriteAllText(path, json);
 		}
-		catch (Exception ex)
+		catch (IOException ex)
+		{
+			MessageBox.Show($"Failed to save config: {ex.Message}", "Save Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+		}
+		catch (UnauthorizedAccessException ex)
+		{
+			MessageBox.Show($"Failed to save config: {ex.Message}", "Save Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+		}
+		catch (NotSupportedException ex)
 		{
 			MessageBox.Show($"Failed to save config: {ex.Message}", "Save Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
 		}
 	}
 
+	public string GetConfigDirectory() => Path.GetDirectoryName(_configPath)!;
+
+	public IReadOnlyList<string> GetConfigPaths(int maxCount)
+	{
+		if (maxCount <= 0)
+			return [];
+
+		var configDirectory = GetConfigDirectory();
+		if (!Directory.Exists(configDirectory))
+			return [];
+
+		return Directory
+			.EnumerateFiles(configDirectory, "*.json", SearchOption.TopDirectoryOnly)
+			.OrderByDescending(File.GetLastWriteTimeUtc)
+			.Take(maxCount)
+			.ToList();
+	}
+
 	public string GetConfigPath() => _configPath;
+
+	public string GetConfigDisplayName(string configPath)
+	{
+		if (string.IsNullOrWhiteSpace(configPath))
+			return ConfigDisplayNames.DefaultName;
+
+		var path = Path.GetFullPath(configPath);
+		if (!File.Exists(path))
+			return ConfigDisplayNames.DefaultName;
+
+		try
+		{
+			var json = File.ReadAllText(path);
+			var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+			var config = JsonSerializer.Deserialize<ProxyConfigModel>(json, options);
+			return ConfigDisplayNames.Normalize(config?.ConfigName);
+		}
+		catch (IOException ex)
+		{
+			Debug.WriteLine($"Failed to read config display name from '{path}': {ex.Message}");
+			return ConfigDisplayNames.DefaultName;
+		}
+		catch (UnauthorizedAccessException ex)
+		{
+			Debug.WriteLine($"Failed to read config display name from '{path}': {ex.Message}");
+			return ConfigDisplayNames.DefaultName;
+		}
+		catch (JsonException ex)
+		{
+			Debug.WriteLine($"Failed to read config display name from '{path}': {ex.Message}");
+			return ConfigDisplayNames.DefaultName;
+		}
+		catch (NotSupportedException ex)
+		{
+			Debug.WriteLine($"Failed to read config display name from '{path}': {ex.Message}");
+			return ConfigDisplayNames.DefaultName;
+		}
+	}
+
+	private static ProxyConfigModel CreateDefaultConfig()
+	{
+		return new ProxyConfigModel
+		{
+			Proxy = new ProxySettings(),
+			Targeting = new TargetingSettings
+			{
+				ProcessNames = new List<string>
+				{
+					"devenv.exe",
+					"blend.exe",
+					"servicehub*.exe",
+					"microsoft.servicehub*.exe",
+					"copilot*.exe",
+					"onedrive.exe",
+					"perfwatson2.exe",
+					"devhub.exe",
+					"msbuild*.exe",
+					"vstest*.exe",
+					"m365copilot.exe",
+					"m365copilot_autostarter.exe",
+					"m365copilot_widget.exe"
+				}
+			}
+		};
+	}
+}
+
+internal static class ConfigDisplayNames
+{
+	internal const string DefaultName = "Default";
+
+	internal static string Normalize(string? configName)
+	{
+		return string.IsNullOrWhiteSpace(configName)
+			? DefaultName
+			: configName.Trim();
+	}
 }

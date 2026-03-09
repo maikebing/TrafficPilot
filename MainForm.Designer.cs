@@ -22,12 +22,31 @@ partial class MainForm
 	// Tray
 	private NotifyIcon? _notifyIcon;
 	private ContextMenuStrip? _contextMenu;
+	private ToolStripMenuItem? _trayShowMenuItem;
+	private ToolStripMenuItem? _trayHideMenuItem;
+	private ToolStripSeparator? _trayTopSeparator;
+	private ToolStripMenuItem? _trayStartProxyMenuItem;
+	private ToolStripMenuItem? _trayStopProxyMenuItem;
+	private ToolStripSeparator? _trayMiddleSeparator;
+	private ToolStripMenuItem? _trayOptionsMenuItem;
+	private ToolStripMenuItem? _trayStartOnBootMenuItem;
+	private ToolStripMenuItem? _trayAutoStartProxyMenuItem;
+	private ToolStripMenuItem? _trayConfigMenuItem;
+	private ToolStripMenuItem? _trayLoadConfigMenuItem;
+	private ToolStripMenuItem? _traySaveConfigAsMenuItem;
+	private ToolStripMenuItem? _traySaveConfigMenuItem;
+	private ToolStripSeparator? _trayConfigSeparator;
+	private ToolStripSeparator? _trayBottomSeparator;
+	private ToolStripMenuItem? _trayExitMenuItem;
 
 	// Config tab - main panel
 	private TableLayoutPanel? _configPanel;
 
 	// Config tab - Proxy Enable
+	private FlowLayoutPanel? _proxyHeaderPanel;
 	private CheckBox? _chkProxyEnabled;
+	private Label? _lblConfigName;
+	private TextBox? _txtConfigName;
 
 	// Config tab - Proxy Host
 	private Label? _lblProxyHost;
@@ -75,7 +94,10 @@ partial class MainForm
 	private CheckBox? _chkAutoStartProxy;
 
 	// Config tab - Buttons
+	private TableLayoutPanel? _configActionPanel;
 	private FlowLayoutPanel? _configBtnPanel;
+	private FlowLayoutPanel? _quickConfigPanel;
+	private Button? _btnSaveConfigAs;
 	private Button? _btnSaveConfig;
 	private Button? _btnLoadConfig;
 
@@ -105,12 +127,16 @@ partial class MainForm
 
     private void InitializeComponent()
     {
+        components = new Container();
         ComponentResourceManager resources = new ComponentResourceManager(typeof(MainForm));
         _mainPanel = new TableLayoutPanel();
         _tabControl = new TabControl();
         _configTab = new TabPage();
         _configPanel = new TableLayoutPanel();
+        _proxyHeaderPanel = new FlowLayoutPanel();
         _chkProxyEnabled = new CheckBox();
+        _lblConfigName = new Label();
+        _txtConfigName = new TextBox();
         _lblProxyHost = new Label();
         _txtProxyHost = new TextBox();
         _lblProxyPort = new Label();
@@ -138,9 +164,12 @@ partial class MainForm
         _startupOptionsPanel = new FlowLayoutPanel();
         _chkStartOnBoot = new CheckBox();
         _chkAutoStartProxy = new CheckBox();
+        _configActionPanel = new TableLayoutPanel();
+        _quickConfigPanel = new FlowLayoutPanel();
         _configBtnPanel = new FlowLayoutPanel();
-        _btnSaveConfig = new Button();
         _btnLoadConfig = new Button();
+        _btnSaveConfigAs = new Button();
+        _btnSaveConfig = new Button();
         _dnsRedirectTab = new TabPage();
         _dnsRedirectPanel = new TableLayoutPanel();
         _chkDNSRedirectEnabled = new CheckBox();
@@ -174,16 +203,36 @@ partial class MainForm
         _lblStats = new Label();
         _controlPanel = new FlowLayoutPanel();
         _btnStartStop = new Button();
+        _contextMenu = new ContextMenuStrip(components);
+        _trayShowMenuItem = new ToolStripMenuItem();
+        _trayHideMenuItem = new ToolStripMenuItem();
+        _trayTopSeparator = new ToolStripSeparator();
+        _trayStartProxyMenuItem = new ToolStripMenuItem();
+        _trayStopProxyMenuItem = new ToolStripMenuItem();
+        _trayMiddleSeparator = new ToolStripSeparator();
+        _trayOptionsMenuItem = new ToolStripMenuItem();
+        _trayStartOnBootMenuItem = new ToolStripMenuItem();
+        _trayAutoStartProxyMenuItem = new ToolStripMenuItem();
+        _trayConfigMenuItem = new ToolStripMenuItem();
+        _trayLoadConfigMenuItem = new ToolStripMenuItem();
+        _traySaveConfigAsMenuItem = new ToolStripMenuItem();
+        _traySaveConfigMenuItem = new ToolStripMenuItem();
+        _trayConfigSeparator = new ToolStripSeparator();
+        _trayBottomSeparator = new ToolStripSeparator();
+        _trayExitMenuItem = new ToolStripMenuItem();
+        _notifyIcon = new NotifyIcon(components);
         _mainPanel.SuspendLayout();
         _tabControl.SuspendLayout();
         _configTab.SuspendLayout();
         _configPanel.SuspendLayout();
+        _proxyHeaderPanel.SuspendLayout();
         ((ISupportInitialize)_numProxyPort).BeginInit();
         _procPanel.SuspendLayout();
         _addProcPanel.SuspendLayout();
         _pidPanel.SuspendLayout();
         _addPidPanel.SuspendLayout();
         _startupOptionsPanel.SuspendLayout();
+        _configActionPanel.SuspendLayout();
         _configBtnPanel.SuspendLayout();
         _dnsRedirectTab.SuspendLayout();
         _dnsRedirectPanel.SuspendLayout();
@@ -197,6 +246,7 @@ partial class MainForm
         _versionPanel.SuspendLayout();
         _statusPanel.SuspendLayout();
         _controlPanel.SuspendLayout();
+        _contextMenu.SuspendLayout();
         SuspendLayout();
         // 
         // _mainPanel
@@ -246,7 +296,7 @@ partial class MainForm
         _configPanel.ColumnCount = 2;
         _configPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 150F));
         _configPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-        _configPanel.Controls.Add(_chkProxyEnabled, 0, 0);
+        _configPanel.Controls.Add(_proxyHeaderPanel, 0, 0);
         _configPanel.Controls.Add(_lblProxyHost, 0, 1);
         _configPanel.Controls.Add(_txtProxyHost, 1, 1);
         _configPanel.Controls.Add(_lblProxyPort, 0, 2);
@@ -264,7 +314,7 @@ partial class MainForm
         _configPanel.Controls.Add(_lblConfigFile, 0, 8);
         _configPanel.Controls.Add(_lblConfigFileValue, 1, 8);
         _configPanel.Controls.Add(_startupOptionsPanel, 0, 9);
-        _configPanel.Controls.Add(_configBtnPanel, 1, 10);
+        _configPanel.Controls.Add(_configActionPanel, 0, 10);
         _configPanel.Dock = DockStyle.Fill;
         _configPanel.Location = new Point(0, 0);
         _configPanel.Name = "_configPanel";
@@ -284,23 +334,54 @@ partial class MainForm
         _configPanel.Size = new Size(769, 530);
         _configPanel.TabIndex = 0;
         // 
+        // _proxyHeaderPanel
+        // 
+        _proxyHeaderPanel.AutoSize = true;
+        _configPanel.SetColumnSpan(_proxyHeaderPanel, 2);
+        _proxyHeaderPanel.Controls.Add(_chkProxyEnabled);
+        _proxyHeaderPanel.Controls.Add(_lblConfigName);
+        _proxyHeaderPanel.Controls.Add(_txtConfigName);
+        _proxyHeaderPanel.Dock = DockStyle.Top;
+        _proxyHeaderPanel.Location = new Point(13, 13);
+        _proxyHeaderPanel.Name = "_proxyHeaderPanel";
+        _proxyHeaderPanel.Size = new Size(743, 29);
+        _proxyHeaderPanel.TabIndex = 0;
+        _proxyHeaderPanel.WrapContents = false;
+        // 
         // _chkProxyEnabled
         // 
         _chkProxyEnabled.AutoSize = true;
         _chkProxyEnabled.Checked = true;
         _chkProxyEnabled.CheckState = CheckState.Checked;
-        _configPanel.SetColumnSpan(_chkProxyEnabled, 2);
-        _chkProxyEnabled.Location = new Point(13, 13);
-        _chkProxyEnabled.Margin = new Padding(3, 3, 3, 6);
+        _chkProxyEnabled.Location = new Point(3, 5);
+        _chkProxyEnabled.Margin = new Padding(3, 5, 18, 3);
         _chkProxyEnabled.Name = "_chkProxyEnabled";
         _chkProxyEnabled.Size = new Size(222, 21);
         _chkProxyEnabled.TabIndex = 0;
         _chkProxyEnabled.Text = "Enable Proxy (TCP traffic redirect)";
         // 
+        // _lblConfigName
+        // 
+        _lblConfigName.Anchor = AnchorStyles.Left;
+        _lblConfigName.AutoSize = true;
+        _lblConfigName.Location = new Point(246, 6);
+        _lblConfigName.Name = "_lblConfigName";
+        _lblConfigName.Size = new Size(88, 17);
+        _lblConfigName.TabIndex = 1;
+        _lblConfigName.Text = "Config Name:";
+        // 
+        // _txtConfigName
+        // 
+        _txtConfigName.Location = new Point(340, 3);
+        _txtConfigName.Name = "_txtConfigName";
+        _txtConfigName.PlaceholderText = "默认";
+        _txtConfigName.Size = new Size(220, 23);
+        _txtConfigName.TabIndex = 2;
+        // 
         // _lblProxyHost
         // 
         _lblProxyHost.Anchor = AnchorStyles.Left | AnchorStyles.Right;
-        _lblProxyHost.Location = new Point(13, 45);
+        _lblProxyHost.Location = new Point(13, 50);
         _lblProxyHost.Name = "_lblProxyHost";
         _lblProxyHost.Size = new Size(144, 23);
         _lblProxyHost.TabIndex = 0;
@@ -310,7 +391,7 @@ partial class MainForm
         // _txtProxyHost
         // 
         _txtProxyHost.Dock = DockStyle.Fill;
-        _txtProxyHost.Location = new Point(165, 45);
+        _txtProxyHost.Location = new Point(165, 50);
         _txtProxyHost.Margin = new Padding(5);
         _txtProxyHost.Name = "_txtProxyHost";
         _txtProxyHost.Size = new Size(589, 23);
@@ -320,7 +401,7 @@ partial class MainForm
         // _lblProxyPort
         // 
         _lblProxyPort.Anchor = AnchorStyles.Left | AnchorStyles.Right;
-        _lblProxyPort.Location = new Point(13, 78);
+        _lblProxyPort.Location = new Point(13, 83);
         _lblProxyPort.Name = "_lblProxyPort";
         _lblProxyPort.Size = new Size(144, 23);
         _lblProxyPort.TabIndex = 2;
@@ -330,7 +411,7 @@ partial class MainForm
         // _numProxyPort
         // 
         _numProxyPort.Dock = DockStyle.Fill;
-        _numProxyPort.Location = new Point(165, 78);
+        _numProxyPort.Location = new Point(165, 83);
         _numProxyPort.Margin = new Padding(5);
         _numProxyPort.Maximum = new decimal(new int[] { 65535, 0, 0, 0 });
         _numProxyPort.Name = "_numProxyPort";
@@ -341,7 +422,7 @@ partial class MainForm
         // _lblProxyScheme
         // 
         _lblProxyScheme.Anchor = AnchorStyles.Left | AnchorStyles.Right;
-        _lblProxyScheme.Location = new Point(13, 112);
+        _lblProxyScheme.Location = new Point(13, 117);
         _lblProxyScheme.Name = "_lblProxyScheme";
         _lblProxyScheme.Size = new Size(144, 23);
         _lblProxyScheme.TabIndex = 4;
@@ -353,7 +434,7 @@ partial class MainForm
         _cmbProxyScheme.Dock = DockStyle.Fill;
         _cmbProxyScheme.DropDownStyle = ComboBoxStyle.DropDownList;
         _cmbProxyScheme.Items.AddRange(new object[] { "socks4", "socks5", "http", "https" });
-        _cmbProxyScheme.Location = new Point(165, 111);
+        _cmbProxyScheme.Location = new Point(165, 116);
         _cmbProxyScheme.Margin = new Padding(5);
         _cmbProxyScheme.Name = "_cmbProxyScheme";
         _cmbProxyScheme.Size = new Size(589, 25);
@@ -362,7 +443,7 @@ partial class MainForm
         // _lblProcesses
         // 
         _lblProcesses.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
-        _lblProcesses.Location = new Point(13, 141);
+        _lblProcesses.Location = new Point(13, 146);
         _lblProcesses.Name = "_lblProcesses";
         _lblProcesses.Size = new Size(144, 23);
         _lblProcesses.TabIndex = 6;
@@ -377,12 +458,12 @@ partial class MainForm
         _procPanel.Controls.Add(_lstProcesses, 0, 0);
         _procPanel.Controls.Add(_btnRemoveProcess, 1, 0);
         _procPanel.Dock = DockStyle.Fill;
-        _procPanel.Location = new Point(165, 146);
+        _procPanel.Location = new Point(165, 151);
         _procPanel.Margin = new Padding(5);
         _procPanel.Name = "_procPanel";
         _procPanel.RowCount = 1;
         _procPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 20F));
-        _procPanel.Size = new Size(589, 84);
+        _procPanel.Size = new Size(589, 80);
         _procPanel.TabIndex = 7;
         // 
         // _lstProcesses
@@ -390,7 +471,7 @@ partial class MainForm
         _lstProcesses.Dock = DockStyle.Fill;
         _lstProcesses.Location = new Point(3, 3);
         _lstProcesses.Name = "_lstProcesses";
-        _lstProcesses.Size = new Size(513, 78);
+        _lstProcesses.Size = new Size(513, 74);
         _lstProcesses.TabIndex = 0;
         // 
         // _btnRemoveProcess
@@ -399,7 +480,7 @@ partial class MainForm
         _btnRemoveProcess.Location = new Point(521, 2);
         _btnRemoveProcess.Margin = new Padding(2);
         _btnRemoveProcess.Name = "_btnRemoveProcess";
-        _btnRemoveProcess.Size = new Size(66, 80);
+        _btnRemoveProcess.Size = new Size(66, 76);
         _btnRemoveProcess.TabIndex = 1;
         _btnRemoveProcess.Text = "Remove";
         _btnRemoveProcess.Click += BtnRemoveProcess_Click;
@@ -407,7 +488,7 @@ partial class MainForm
         // _lblAddProcess
         // 
         _lblAddProcess.Anchor = AnchorStyles.Left | AnchorStyles.Right;
-        _lblAddProcess.Location = new Point(13, 243);
+        _lblAddProcess.Location = new Point(13, 244);
         _lblAddProcess.Name = "_lblAddProcess";
         _lblAddProcess.Size = new Size(144, 23);
         _lblAddProcess.TabIndex = 8;
@@ -422,7 +503,7 @@ partial class MainForm
         _addProcPanel.Controls.Add(_txtNewProcess, 0, 0);
         _addProcPanel.Controls.Add(_btnAddProcess, 1, 0);
         _addProcPanel.Dock = DockStyle.Fill;
-        _addProcPanel.Location = new Point(165, 240);
+        _addProcPanel.Location = new Point(165, 241);
         _addProcPanel.Margin = new Padding(5);
         _addProcPanel.Name = "_addProcPanel";
         _addProcPanel.RowCount = 1;
@@ -452,7 +533,7 @@ partial class MainForm
         // _lblExtraPids
         // 
         _lblExtraPids.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
-        _lblExtraPids.Location = new Point(13, 274);
+        _lblExtraPids.Location = new Point(13, 275);
         _lblExtraPids.Name = "_lblExtraPids";
         _lblExtraPids.Size = new Size(144, 23);
         _lblExtraPids.TabIndex = 10;
@@ -467,12 +548,12 @@ partial class MainForm
         _pidPanel.Controls.Add(_lstExtraPids, 0, 0);
         _pidPanel.Controls.Add(_btnRemovePid, 1, 0);
         _pidPanel.Dock = DockStyle.Fill;
-        _pidPanel.Location = new Point(165, 279);
+        _pidPanel.Location = new Point(165, 280);
         _pidPanel.Margin = new Padding(5);
         _pidPanel.Name = "_pidPanel";
         _pidPanel.RowCount = 1;
         _pidPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 20F));
-        _pidPanel.Size = new Size(589, 84);
+        _pidPanel.Size = new Size(589, 80);
         _pidPanel.TabIndex = 11;
         // 
         // _lstExtraPids
@@ -480,7 +561,7 @@ partial class MainForm
         _lstExtraPids.Dock = DockStyle.Fill;
         _lstExtraPids.Location = new Point(3, 3);
         _lstExtraPids.Name = "_lstExtraPids";
-        _lstExtraPids.Size = new Size(513, 78);
+        _lstExtraPids.Size = new Size(513, 74);
         _lstExtraPids.TabIndex = 0;
         // 
         // _btnRemovePid
@@ -489,7 +570,7 @@ partial class MainForm
         _btnRemovePid.Location = new Point(521, 2);
         _btnRemovePid.Margin = new Padding(2);
         _btnRemovePid.Name = "_btnRemovePid";
-        _btnRemovePid.Size = new Size(66, 80);
+        _btnRemovePid.Size = new Size(66, 76);
         _btnRemovePid.TabIndex = 1;
         _btnRemovePid.Text = "Remove";
         _btnRemovePid.Click += BtnRemovePid_Click;
@@ -497,7 +578,7 @@ partial class MainForm
         // _lblAddPid
         // 
         _lblAddPid.Anchor = AnchorStyles.Left | AnchorStyles.Right;
-        _lblAddPid.Location = new Point(13, 377);
+        _lblAddPid.Location = new Point(13, 374);
         _lblAddPid.Name = "_lblAddPid";
         _lblAddPid.Size = new Size(144, 23);
         _lblAddPid.TabIndex = 12;
@@ -512,7 +593,7 @@ partial class MainForm
         _addPidPanel.Controls.Add(_txtNewPid, 0, 0);
         _addPidPanel.Controls.Add(_btnAddPid, 1, 0);
         _addPidPanel.Dock = DockStyle.Fill;
-        _addPidPanel.Location = new Point(165, 373);
+        _addPidPanel.Location = new Point(165, 370);
         _addPidPanel.Margin = new Padding(5);
         _addPidPanel.Name = "_addPidPanel";
         _addPidPanel.RowCount = 1;
@@ -542,7 +623,7 @@ partial class MainForm
         // _lblConfigFile
         // 
         _lblConfigFile.Anchor = AnchorStyles.Left | AnchorStyles.Right;
-        _lblConfigFile.Location = new Point(13, 415);
+        _lblConfigFile.Location = new Point(13, 412);
         _lblConfigFile.Name = "_lblConfigFile";
         _lblConfigFile.Size = new Size(144, 23);
         _lblConfigFile.TabIndex = 14;
@@ -553,7 +634,7 @@ partial class MainForm
         // 
         _lblConfigFileValue.AutoEllipsis = true;
         _lblConfigFileValue.Dock = DockStyle.Fill;
-        _lblConfigFileValue.Location = new Point(165, 415);
+        _lblConfigFileValue.Location = new Point(165, 412);
         _lblConfigFileValue.Margin = new Padding(5);
         _lblConfigFileValue.Name = "_lblConfigFileValue";
         _lblConfigFileValue.Size = new Size(589, 23);
@@ -567,7 +648,7 @@ partial class MainForm
         _startupOptionsPanel.Controls.Add(_chkStartOnBoot);
         _startupOptionsPanel.Controls.Add(_chkAutoStartProxy);
         _startupOptionsPanel.Dock = DockStyle.Top;
-        _startupOptionsPanel.Location = new Point(13, 446);
+        _startupOptionsPanel.Location = new Point(13, 443);
         _startupOptionsPanel.Name = "_startupOptionsPanel";
         _startupOptionsPanel.Size = new Size(743, 27);
         _startupOptionsPanel.TabIndex = 17;
@@ -592,39 +673,81 @@ partial class MainForm
         _chkAutoStartProxy.Size = new Size(162, 21);
         _chkAutoStartProxy.TabIndex = 1;
         _chkAutoStartProxy.Text = "Start Proxy after launch";
+        _chkAutoStartProxy.CheckedChanged += ChkAutoStartProxy_CheckedChanged;
+        // 
+        // _configActionPanel
+        // 
+        _configActionPanel.AutoSize = true;
+        _configActionPanel.ColumnCount = 2;
+        _configPanel.SetColumnSpan(_configActionPanel, 2);
+        _configActionPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+        _configActionPanel.ColumnStyles.Add(new ColumnStyle());
+        _configActionPanel.Controls.Add(_quickConfigPanel, 0, 0);
+        _configActionPanel.Controls.Add(_configBtnPanel, 1, 0);
+        _configActionPanel.Dock = DockStyle.Top;
+        _configActionPanel.Location = new Point(13, 473);
+        _configActionPanel.Margin = new Padding(3, 0, 3, 3);
+        _configActionPanel.Name = "_configActionPanel";
+        _configActionPanel.RowCount = 1;
+        _configActionPanel.RowStyles.Add(new RowStyle());
+        _configActionPanel.Size = new Size(743, 44);
+        _configActionPanel.TabIndex = 18;
+        // 
+        // _quickConfigPanel
+        // 
+        _quickConfigPanel.AutoSize = true;
+        _quickConfigPanel.Dock = DockStyle.Fill;
+        _quickConfigPanel.Location = new Point(0, 0);
+        _quickConfigPanel.Margin = new Padding(0);
+        _quickConfigPanel.Name = "_quickConfigPanel";
+        _quickConfigPanel.Size = new Size(423, 44);
+        _quickConfigPanel.TabIndex = 0;
+        _quickConfigPanel.WrapContents = false;
         // 
         // _configBtnPanel
         // 
         _configBtnPanel.AutoSize = true;
-        _configBtnPanel.Controls.Add(_btnSaveConfig);
         _configBtnPanel.Controls.Add(_btnLoadConfig);
+        _configBtnPanel.Controls.Add(_btnSaveConfigAs);
+        _configBtnPanel.Controls.Add(_btnSaveConfig);
         _configBtnPanel.Dock = DockStyle.Top;
         _configBtnPanel.FlowDirection = FlowDirection.RightToLeft;
-        _configBtnPanel.Location = new Point(165, 481);
+        _configBtnPanel.Location = new Point(428, 5);
         _configBtnPanel.Margin = new Padding(5);
         _configBtnPanel.Name = "_configBtnPanel";
-        _configBtnPanel.Size = new Size(589, 34);
+        _configBtnPanel.Size = new Size(310, 34);
         _configBtnPanel.TabIndex = 18;
-        // 
-        // _btnSaveConfig
-        // 
-        _btnSaveConfig.Location = new Point(487, 2);
-        _btnSaveConfig.Margin = new Padding(2);
-        _btnSaveConfig.Name = "_btnSaveConfig";
-        _btnSaveConfig.Size = new Size(100, 30);
-        _btnSaveConfig.TabIndex = 0;
-        _btnSaveConfig.Text = "Save Config";
-        _btnSaveConfig.Click += BtnSaveConfig_Click;
+        _configBtnPanel.WrapContents = false;
         // 
         // _btnLoadConfig
         // 
-        _btnLoadConfig.Location = new Point(383, 2);
+        _btnLoadConfig.Location = new Point(208, 2);
         _btnLoadConfig.Margin = new Padding(2);
         _btnLoadConfig.Name = "_btnLoadConfig";
         _btnLoadConfig.Size = new Size(100, 30);
         _btnLoadConfig.TabIndex = 1;
         _btnLoadConfig.Text = "Load Config";
         _btnLoadConfig.Click += BtnLoadConfig_Click;
+        // 
+        // _btnSaveConfigAs
+        // 
+        _btnSaveConfigAs.Location = new Point(106, 2);
+        _btnSaveConfigAs.Margin = new Padding(2);
+        _btnSaveConfigAs.Name = "_btnSaveConfigAs";
+        _btnSaveConfigAs.Size = new Size(98, 30);
+        _btnSaveConfigAs.TabIndex = 2;
+        _btnSaveConfigAs.Text = "Save As";
+        _btnSaveConfigAs.Click += BtnSaveConfigAs_Click;
+        // 
+        // _btnSaveConfig
+        // 
+        _btnSaveConfig.Location = new Point(2, 2);
+        _btnSaveConfig.Margin = new Padding(2);
+        _btnSaveConfig.Name = "_btnSaveConfig";
+        _btnSaveConfig.Size = new Size(100, 30);
+        _btnSaveConfig.TabIndex = 3;
+        _btnSaveConfig.Text = "Save Config";
+        _btnSaveConfig.Click += BtnSaveConfig_Click;
         // 
         // _dnsRedirectTab
         // 
@@ -1021,6 +1144,125 @@ partial class MainForm
         _btnStartStop.UseVisualStyleBackColor = false;
         _btnStartStop.Click += BtnStartStop_Click;
         // 
+        // _contextMenu
+        // 
+        _contextMenu.Items.AddRange(new ToolStripItem[] { _trayShowMenuItem, _trayHideMenuItem, _trayTopSeparator, _trayStartProxyMenuItem, _trayStopProxyMenuItem, _trayMiddleSeparator, _trayOptionsMenuItem, _trayConfigMenuItem, _trayBottomSeparator, _trayExitMenuItem });
+        _contextMenu.Name = "_contextMenu";
+        _contextMenu.Size = new Size(181, 198);
+        // 
+        // _trayShowMenuItem
+        // 
+        _trayShowMenuItem.Name = "_trayShowMenuItem";
+        _trayShowMenuItem.Size = new Size(180, 22);
+        _trayShowMenuItem.Text = "Show";
+        _trayShowMenuItem.Click += TrayShowMenuItem_Click;
+        // 
+        // _trayHideMenuItem
+        // 
+        _trayHideMenuItem.Name = "_trayHideMenuItem";
+        _trayHideMenuItem.Size = new Size(180, 22);
+        _trayHideMenuItem.Text = "Hide";
+        _trayHideMenuItem.Click += TrayHideMenuItem_Click;
+        // 
+        // _trayTopSeparator
+        // 
+        _trayTopSeparator.Name = "_trayTopSeparator";
+        _trayTopSeparator.Size = new Size(177, 6);
+        // 
+        // _trayStartProxyMenuItem
+        // 
+        _trayStartProxyMenuItem.Name = "_trayStartProxyMenuItem";
+        _trayStartProxyMenuItem.Size = new Size(180, 22);
+        _trayStartProxyMenuItem.Text = "Start Proxy";
+        _trayStartProxyMenuItem.Click += TrayStartProxyMenuItem_Click;
+        // 
+        // _trayStopProxyMenuItem
+        // 
+        _trayStopProxyMenuItem.Name = "_trayStopProxyMenuItem";
+        _trayStopProxyMenuItem.Size = new Size(180, 22);
+        _trayStopProxyMenuItem.Text = "Stop Proxy";
+        _trayStopProxyMenuItem.Click += TrayStopProxyMenuItem_Click;
+        // 
+        // _trayMiddleSeparator
+        // 
+        _trayMiddleSeparator.Name = "_trayMiddleSeparator";
+        _trayMiddleSeparator.Size = new Size(177, 6);
+        // 
+        // _trayOptionsMenuItem
+        // 
+        _trayOptionsMenuItem.DropDownItems.AddRange(new ToolStripItem[] { _trayStartOnBootMenuItem, _trayAutoStartProxyMenuItem });
+        _trayOptionsMenuItem.Name = "_trayOptionsMenuItem";
+        _trayOptionsMenuItem.Size = new Size(180, 22);
+        _trayOptionsMenuItem.Text = "Options";
+        // 
+        // _trayStartOnBootMenuItem
+        // 
+        _trayStartOnBootMenuItem.CheckOnClick = true;
+        _trayStartOnBootMenuItem.Name = "_trayStartOnBootMenuItem";
+        _trayStartOnBootMenuItem.Size = new Size(224, 22);
+        _trayStartOnBootMenuItem.Text = "Start on Windows startup";
+        _trayStartOnBootMenuItem.Click += TrayStartOnBootMenuItem_Click;
+        // 
+        // _trayAutoStartProxyMenuItem
+        // 
+        _trayAutoStartProxyMenuItem.CheckOnClick = true;
+        _trayAutoStartProxyMenuItem.Name = "_trayAutoStartProxyMenuItem";
+        _trayAutoStartProxyMenuItem.Size = new Size(224, 22);
+        _trayAutoStartProxyMenuItem.Text = "Start Proxy after launch";
+        _trayAutoStartProxyMenuItem.Click += TrayAutoStartProxyMenuItem_Click;
+        // 
+        // _trayConfigMenuItem
+        // 
+        _trayConfigMenuItem.DropDownItems.AddRange(new ToolStripItem[] { _trayLoadConfigMenuItem, _traySaveConfigAsMenuItem, _traySaveConfigMenuItem, _trayConfigSeparator });
+        _trayConfigMenuItem.Name = "_trayConfigMenuItem";
+        _trayConfigMenuItem.Size = new Size(180, 22);
+        _trayConfigMenuItem.Text = "Config";
+        // 
+        // _trayLoadConfigMenuItem
+        // 
+        _trayLoadConfigMenuItem.Name = "_trayLoadConfigMenuItem";
+        _trayLoadConfigMenuItem.Size = new Size(147, 22);
+        _trayLoadConfigMenuItem.Text = "Load Config";
+        _trayLoadConfigMenuItem.Click += TrayLoadConfigMenuItem_Click;
+        // 
+        // _traySaveConfigAsMenuItem
+        // 
+        _traySaveConfigAsMenuItem.Name = "_traySaveConfigAsMenuItem";
+        _traySaveConfigAsMenuItem.Size = new Size(147, 22);
+        _traySaveConfigAsMenuItem.Text = "Save As";
+        _traySaveConfigAsMenuItem.Click += TraySaveConfigAsMenuItem_Click;
+        // 
+        // _traySaveConfigMenuItem
+        // 
+        _traySaveConfigMenuItem.Name = "_traySaveConfigMenuItem";
+        _traySaveConfigMenuItem.Size = new Size(147, 22);
+        _traySaveConfigMenuItem.Text = "Save Config";
+        _traySaveConfigMenuItem.Click += TraySaveConfigMenuItem_Click;
+        // 
+        // _trayConfigSeparator
+        // 
+        _trayConfigSeparator.Name = "_trayConfigSeparator";
+        _trayConfigSeparator.Size = new Size(144, 6);
+        // 
+        // _trayBottomSeparator
+        // 
+        _trayBottomSeparator.Name = "_trayBottomSeparator";
+        _trayBottomSeparator.Size = new Size(177, 6);
+        // 
+        // _trayExitMenuItem
+        // 
+        _trayExitMenuItem.Name = "_trayExitMenuItem";
+        _trayExitMenuItem.Size = new Size(180, 22);
+        _trayExitMenuItem.Text = "Exit";
+        _trayExitMenuItem.Click += TrayExitMenuItem_Click;
+        // 
+        // _notifyIcon
+        // 
+        _notifyIcon.ContextMenuStrip = _contextMenu;
+        _notifyIcon.Text = "TrafficPilot";
+        _notifyIcon.Visible = true;
+        _notifyIcon.DoubleClick += NotifyIcon_DoubleClick;
+        // 
         // MainForm
         // 
         ClientSize = new Size(787, 675);
@@ -1035,6 +1277,8 @@ partial class MainForm
         _configTab.ResumeLayout(false);
         _configPanel.ResumeLayout(false);
         _configPanel.PerformLayout();
+        _proxyHeaderPanel.ResumeLayout(false);
+        _proxyHeaderPanel.PerformLayout();
         ((ISupportInitialize)_numProxyPort).EndInit();
         _procPanel.ResumeLayout(false);
         _addProcPanel.ResumeLayout(false);
@@ -1044,6 +1288,8 @@ partial class MainForm
         _addPidPanel.PerformLayout();
         _startupOptionsPanel.ResumeLayout(false);
         _startupOptionsPanel.PerformLayout();
+        _configActionPanel.ResumeLayout(false);
+        _configActionPanel.PerformLayout();
         _configBtnPanel.ResumeLayout(false);
         _dnsRedirectTab.ResumeLayout(false);
         _dnsRedirectPanel.ResumeLayout(false);
@@ -1062,6 +1308,7 @@ partial class MainForm
         _statusPanel.ResumeLayout(false);
         _statusPanel.PerformLayout();
         _controlPanel.ResumeLayout(false);
+        _contextMenu.ResumeLayout(false);
         ResumeLayout(false);
     }
 
