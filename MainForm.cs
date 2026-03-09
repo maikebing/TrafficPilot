@@ -35,6 +35,7 @@ internal partial class MainForm : Form
 		_logBuffer = new LogBuffer(BatchAppendLogs);
 		_autoUpdater = new AutoUpdater();
 		InitializeComponent();
+		InitIpResultsColumns();
 		LoadApplicationIcon();
 		LoadVersionLabel();
 		CenterToScreen();
@@ -42,6 +43,21 @@ internal partial class MainForm : Form
 		RefreshConfigShortcutButtons();
 		UpdateTrayMenuState();
 	}
+
+	/// <summary>
+	/// Initializes ListView columns for IP results.
+	/// Must be called from the constructor — the WinForms designer regenerates
+	/// InitializeComponent and removes any Columns.Add calls placed there.
+	/// </summary>
+	private void InitIpResultsColumns()
+	{
+		_lvIpResults!.Columns.Clear();
+		_lvIpResults.Columns.Add("Domain",     220, HorizontalAlignment.Left);
+		_lvIpResults.Columns.Add("IP Address", 130, HorizontalAlignment.Left);
+		_lvIpResults.Columns.Add("Latency",     90, HorizontalAlignment.Right);
+		_lvIpResults.Columns.Add("Source",     100, HorizontalAlignment.Left);
+	}
+
 
 	private void LoadApplicationIcon()
 	{
@@ -819,34 +835,44 @@ internal partial class MainForm : Form
 		if (domains.Count == 0)
 			return;
 
+		// Pre-populate every domain as "Pending" so the list is visible before any result arrives
 		_lvIpResults!.Items.Clear();
+		var itemMap = new Dictionary<string, ListViewItem>(domains.Count, StringComparer.OrdinalIgnoreCase);
+		foreach (var domain in domains)
+		{
+			var pending = new ListViewItem(domain);
+			pending.SubItems.Add("-");
+			pending.SubItems.Add("Pending...");
+			pending.SubItems.Add("-");
+			pending.ForeColor = SystemColors.GrayText;
+			_lvIpResults.Items.Add(pending);
+			itemMap[domain] = pending;
+		}
+
 		_lblHostsStatus!.Text = $"Resolving {domains.Count} domains...";
 
 		var updates = new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase);
 		int resolved = 0, failed = 0;
 
+		// No BeginUpdate/EndUpdate — each result streams in immediately as it completes
 		using var service = new IpFetchService();
-		_lvIpResults.BeginUpdate();
-		try
+		await foreach (var result in service.FetchAllAsync(domains, ct))
 		{
-			await foreach (var result in service.FetchAllAsync(domains, ct))
-			{
-				if (result.Ip is not null && IPAddress.TryParse(result.Ip, out var addr))
-					updates[result.Domain] = addr.GetAddressBytes();
+			if (result.Ip is not null && IPAddress.TryParse(result.Ip, out var addr))
+				updates[result.Domain] = addr.GetAddressBytes();
 
+			// Update the pre-populated row in place
+			if (itemMap.TryGetValue(result.Domain, out var item))
+				ApplyIpResultToItem(item, result);
+			else
 				_lvIpResults.Items.Add(CreateIpListViewItem(result));
 
-				if (result.Ip is not null && result.LatencyMs is >= 0 and < 800)
-					resolved++;
-				else
-					failed++;
+			if (result.Ip is not null && result.LatencyMs is >= 0 and < 800)
+				resolved++;
+			else
+				failed++;
 
-				_lblHostsStatus.Text = $"Resolved: {resolved} | Failed: {failed} | Remaining: {domains.Count - resolved - failed}";
-			}
-		}
-		finally
-		{
-			_lvIpResults.EndUpdate();
+			_lblHostsStatus.Text = $"Resolved: {resolved} | Failed: {failed} | Remaining: {domains.Count - resolved - failed}";
 		}
 
 		_lblHostsStatus.Text = $"Done \u2014 Resolved: {resolved} | Failed: {failed} | Total: {domains.Count}";
@@ -855,14 +881,20 @@ internal partial class MainForm : Form
 
 	private static ListViewItem CreateIpListViewItem(DomainIpResult result)
 	{
-		var latencyText = result.LatencyMs >= 0
-			? $"{result.LatencyMs} ms"
-			: result.Error ?? "Failed";
-
 		var item = new ListViewItem(result.Domain);
-		item.SubItems.Add(result.Ip ?? "-");
-		item.SubItems.Add(latencyText);
-		item.SubItems.Add(result.DohSource ?? "-");
+		item.SubItems.Add("-");
+		item.SubItems.Add("-");
+		item.SubItems.Add("-");
+		ApplyIpResultToItem(item, result);
+
+		return item;
+	}
+
+	private static void ApplyIpResultToItem(ListViewItem item, DomainIpResult result)
+	{
+		item.SubItems[1].Text = result.Ip ?? "-";
+		item.SubItems[2].Text = result.LatencyMs >= 0 ? $"{result.LatencyMs} ms" : result.Error ?? "Failed";
+		item.SubItems[3].Text = result.DohSource ?? "-";
 
 		if (result.Ip is null)
 			item.ForeColor = Color.Red;
@@ -872,8 +904,6 @@ internal partial class MainForm : Form
 			item.ForeColor = Color.DarkOrange;
 		else
 			item.ForeColor = Color.Red;
-
-		return item;
 	}
 
 		private void BtnClearLogs_Click(object? sender, EventArgs e)

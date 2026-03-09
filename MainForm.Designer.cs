@@ -664,8 +664,8 @@ partial class MainForm
         _dnsRedirectPanel.RowStyles.Add(new RowStyle());
         _dnsRedirectPanel.RowStyles.Add(new RowStyle());
         _dnsRedirectPanel.RowStyles.Add(new RowStyle());
-        _dnsRedirectPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 35F));
-        _dnsRedirectPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 65F));
+        _dnsRedirectPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 30.2670631F));
+        _dnsRedirectPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 69.73294F));
         _dnsRedirectPanel.Size = new Size(769, 530);
         _dnsRedirectPanel.TabIndex = 0;
         // 
@@ -806,7 +806,7 @@ partial class MainForm
         _txtRefreshDomains.Name = "_txtRefreshDomains";
         _txtRefreshDomains.PlaceholderText = "每行一个域名，例如:\nalive.github.com\ngithub.com";
         _txtRefreshDomains.ScrollBars = ScrollBars.Vertical;
-        _txtRefreshDomains.Size = new Size(589, 107);
+        _txtRefreshDomains.Size = new Size(589, 92);
         _txtRefreshDomains.TabIndex = 7;
         _txtRefreshDomains.WordWrap = false;
         // 
@@ -816,9 +816,9 @@ partial class MainForm
         _lvIpResults.Dock = DockStyle.Fill;
         _lvIpResults.FullRowSelect = true;
         _lvIpResults.GridLines = true;
-        _lvIpResults.Location = new Point(13, 303);
+        _lvIpResults.Location = new Point(13, 288);
         _lvIpResults.Name = "_lvIpResults";
-        _lvIpResults.Size = new Size(743, 214);
+        _lvIpResults.Size = new Size(743, 229);
         _lvIpResults.TabIndex = 8;
         _lvIpResults.UseCompatibleStateImageBehavior = false;
         _lvIpResults.View = View.Details;
