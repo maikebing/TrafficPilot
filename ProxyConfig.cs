@@ -21,6 +21,9 @@ internal class ProxyConfigModel
 	[JsonPropertyName("startOnBoot")]
 	public bool StartOnBoot { get; set; } = false;
 
+	[JsonPropertyName("autoStartProxy")]
+	public bool AutoStartProxy { get; set; } = false;
+
 	public ProxyConfigModel() { }
 
 	public ProxyConfigModel(ProxyOptions opts)

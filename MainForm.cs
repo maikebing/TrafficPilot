@@ -19,6 +19,7 @@ internal partial class MainForm : Form
 	private ReleaseInfo? _availableRelease;
 
 	private bool _isStarting = false;
+	private bool _initialAutoStartHandled;
 
 	public MainForm()
 	{
@@ -246,7 +247,8 @@ internal partial class MainForm : Form
 				Enabled = _chkDNSRedirectEnabled!.Checked,
 				HostsUrl = _txtHostsUrl!.Text.Trim()
 			},
-			StartOnBoot = _chkStartOnBoot!.Checked
+			StartOnBoot = _chkStartOnBoot!.Checked,
+			AutoStartProxy = _chkAutoStartProxy!.Checked
 		};
 	}
 
@@ -283,6 +285,7 @@ internal partial class MainForm : Form
 		_chkDNSRedirectEnabled!.Checked = _currentConfig.HostsRedirect?.Enabled ?? false;
 		_txtHostsUrl!.Text = _currentConfig.HostsRedirect?.HostsUrl ?? GitHub520HostsProvider.DefaultUrl;
 		_chkStartOnBoot!.Checked = StartupManager.IsEnabled();
+		_chkAutoStartProxy!.Checked = _currentConfig.AutoStartProxy;
 	}
 
 	private void AppendLog(string message)
@@ -382,6 +385,33 @@ internal partial class MainForm : Form
 		{
 			ShowLatestVersion(null);
 			_lblUpdateStatus!.Text = string.Empty;
+		}
+	}
+
+	protected override async void OnShown(EventArgs e)
+	{
+		base.OnShown(e);
+
+		if (_initialAutoStartHandled || !_currentConfig.AutoStartProxy)
+			return;
+
+		_initialAutoStartHandled = true;
+
+		if (!_chkProxyEnabled!.Checked && !_chkDNSRedirectEnabled!.Checked)
+			return;
+
+		try
+		{
+			await StartProxyAsync();
+		}
+		catch (Exception ex)
+		{
+			MessageBox.Show($"Error: {ex.Message}", "Proxy Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+			_btnStartStop!.Text = "Start Proxy";
+			_btnStartStop.BackColor = Color.LimeGreen;
+			_lblStatus!.Text = "Status: Stopped";
+			_engine?.Dispose();
+			_engine = null;
 		}
 	}
 
