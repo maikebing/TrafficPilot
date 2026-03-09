@@ -18,6 +18,9 @@ internal class ProxyConfigModel
 	[JsonPropertyName("hostsRedirect")]
 	public HostsRedirectSettings? HostsRedirect { get; set; }
 
+	[JsonPropertyName("startOnBoot")]
+	public bool StartOnBoot { get; set; } = false;
+
 	public ProxyConfigModel() { }
 
 	public ProxyConfigModel(ProxyOptions opts)

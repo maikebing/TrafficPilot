@@ -69,6 +69,9 @@ partial class MainForm
 	private Label? _lblConfigFile;
 	private Label? _lblConfigFileValue;
 
+	// Config tab - Startup
+	private CheckBox? _chkStartOnBoot;
+
 	// Config tab - Buttons
 	private FlowLayoutPanel? _configBtnPanel;
 	private Button? _btnSaveConfig;
@@ -130,14 +133,10 @@ partial class MainForm
         _btnAddPid = new Button();
         _lblConfigFile = new Label();
         _lblConfigFileValue = new Label();
+        _chkStartOnBoot = new CheckBox();
         _configBtnPanel = new FlowLayoutPanel();
         _btnSaveConfig = new Button();
         _btnLoadConfig = new Button();
-        _logsTab = new TabPage();
-        _logPanel = new TableLayoutPanel();
-        _rtbLogs = new RichTextBox();
-        _btnClearPanel = new FlowLayoutPanel();
-        _btnClearLogs = new Button();
         _dnsRedirectTab = new TabPage();
         _dnsRedirectPanel = new TableLayoutPanel();
         _chkDNSRedirectEnabled = new CheckBox();
@@ -146,6 +145,11 @@ partial class MainForm
         _hostsRedirectBtnPanel = new FlowLayoutPanel();
         _btnRefreshHosts = new Button();
         _lblHostsStatus = new Label();
+        _logsTab = new TabPage();
+        _logPanel = new TableLayoutPanel();
+        _rtbLogs = new RichTextBox();
+        _btnClearPanel = new FlowLayoutPanel();
+        _btnClearLogs = new Button();
         _aboutTab = new TabPage();
         _aboutScrollPanel = new Panel();
         _aboutContentPanel = new TableLayoutPanel();
@@ -172,12 +176,12 @@ partial class MainForm
         _pidPanel.SuspendLayout();
         _addPidPanel.SuspendLayout();
         _configBtnPanel.SuspendLayout();
-        _logsTab.SuspendLayout();
-        _logPanel.SuspendLayout();
-        _btnClearPanel.SuspendLayout();
         _dnsRedirectTab.SuspendLayout();
         _dnsRedirectPanel.SuspendLayout();
         _hostsRedirectBtnPanel.SuspendLayout();
+        _logsTab.SuspendLayout();
+        _logPanel.SuspendLayout();
+        _btnClearPanel.SuspendLayout();
         _aboutTab.SuspendLayout();
         _aboutScrollPanel.SuspendLayout();
         _aboutContentPanel.SuspendLayout();
@@ -249,25 +253,24 @@ partial class MainForm
         _configPanel.Controls.Add(_addPidPanel, 1, 7);
         _configPanel.Controls.Add(_lblConfigFile, 0, 8);
         _configPanel.Controls.Add(_lblConfigFileValue, 1, 8);
-        _configPanel.Controls.Add(_configBtnPanel, 1, 9);
+        _configPanel.Controls.Add(_chkStartOnBoot, 0, 9);
+        _configPanel.Controls.Add(_configBtnPanel, 1, 10);
         _configPanel.Dock = DockStyle.Fill;
         _configPanel.Location = new Point(0, 0);
         _configPanel.Name = "_configPanel";
         _configPanel.Padding = new Padding(10);
-        _configPanel.RowCount = 13;
+        _configPanel.RowCount = 11;
         _configPanel.RowStyles.Add(new RowStyle());
         _configPanel.RowStyles.Add(new RowStyle());
         _configPanel.RowStyles.Add(new RowStyle());
         _configPanel.RowStyles.Add(new RowStyle());
-        _configPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 25F));
-        _configPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 44F));
-        _configPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 25F));
+        _configPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 50F));
+        _configPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 39F));
+        _configPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 50F));
         _configPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 42F));
         _configPanel.RowStyles.Add(new RowStyle());
         _configPanel.RowStyles.Add(new RowStyle());
-        _configPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 20F));
-        _configPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 20F));
-        _configPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 20F));
+        _configPanel.RowStyles.Add(new RowStyle());
         _configPanel.Size = new Size(769, 530);
         _configPanel.TabIndex = 0;
         // 
@@ -369,7 +372,7 @@ partial class MainForm
         _procPanel.Name = "_procPanel";
         _procPanel.RowCount = 1;
         _procPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 20F));
-        _procPanel.Size = new Size(589, 52);
+        _procPanel.Size = new Size(589, 85);
         _procPanel.TabIndex = 7;
         // 
         // _lstProcesses
@@ -377,7 +380,7 @@ partial class MainForm
         _lstProcesses.Dock = DockStyle.Fill;
         _lstProcesses.Location = new Point(3, 3);
         _lstProcesses.Name = "_lstProcesses";
-        _lstProcesses.Size = new Size(513, 46);
+        _lstProcesses.Size = new Size(513, 79);
         _lstProcesses.TabIndex = 0;
         // 
         // _btnRemoveProcess
@@ -386,7 +389,7 @@ partial class MainForm
         _btnRemoveProcess.Location = new Point(521, 2);
         _btnRemoveProcess.Margin = new Padding(2);
         _btnRemoveProcess.Name = "_btnRemoveProcess";
-        _btnRemoveProcess.Size = new Size(66, 48);
+        _btnRemoveProcess.Size = new Size(66, 81);
         _btnRemoveProcess.TabIndex = 1;
         _btnRemoveProcess.Text = "Remove";
         _btnRemoveProcess.Click += BtnRemoveProcess_Click;
@@ -394,7 +397,7 @@ partial class MainForm
         // _lblAddProcess
         // 
         _lblAddProcess.Anchor = AnchorStyles.Left | AnchorStyles.Right;
-        _lblAddProcess.Location = new Point(13, 213);
+        _lblAddProcess.Location = new Point(13, 244);
         _lblAddProcess.Name = "_lblAddProcess";
         _lblAddProcess.Size = new Size(144, 23);
         _lblAddProcess.TabIndex = 8;
@@ -409,12 +412,12 @@ partial class MainForm
         _addProcPanel.Controls.Add(_txtNewProcess, 0, 0);
         _addProcPanel.Controls.Add(_btnAddProcess, 1, 0);
         _addProcPanel.Dock = DockStyle.Fill;
-        _addProcPanel.Location = new Point(165, 208);
+        _addProcPanel.Location = new Point(165, 241);
         _addProcPanel.Margin = new Padding(5);
         _addProcPanel.Name = "_addProcPanel";
         _addProcPanel.RowCount = 1;
         _addProcPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 20F));
-        _addProcPanel.Size = new Size(589, 34);
+        _addProcPanel.Size = new Size(589, 29);
         _addProcPanel.TabIndex = 9;
         // 
         // _txtNewProcess
@@ -431,7 +434,7 @@ partial class MainForm
         _btnAddProcess.Location = new Point(521, 2);
         _btnAddProcess.Margin = new Padding(2);
         _btnAddProcess.Name = "_btnAddProcess";
-        _btnAddProcess.Size = new Size(66, 30);
+        _btnAddProcess.Size = new Size(66, 25);
         _btnAddProcess.TabIndex = 1;
         _btnAddProcess.Text = "Add";
         _btnAddProcess.Click += BtnAddProcess_Click;
@@ -439,7 +442,7 @@ partial class MainForm
         // _lblExtraPids
         // 
         _lblExtraPids.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
-        _lblExtraPids.Location = new Point(13, 247);
+        _lblExtraPids.Location = new Point(13, 275);
         _lblExtraPids.Name = "_lblExtraPids";
         _lblExtraPids.Size = new Size(144, 23);
         _lblExtraPids.TabIndex = 10;
@@ -454,12 +457,12 @@ partial class MainForm
         _pidPanel.Controls.Add(_lstExtraPids, 0, 0);
         _pidPanel.Controls.Add(_btnRemovePid, 1, 0);
         _pidPanel.Dock = DockStyle.Fill;
-        _pidPanel.Location = new Point(165, 252);
+        _pidPanel.Location = new Point(165, 280);
         _pidPanel.Margin = new Padding(5);
         _pidPanel.Name = "_pidPanel";
         _pidPanel.RowCount = 1;
         _pidPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 20F));
-        _pidPanel.Size = new Size(589, 52);
+        _pidPanel.Size = new Size(589, 85);
         _pidPanel.TabIndex = 11;
         // 
         // _lstExtraPids
@@ -467,7 +470,7 @@ partial class MainForm
         _lstExtraPids.Dock = DockStyle.Fill;
         _lstExtraPids.Location = new Point(3, 3);
         _lstExtraPids.Name = "_lstExtraPids";
-        _lstExtraPids.Size = new Size(513, 46);
+        _lstExtraPids.Size = new Size(513, 79);
         _lstExtraPids.TabIndex = 0;
         // 
         // _btnRemovePid
@@ -476,7 +479,7 @@ partial class MainForm
         _btnRemovePid.Location = new Point(521, 2);
         _btnRemovePid.Margin = new Padding(2);
         _btnRemovePid.Name = "_btnRemovePid";
-        _btnRemovePid.Size = new Size(66, 48);
+        _btnRemovePid.Size = new Size(66, 81);
         _btnRemovePid.TabIndex = 1;
         _btnRemovePid.Text = "Remove";
         _btnRemovePid.Click += BtnRemovePid_Click;
@@ -484,7 +487,7 @@ partial class MainForm
         // _lblAddPid
         // 
         _lblAddPid.Anchor = AnchorStyles.Left | AnchorStyles.Right;
-        _lblAddPid.Location = new Point(13, 318);
+        _lblAddPid.Location = new Point(13, 379);
         _lblAddPid.Name = "_lblAddPid";
         _lblAddPid.Size = new Size(144, 23);
         _lblAddPid.TabIndex = 12;
@@ -499,7 +502,7 @@ partial class MainForm
         _addPidPanel.Controls.Add(_txtNewPid, 0, 0);
         _addPidPanel.Controls.Add(_btnAddPid, 1, 0);
         _addPidPanel.Dock = DockStyle.Fill;
-        _addPidPanel.Location = new Point(165, 314);
+        _addPidPanel.Location = new Point(165, 375);
         _addPidPanel.Margin = new Padding(5);
         _addPidPanel.Name = "_addPidPanel";
         _addPidPanel.RowCount = 1;
@@ -529,7 +532,7 @@ partial class MainForm
         // _lblConfigFile
         // 
         _lblConfigFile.Anchor = AnchorStyles.Left | AnchorStyles.Right;
-        _lblConfigFile.Location = new Point(13, 356);
+        _lblConfigFile.Location = new Point(13, 417);
         _lblConfigFile.Name = "_lblConfigFile";
         _lblConfigFile.Size = new Size(144, 23);
         _lblConfigFile.TabIndex = 14;
@@ -540,12 +543,24 @@ partial class MainForm
         // 
         _lblConfigFileValue.AutoEllipsis = true;
         _lblConfigFileValue.Dock = DockStyle.Fill;
-        _lblConfigFileValue.Location = new Point(165, 356);
+        _lblConfigFileValue.Location = new Point(165, 417);
         _lblConfigFileValue.Margin = new Padding(5);
         _lblConfigFileValue.Name = "_lblConfigFileValue";
         _lblConfigFileValue.Size = new Size(589, 23);
         _lblConfigFileValue.TabIndex = 15;
         _lblConfigFileValue.TextAlign = ContentAlignment.MiddleLeft;
+        // 
+        // _chkStartOnBoot
+        // 
+        _chkStartOnBoot.AutoSize = true;
+        _configPanel.SetColumnSpan(_chkStartOnBoot, 2);
+        _chkStartOnBoot.Location = new Point(13, 448);
+        _chkStartOnBoot.Margin = new Padding(3, 3, 3, 6);
+        _chkStartOnBoot.Name = "_chkStartOnBoot";
+        _chkStartOnBoot.Size = new Size(175, 21);
+        _chkStartOnBoot.TabIndex = 17;
+        _chkStartOnBoot.Text = "Start on Windows startup";
+        _chkStartOnBoot.CheckedChanged += ChkStartOnBoot_CheckedChanged;
         // 
         // _configBtnPanel
         // 
@@ -554,7 +569,7 @@ partial class MainForm
         _configBtnPanel.Controls.Add(_btnLoadConfig);
         _configBtnPanel.Dock = DockStyle.Top;
         _configBtnPanel.FlowDirection = FlowDirection.RightToLeft;
-        _configBtnPanel.Location = new Point(165, 389);
+        _configBtnPanel.Location = new Point(165, 480);
         _configBtnPanel.Margin = new Padding(5);
         _configBtnPanel.Name = "_configBtnPanel";
         _configBtnPanel.Size = new Size(589, 34);
@@ -579,65 +594,6 @@ partial class MainForm
         _btnLoadConfig.TabIndex = 1;
         _btnLoadConfig.Text = "Load Config";
         _btnLoadConfig.Click += BtnLoadConfig_Click;
-        // 
-        // _logsTab
-        // 
-        _logsTab.Controls.Add(_logPanel);
-        _logsTab.Location = new Point(4, 26);
-        _logsTab.Name = "_logsTab";
-        _logsTab.Size = new Size(769, 530);
-        _logsTab.TabIndex = 1;
-        _logsTab.Text = "Logs";
-        // 
-        // _logPanel
-        // 
-        _logPanel.ColumnCount = 1;
-        _logPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-        _logPanel.Controls.Add(_rtbLogs, 0, 0);
-        _logPanel.Controls.Add(_btnClearPanel, 0, 1);
-        _logPanel.Dock = DockStyle.Fill;
-        _logPanel.Location = new Point(0, 0);
-        _logPanel.Margin = new Padding(0);
-        _logPanel.Name = "_logPanel";
-        _logPanel.RowCount = 2;
-        _logPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
-        _logPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 40F));
-        _logPanel.Size = new Size(769, 530);
-        _logPanel.TabIndex = 0;
-        // 
-        // _rtbLogs
-        // 
-        _rtbLogs.BackColor = Color.Black;
-        _rtbLogs.Dock = DockStyle.Fill;
-        _rtbLogs.Font = new Font("Courier New", 9F);
-        _rtbLogs.ForeColor = Color.Lime;
-        _rtbLogs.Location = new Point(3, 3);
-        _rtbLogs.Name = "_rtbLogs";
-        _rtbLogs.ReadOnly = true;
-        _rtbLogs.Size = new Size(763, 484);
-        _rtbLogs.TabIndex = 0;
-        _rtbLogs.Text = "";
-        _rtbLogs.WordWrap = false;
-        // 
-        // _btnClearPanel
-        // 
-        _btnClearPanel.Controls.Add(_btnClearLogs);
-        _btnClearPanel.Dock = DockStyle.Fill;
-        _btnClearPanel.FlowDirection = FlowDirection.RightToLeft;
-        _btnClearPanel.Location = new Point(5, 495);
-        _btnClearPanel.Margin = new Padding(5);
-        _btnClearPanel.Name = "_btnClearPanel";
-        _btnClearPanel.Size = new Size(759, 30);
-        _btnClearPanel.TabIndex = 1;
-        // 
-        // _btnClearLogs
-        // 
-        _btnClearLogs.Location = new Point(676, 3);
-        _btnClearLogs.Name = "_btnClearLogs";
-        _btnClearLogs.Size = new Size(80, 30);
-        _btnClearLogs.TabIndex = 0;
-        _btnClearLogs.Text = "Clear Logs";
-        _btnClearLogs.Click += BtnClearLogs_Click;
         // 
         // _dnsRedirectTab
         // 
@@ -732,6 +688,65 @@ partial class MainForm
         _lblHostsStatus.Size = new Size(117, 17);
         _lblHostsStatus.TabIndex = 4;
         _lblHostsStatus.Text = "Status: Not loaded";
+        // 
+        // _logsTab
+        // 
+        _logsTab.Controls.Add(_logPanel);
+        _logsTab.Location = new Point(4, 26);
+        _logsTab.Name = "_logsTab";
+        _logsTab.Size = new Size(769, 530);
+        _logsTab.TabIndex = 1;
+        _logsTab.Text = "Logs";
+        // 
+        // _logPanel
+        // 
+        _logPanel.ColumnCount = 1;
+        _logPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+        _logPanel.Controls.Add(_rtbLogs, 0, 0);
+        _logPanel.Controls.Add(_btnClearPanel, 0, 1);
+        _logPanel.Dock = DockStyle.Fill;
+        _logPanel.Location = new Point(0, 0);
+        _logPanel.Margin = new Padding(0);
+        _logPanel.Name = "_logPanel";
+        _logPanel.RowCount = 2;
+        _logPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
+        _logPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 40F));
+        _logPanel.Size = new Size(769, 530);
+        _logPanel.TabIndex = 0;
+        // 
+        // _rtbLogs
+        // 
+        _rtbLogs.BackColor = Color.Black;
+        _rtbLogs.Dock = DockStyle.Fill;
+        _rtbLogs.Font = new Font("Courier New", 9F);
+        _rtbLogs.ForeColor = Color.Lime;
+        _rtbLogs.Location = new Point(3, 3);
+        _rtbLogs.Name = "_rtbLogs";
+        _rtbLogs.ReadOnly = true;
+        _rtbLogs.Size = new Size(763, 484);
+        _rtbLogs.TabIndex = 0;
+        _rtbLogs.Text = "";
+        _rtbLogs.WordWrap = false;
+        // 
+        // _btnClearPanel
+        // 
+        _btnClearPanel.Controls.Add(_btnClearLogs);
+        _btnClearPanel.Dock = DockStyle.Fill;
+        _btnClearPanel.FlowDirection = FlowDirection.RightToLeft;
+        _btnClearPanel.Location = new Point(5, 495);
+        _btnClearPanel.Margin = new Padding(5);
+        _btnClearPanel.Name = "_btnClearPanel";
+        _btnClearPanel.Size = new Size(759, 30);
+        _btnClearPanel.TabIndex = 1;
+        // 
+        // _btnClearLogs
+        // 
+        _btnClearLogs.Location = new Point(676, 3);
+        _btnClearLogs.Name = "_btnClearLogs";
+        _btnClearLogs.Size = new Size(80, 30);
+        _btnClearLogs.TabIndex = 0;
+        _btnClearLogs.Text = "Clear Logs";
+        _btnClearLogs.Click += BtnClearLogs_Click;
         // 
         // _aboutTab
         // 
@@ -951,13 +966,13 @@ partial class MainForm
         _addPidPanel.ResumeLayout(false);
         _addPidPanel.PerformLayout();
         _configBtnPanel.ResumeLayout(false);
-        _logsTab.ResumeLayout(false);
-        _logPanel.ResumeLayout(false);
-        _btnClearPanel.ResumeLayout(false);
         _dnsRedirectTab.ResumeLayout(false);
         _dnsRedirectPanel.ResumeLayout(false);
         _dnsRedirectPanel.PerformLayout();
         _hostsRedirectBtnPanel.ResumeLayout(false);
+        _logsTab.ResumeLayout(false);
+        _logPanel.ResumeLayout(false);
+        _btnClearPanel.ResumeLayout(false);
         _aboutTab.ResumeLayout(false);
         _aboutScrollPanel.ResumeLayout(false);
         _aboutScrollPanel.PerformLayout();

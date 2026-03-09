@@ -179,6 +179,40 @@ internal sealed class LocalTrafficBypass
 }
 
 // ════════════════════════════════════════════════════════════════
+//  Windows startup registration via registry
+// ════════════════════════════════════════════════════════════════
+
+internal static class StartupManager
+{
+	private const string RunKey = @"SOFTWARE\Microsoft\Windows\CurrentVersion\Run";
+	private const string AppName = "TrafficPilot";
+
+	/// <summary>Returns true if a startup entry for this app exists in the current user's registry.</summary>
+	public static bool IsEnabled()
+	{
+		using var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(RunKey, writable: false);
+		return key?.GetValue(AppName) is not null;
+	}
+
+	/// <summary>Creates or updates the startup registry entry pointing to the current executable.</summary>
+	public static void Enable()
+	{
+		var exePath = Environment.ProcessPath
+			?? System.Reflection.Assembly.GetEntryAssembly()!.Location;
+		using var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(RunKey, writable: true)
+			?? throw new InvalidOperationException("Cannot open registry startup key.");
+		key.SetValue(AppName, $"\"{exePath}\"");
+	}
+
+	/// <summary>Removes the startup registry entry if it exists.</summary>
+	public static void Disable()
+	{
+		using var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(RunKey, writable: true);
+		key?.DeleteValue(AppName, throwOnMissingValue: false);
+	}
+}
+
+// ════════════════════════════════════════════════════════════════
 //  Runtime statistics
 // ════════════════════════════════════════════════════════════════
 

@@ -210,7 +210,8 @@ internal partial class MainForm : Form
 			{
 				Enabled = _chkDNSRedirectEnabled!.Checked,
 				HostsUrl = _txtHostsUrl!.Text.Trim()
-			}
+			},
+			StartOnBoot = _chkStartOnBoot!.Checked
 		};
 	}
 
@@ -246,6 +247,7 @@ internal partial class MainForm : Form
 
 		_chkDNSRedirectEnabled!.Checked = _currentConfig.HostsRedirect?.Enabled ?? false;
 		_txtHostsUrl!.Text = _currentConfig.HostsRedirect?.HostsUrl ?? GitHub520HostsProvider.DefaultUrl;
+		_chkStartOnBoot!.Checked = StartupManager.IsEnabled();
 	}
 
 	private void AppendLog(string message)
@@ -365,6 +367,24 @@ internal partial class MainForm : Form
 	private void BtnClearLogs_Click(object? sender, EventArgs e)
 	{
 		_rtbLogs?.Clear();
+	}
+
+	private void ChkStartOnBoot_CheckedChanged(object? sender, EventArgs e)
+	{
+		try
+		{
+			if (_chkStartOnBoot!.Checked)
+				StartupManager.Enable();
+			else
+				StartupManager.Disable();
+		}
+		catch (Exception ex)
+		{
+			MessageBox.Show($"Failed to update startup setting: {ex.Message}", "Startup Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+			_chkStartOnBoot!.CheckedChanged -= ChkStartOnBoot_CheckedChanged;
+			_chkStartOnBoot.Checked = StartupManager.IsEnabled();
+			_chkStartOnBoot.CheckedChanged += ChkStartOnBoot_CheckedChanged;
+		}
 	}
 
 	private async void BtnRefreshHosts_Click(object? sender, EventArgs e)
