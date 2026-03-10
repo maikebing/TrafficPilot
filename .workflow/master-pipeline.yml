@@ -10,8 +10,6 @@ triggers:
     tags:
       prefix:
         - v
-variables:
-  VERSION: 0.0.0
 stages:
   - name: compile
     displayName: 编译
@@ -35,13 +33,6 @@ stages:
         notify: []
         strategy:
           retry: '0'
-      - step: publish@general_artifacts
-        name: publish_general_artifacts
-        displayName: 上传制品
-        dependArtifact: TrafficPilot
-        artifactName: TrafficPilot
-        strategy: {}
-        dependsOn: build_dotnet
   - name: release
     displayName: 发布
     strategy: naturally
@@ -50,13 +41,10 @@ stages:
       - step: release@gitee
         name: release_gitee
         displayName: Gitee Release
-        releaseName: {GITEE_BRANCH}
-        description: {GITEE_COMMIT_MESSAGE}
-        tagName: {GITEE_BRANCH}
         upstreamArtifact:
           - TrafficPilot
         assertFiles:
-          - TrafficPilot.tar.gz
+          - ../artifact_TrafficPilot.tar.gz
         prerelease: true
         allowUpdate: true
         notify: []
