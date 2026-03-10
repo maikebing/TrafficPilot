@@ -61,7 +61,7 @@ jobs:
         shell: pwsh
         run: |
           $version = "${{ steps.version.outputs.VERSION }}"
-          $releaseDir = "TrafficPilot-$version"
+          $releaseDir = "TrafficPilot-v$version"
           
           # Create release directory
           New-Item -ItemType Directory -Path $releaseDir -Force | Out-Null
@@ -84,32 +84,47 @@ jobs:
         shell: pwsh
         run: |
           $version = "${{ steps.version.outputs.VERSION }}"
+          $changelog = Get-Content -Path "CHANGELOG.md" -Encoding UTF8
+
+          # Find the start line of the target version section
+          $startIndex = -1
+          for ($i = 0; $i -lt $changelog.Count; $i++) {
+            if ($changelog[$i] -match "^## \[$([regex]::Escape($version))\]") {
+              $startIndex = $i
+              break
+            }
+          }
+
+          if ($startIndex -eq -1) {
+            Write-Warning "Version $version not found in CHANGELOG.md, using fallback."
+            $changelogSection = "See the commit log for detailed changes."
+          } else {
+            # Find the next version section (next ## [...] line)
+            $endIndex = $changelog.Count
+            for ($i = $startIndex + 1; $i -lt $changelog.Count; $i++) {
+              if ($changelog[$i] -match "^## \[") {
+                $endIndex = $i
+                break
+              }
+            }
+            $changelogSection = ($changelog[($startIndex)..($endIndex - 1)] | Where-Object { $_ -ne $null }) -join "`n"
+          }
+
           $releaseNotes = @"
-          # TrafficPilot v$version Release
-          
-          ## What's Changed
-          See the commit log for detailed changes.
-          
+          $changelogSection
+
           ## Installation
-          1. Download the ``TrafficPilot-$version.zip`` file below
+          1. Download the ``TrafficPilot-v$version.zip`` file below
           2. Extract it to your preferred location
           3. Run ``TrafficPilot.exe``
-          
+
           ## Requirements
-          - Windows 10 or later
-          - .NET 10 Runtime (included in the release)
-          
-          ## Features
-          - Intercept and redirect traffic from specified processes
-          - Support for SOCKS4, SOCKS5, and HTTP proxies
-          - Real-time logging and statistics
-          - Configuration save/load functionality
-          - System tray integration
-          
+          - Windows 10 or later (x64)
+          - .NET 10 Runtime (included in the release, no separate install needed)
           "@
-          
-          # Save to file for later use
+
           $releaseNotes | Out-File -FilePath "release_notes.md" -Encoding UTF8
+          Write-Host "Release notes written for version $version"
       
       - name: Upload Release
         if: steps.version.outputs.IS_RELEASE == 'true'
