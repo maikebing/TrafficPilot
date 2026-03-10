@@ -21,9 +21,8 @@ stages:
         displayName: .NET Core 构建
         dotnetVersion: '10.0'
         commands:
-          - '# input your command here'
-          - ' dotnet build --configuration Release --no-restore -p:Version=${VERSION}'
-          - dotnet publish -c Release -o publish -p:PublishSingleFile=true -p:SelfContained=true -p:RuntimeIdentifier=win-x64 -p:Version=${VERSION}
+          - dotnet build --configuration Release --no-restore -p:Version=${VERSION}' -p:EnableWindowsTargeting=true 
+          - dotnet publish -c Release -o publish -p:PublishSingleFile=true -p:SelfContained=true -p:RuntimeIdentifier=win-x64 -p:Version=${VERSION}  -p:EnableWindowsTargeting=true
         artifacts:
           - name: BUILD_ARTIFACT
             path:
