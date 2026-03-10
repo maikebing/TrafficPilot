@@ -36,6 +36,7 @@ internal partial class MainForm : Form
 		_autoUpdater = new AutoUpdater();
 		InitializeComponent();
 		InitIpResultsColumns();
+		InitProxyHostComboBox();
 		LoadApplicationIcon();
 		LoadVersionLabel();
 		CenterToScreen();
@@ -57,6 +58,20 @@ internal partial class MainForm : Form
 		_lvIpResults.Columns.Add("Latency",     90, HorizontalAlignment.Right);
 		_lvIpResults.Columns.Add("Via Proxy",  100, HorizontalAlignment.Right);
 		_lvIpResults.Columns.Add("Source",     100, HorizontalAlignment.Left);
+	}
+
+	/// <summary>
+	/// Populates the Proxy Host ComboBox with local IPv4 addresses that have
+	/// a valid default gateway. Allows free-text entry for manual values.
+	/// </summary>
+	private void InitProxyHostComboBox()
+	{
+		_cmbProxyHost!.Items.Clear();
+		foreach (var ip in LocalNetworkHelper.GetLocalIpsWithGateway())
+			_cmbProxyHost.Items.Add(ip);
+
+		if (_cmbProxyHost.Items.Count > 0 && string.IsNullOrEmpty(_cmbProxyHost.Text))
+			_cmbProxyHost.SelectedIndex = 0;
 	}
 
 
@@ -262,7 +277,7 @@ internal partial class MainForm : Form
 			Proxy = new ProxySettings
 			{
 				Enabled = _chkProxyEnabled!.Checked,
-				Host = _txtProxyHost!.Text,
+				Host = _cmbProxyHost!.Text,
 				Port = (ushort)_numProxyPort!.Value,
 				Scheme = _cmbProxyScheme!.SelectedItem?.ToString() ?? "socks4"
 			},
@@ -287,7 +302,7 @@ internal partial class MainForm : Form
 		return new ProxyOptions(
 			GetProcessNamesFromUi(),
 			GetDomainRulesFromUi(),
-			_txtProxyHost!.Text,
+			_cmbProxyHost!.Text,
 			(ushort)_numProxyPort!.Value,
 			_cmbProxyScheme!.SelectedItem?.ToString() ?? "socks4",
 			_chkProxyEnabled!.Checked,
@@ -299,7 +314,7 @@ internal partial class MainForm : Form
 	private void LoadConfigToUI()
 	{
 		_chkProxyEnabled!.Checked = _currentConfig.Proxy?.Enabled ?? true;
-		_txtProxyHost!.Text = _currentConfig.Proxy?.Host ?? "";
+		_cmbProxyHost!.Text = _currentConfig.Proxy?.Host ?? "";
 		_numProxyPort!.Value = _currentConfig.Proxy?.Port ?? 7890;
 		_cmbProxyScheme!.SelectedItem = _currentConfig.Proxy?.Scheme ?? "socks4";
 		_lblConfigFileValue!.Text = _activeConfigPath;

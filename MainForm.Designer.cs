@@ -50,7 +50,7 @@ partial class MainForm
 
 	// Config tab - Proxy Host
 	private Label? _lblProxyHost;
-	private TextBox? _txtProxyHost;
+	private ComboBox? _cmbProxyHost;
 
 	// Config tab - Proxy Port
 	private Label? _lblProxyPort;
@@ -132,7 +132,7 @@ partial class MainForm
         _lblConfigName = new Label();
         _txtConfigName = new TextBox();
         _lblProxyHost = new Label();
-        _txtProxyHost = new TextBox();
+        _cmbProxyHost = new ComboBox();
         _lblProxyPort = new Label();
         _numProxyPort = new NumericUpDown();
         _lblProxyScheme = new Label();
@@ -290,7 +290,7 @@ partial class MainForm
         _configPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
         _configPanel.Controls.Add(_proxyHeaderPanel, 0, 0);
         _configPanel.Controls.Add(_lblProxyHost, 0, 1);
-        _configPanel.Controls.Add(_txtProxyHost, 1, 1);
+        _configPanel.Controls.Add(_cmbProxyHost, 1, 1);
         _configPanel.Controls.Add(_lblProxyPort, 0, 2);
         _configPanel.Controls.Add(_numProxyPort, 1, 2);
         _configPanel.Controls.Add(_lblProxyScheme, 0, 3);
@@ -374,15 +374,15 @@ partial class MainForm
         _lblProxyHost.Text = "Proxy Host:";
         _lblProxyHost.TextAlign = ContentAlignment.MiddleRight;
         // 
-        // _txtProxyHost
+        // _cmbProxyHost
         // 
-        _txtProxyHost.Dock = DockStyle.Fill;
-        _txtProxyHost.Location = new Point(165, 50);
-        _txtProxyHost.Margin = new Padding(5);
-        _txtProxyHost.Name = "_txtProxyHost";
-        _txtProxyHost.Size = new Size(589, 23);
-        _txtProxyHost.TabIndex = 1;
-        _txtProxyHost.Text = "host.docker.internal";
+        _cmbProxyHost.Dock = DockStyle.Fill;
+        _cmbProxyHost.DropDownStyle = ComboBoxStyle.DropDown;
+        _cmbProxyHost.Location = new Point(165, 50);
+        _cmbProxyHost.Margin = new Padding(5);
+        _cmbProxyHost.Name = "_cmbProxyHost";
+        _cmbProxyHost.Size = new Size(589, 23);
+        _cmbProxyHost.TabIndex = 1;
         // 
         // _lblProxyPort
         // 

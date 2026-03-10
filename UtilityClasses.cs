@@ -1,4 +1,6 @@
 using System.Diagnostics;
+using System.Net.NetworkInformation;
+using System.Net.Sockets;
 using System.Text.RegularExpressions;
 
 namespace TrafficPilot;
@@ -481,5 +483,50 @@ internal sealed record ProxyOptions(
 			host,
 			port,
 			scheme);
+	}
+}
+
+// ════════════════════════════════════════════════════════════════
+//  Local network helpers
+// ════════════════════════════════════════════════════════════════
+
+internal static class LocalNetworkHelper
+{
+	/// <summary>
+	/// Returns IPv4 addresses of network interfaces that are Up and have at least
+	/// one usable default gateway configured.
+	/// </summary>
+	public static IReadOnlyList<string> GetLocalIpsWithGateway()
+	{
+		var result = new List<string>();
+
+		foreach (var nic in NetworkInterface.GetAllNetworkInterfaces())
+		{
+			if (nic.OperationalStatus != OperationalStatus.Up)
+				continue;
+
+			if (nic.NetworkInterfaceType is NetworkInterfaceType.Loopback
+				or NetworkInterfaceType.Tunnel)
+				continue;
+
+			var props = nic.GetIPProperties();
+
+			var hasGateway = props.GatewayAddresses
+				.Any(g => g.Address.AddressFamily == AddressFamily.InterNetwork
+					&& !g.Address.Equals(System.Net.IPAddress.Any));
+
+			if (!hasGateway)
+				continue;
+
+			foreach (var uni in props.UnicastAddresses)
+			{
+				if (uni.Address.AddressFamily != AddressFamily.InterNetwork)
+					continue;
+
+				result.Add(uni.Address.ToString());
+			}
+		}
+
+		return result;
 	}
 }
