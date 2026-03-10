@@ -23,8 +23,8 @@ stages:
         commands:
           - VERSION=$(git describe --tags --exact-match 2>/dev/null | sed 's/^v//'); [ -z "$VERSION" ] && VERSION="0.0.0"
           - dotnet build --configuration Release -p:Version=${VERSION} -p:EnableWindowsTargeting=true
-          - dotnet publish -c Release --p:OutputPath=./publish/   -p:PublishSingleFile=true -p:SelfContained=true -p:RuntimeIdentifier=win-x64 -p:Version=${VERSION}  -p:EnableWindowsTargeting=true
-          - mkdir -p out && (cd ./publish && zip -r ../out/TrafficPilot-v${VERSION}.zip .)
+          - dotnet publish -c Release --p:OutputPath=./release/   -p:PublishSingleFile=true -p:SelfContained=true -p:RuntimeIdentifier=win-x64 -p:Version=${VERSION}  -p:EnableWindowsTargeting=true
+          - mkdir -p out && (cd ./release/publish/ && zip -r ../../out/TrafficPilot-v${VERSION}.zip .) && cd ../../
         artifacts:
           - name: TrafficPilot
             path:
