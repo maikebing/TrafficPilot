@@ -111,7 +111,7 @@ internal sealed class AutoUpdater : IDisposable
 
             var contentDir = FindContentDirectory(extractDir);
             var exePath = Environment.ProcessPath
-                ?? Assembly.GetEntryAssembly()!.Location;
+                ?? System.AppContext.BaseDirectory;
             var appDir = Path.GetDirectoryName(exePath)!;
 
             progress?.Report((95, "Preparing updater..."));
