@@ -18,7 +18,7 @@ stages:
         displayName: .NET Core 构建
         dotnetVersion: '10.0'
         commands:
-          - VERSION=${${GITEE_BRANCH}#v}
+          - VERSION="${GITEE_BRANCH#v}"
           - dotnet build --configuration Release -p:Version=${VERSION} -p:EnableWindowsTargeting=true
           - dotnet publish -c Release --p:OutputPath=./release/   -p:PublishSingleFile=true -p:SelfContained=true -p:RuntimeIdentifier=win-x64 -p:Version=${VERSION}  -p:EnableWindowsTargeting=true
           - mkdir -p out && (cd ./release/publish/ && zip -r ../../out/TrafficPilot-${GITEE_BRANCH}.zip .) && cd ../../
