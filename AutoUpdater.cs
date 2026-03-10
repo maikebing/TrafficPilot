@@ -245,5 +245,5 @@ internal sealed class AutoUpdater : IDisposable
     // Normalise to Major.Minor.Build so version tags like "v1.2.3" compare
     // correctly against assembly versions like "1.2.3.0".
     private static Version NormalizeVersion(Version v) =>
-        new(v.Major, Math.Max(0, v.Minor), Math.Max(0, v.Build));
+        new(v.Major, Math.Max(0, v.Minor), Math.Max(0, v.Build), Math.Max(0, v.Revision));
 }

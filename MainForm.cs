@@ -97,7 +97,7 @@ internal partial class MainForm : Form
 		if (version is null)
 			return new Version(0, 0, 0);
 
-		return new Version(version.Major, Math.Max(0, version.Minor), Math.Max(0, version.Build));
+		return new Version(version.Major, Math.Max(0, version.Minor), Math.Max(0, version.Build), Math.Max(0, version.Revision));
 	}
 
 	private void ShowLatestVersion(ReleaseInfo? latestRelease)
