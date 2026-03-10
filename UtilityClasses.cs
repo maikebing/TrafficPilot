@@ -281,7 +281,7 @@ internal static class StartupManager
 	public static void Enable()
 	{
 		var exePath = Environment.ProcessPath
-			?? System.Reflection.Assembly.GetEntryAssembly()!.Location;
+			?? Path.Combine(AppContext.BaseDirectory, $"{AppName}.exe");
 		using var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(RunKey, writable: true)
 			?? throw new InvalidOperationException("Cannot open registry startup key.");
 		key.SetValue(AppName, $"\"{exePath}\"");

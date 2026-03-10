@@ -1,0 +1,62 @@
+version: '1.0'
+name: tag-release-pipeline
+displayName: GiteeReleasePipeline
+triggers:
+  trigger: auto
+  push:
+    tags:
+      prefix:
+        - v
+stages:
+  - name: compile
+    displayName: 编译
+    strategy: naturally
+    trigger: auto
+    steps:
+      - step: build@dotnet
+        name: build_dotnet
+        displayName: .NET Core 构建
+        dotnetVersion: '10.0'
+        commands:
+          - VERSION=$(git describe --tags --exact-match 2>/dev/null | sed 's/^v//'); [ -z "$VERSION" ] && VERSION="0.0.0"
+          - dotnet build --configuration Release -p:Version=${VERSION} -p:EnableWindowsTargeting=true
+          - dotnet publish -c Release --p:OutputPath=./release/   -p:PublishSingleFile=true -p:SelfContained=true -p:RuntimeIdentifier=win-x64 -p:Version=${VERSION}  -p:EnableWindowsTargeting=true
+          - mkdir -p out && (cd ./release/publish/ && zip -r ../../out/TrafficPilot-${GITEE_BRANCH}.zip .) && cd ../../
+        artifacts:
+          - name: TrafficPilot
+            path:
+              - ./out/
+        caches:
+          - ~/.nuget/packages
+        notify: []
+        strategy:
+          retry: '0'
+      - step: publish@general_artifacts
+        name: publish_general_artifacts
+        displayName: 上传制品
+        dependArtifact: TrafficPilot
+        artifactName: TrafficPilot
+        notify: []
+        strategy:
+          retry: '0'
+        dependsOn: build_dotnet
+  - name: release
+    displayName: 发布
+    strategy: naturally
+    trigger: auto
+    steps:
+      - step: release@gitee
+        name: release_gitee
+        displayName: Gitee Release
+        releaseName: ${GITEE_BRANCH}
+        description: ${GITEE_BRANCH}
+        tagName: ${GITEE_BRANCH}
+        upstreamArtifact:
+          - TrafficPilot
+        assertFiles:
+          - TrafficPilot-${GITEE_BRANCH}.zip
+        prerelease: true
+        allowUpdate: true
+        notify: []
+        strategy:
+          retry: '0'
