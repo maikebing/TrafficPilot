@@ -9,13 +9,13 @@ triggers:
         - v
 stages:
   - name: compile
-    displayName: 编译
+    displayName: Compile
     strategy: naturally
     trigger: auto
     steps:
       - step: build@dotnet
         name: build_dotnet
-        displayName: .NET Core 构建
+        displayName: .NET Core Build
         dotnetVersion: '10.0'
         commands:
           - VERSION="${GITEE_BRANCH#v}"
@@ -41,7 +41,7 @@ stages:
           retry: '0'
         dependsOn: build_dotnet
   - name: release
-    displayName: 发布
+    displayName: Release
     strategy: naturally
     trigger: auto
     steps:
@@ -55,7 +55,7 @@ stages:
           - TrafficPilot
         assertFiles:
           - TrafficPilot-${GITEE_BRANCH}.zip
-        prerelease: true
+        prerelease: false
         allowUpdate: true
         notify: []
         strategy:
