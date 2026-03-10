@@ -33,15 +33,6 @@ stages:
         notify: []
         strategy:
           retry: '0'
-      - step: publish@general_artifacts
-        name: publish_general_artifacts
-        displayName: 上传制品
-        dependArtifact: TrafficPilot
-        artifactName: TrafficPilot
-        notify: []
-        strategy:
-          retry: '0'
-        dependsOn: build_dotnet
   - name: release
     displayName: 发布
     strategy: naturally
@@ -56,7 +47,7 @@ stages:
         upstreamArtifact:
           - TrafficPilot
         assertFiles:
-          - /TrafficPilot/out/publish/
+          - ${TrafficPilot}
         prerelease: true
         allowUpdate: true
         notify: []
