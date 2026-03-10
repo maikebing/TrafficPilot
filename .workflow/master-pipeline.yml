@@ -56,7 +56,7 @@ stages:
         upstreamArtifact:
           - TrafficPilot
         assertFiles:
-          - ../artifact_TrafficPilot.tar.gz 
+          - /TrafficPilot/out/publish/
         prerelease: true
         allowUpdate: true
         notify: []
