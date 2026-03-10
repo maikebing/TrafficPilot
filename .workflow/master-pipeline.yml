@@ -56,7 +56,8 @@ stages:
         upstreamArtifact:
           - TrafficPilot
         assertFiles:
-          - ${TrafficPilot}
+          - TrafficPilot.pdb
+          - TrafficPilot.exe
         prerelease: true
         allowUpdate: true
         notify: []
