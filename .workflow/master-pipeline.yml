@@ -41,10 +41,13 @@ stages:
       - step: release@gitee
         name: release_gitee
         displayName: Gitee Release
+        releaseName: ${GITEE_BRANCH}
+        description: ${GITEE_BRANCH}
+        tagName: ${GITEE_BRANCH}
         upstreamArtifact:
           - TrafficPilot
         assertFiles:
-          - ../artifact_TrafficPilot.tar.gz
+          - ${BUILD_ARTIFACT}
         prerelease: true
         allowUpdate: true
         notify: []
