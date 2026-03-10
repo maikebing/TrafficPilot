@@ -25,7 +25,7 @@ stages:
           - dotnet build --configuration Release -p:Version=${VERSION} -p:EnableWindowsTargeting=true
           - dotnet publish -c Release --p:OutputPath=./out/   -p:PublishSingleFile=true -p:SelfContained=true -p:RuntimeIdentifier=win-x64 -p:Version=${VERSION}  -p:EnableWindowsTargeting=true
         artifacts:
-          - name: BUILD_ARTIFACT
+          - name: TrafficPilot
             path:
               - ./out/publish/
         caches:
@@ -36,7 +36,7 @@ stages:
       - step: publish@general_artifacts
         name: publish_general_artifacts
         displayName: 上传制品
-        dependArtifact: BUILD_ARTIFACT
+        dependArtifact: TrafficPilot
         artifactName: TrafficPilot
         notify: []
         strategy:
@@ -54,9 +54,9 @@ stages:
         description: ${GITEE_BRANCH}
         tagName: ${GITEE_BRANCH}
         upstreamArtifact:
-          - BUILD_ARTIFACT
+          - TrafficPilot
         assertFiles:
-          - TrafficPilot.exe
+          - ../artifact_TrafficPilot.tar.gz 
         prerelease: true
         allowUpdate: true
         notify: []
