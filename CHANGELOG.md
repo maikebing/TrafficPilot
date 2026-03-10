@@ -1,5 +1,59 @@
 # Changelog
 
+## [1.0.10.0] - 2026-03-10
+
+### 修复
+- 修复版本号比对逻辑：版本比对从 3 位（Major.Minor.Build）改为 4 位（Major.Minor.Build.Revision），以支持完整的语义化版本号。
+
+### 改进
+- `AutoUpdater.NormalizeVersion` 和 `MainForm.GetCurrentVersion` 现在使用 4 位版本号进行比对，避免版本号截断导致的更新检测错误。
+
+---
+
+## [1.0.9.1] - 2026-03-10
+
+### 新增
+- 新增 `LocalNetworkHelper.GetLocalIpsWithGateway()` 工具方法：自动获取本机所有有效网络接口的 IPv4 地址（需具备默认网关）。
+- 代理服务器地址输入框（`Proxy Host`）改为**下拉框**（`ComboBox`），自动填充本机 IP 地址，方便快速选择。
+
+### 改进
+- UI 初始化时自动加载本机 IP 地址列表至代理地址下拉框，提升配置便捷性。
+- 若下拉框中有可用 IP 且当前值为空，自动选择第一个 IP 作为默认值。
+- 排除回环接口（Loopback）和隧道接口（Tunnel），只列出实际网络连接的 IP。
+
+---
+
+## [1.0.9.0] - 2026-03-10
+
+### 修复
+- 修复 Gitee 流水线（`.workflow/tag-release-pipeline.yml`）版本号提取逻辑：从 `git describe` 方式改为直接使用 `${GITEE_BRANCH#v}`，避免非 tag 提交构建失败。
+
+---
+
+## [1.0.8] - 2026-03-10
+
+### 新增
+- 新增 GitHub Actions 自动化发布流程：Release Notes 自动从 `CHANGELOG.md` 读取对应版本内容，无需手动编写。
+
+### 改进
+- GitHub Actions `build-release.yml` 工作流优化：
+  - 新增 `Create Release Notes` 步骤，自动解析 `CHANGELOG.md` 按版本号提取变更内容。
+  - 若对应版本不存在于 CHANGELOG 中，自动回退至默认文案，并输出警告而不中断构建。
+  - Release Notes 格式统一：变更内容 + 安装说明 + 系统需求。
+
+---
+
+## [1.0.7] - 2026-03-10
+
+### 修复
+- 修复单文件发布（Single-file publish）时 `StartupManager.Enable()` 方法无法正确获取程序路径的问题：
+  - 将 `Assembly.GetEntryAssembly()!.Location` 改为 `Path.Combine(AppContext.BaseDirectory, $"{AppName}.exe")`，避免单文件发布时 `Location` 为空字符串导致开机启动注册失败。
+
+### 新增
+- 新增 Gitee 流水线模板（`.workflow/tag-release-pipeline.yml`），支持 Gitee 自动化构建与发布。
+
+---
+
 ## [1.0.6] - 2026-03-10
 
 ### 新增
