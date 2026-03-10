@@ -10,6 +10,8 @@ triggers:
     tags:
       prefix:
         - v
+variables:
+  VERSION: 0.0.0
 stages:
   - name: compile
     displayName: 编译
@@ -25,7 +27,7 @@ stages:
           - dotnet build --configuration Release -p:Version=${VERSION} -p:EnableWindowsTargeting=true
           - dotnet publish -c Release --p:OutputPath=./out/   -p:PublishSingleFile=true -p:SelfContained=true -p:RuntimeIdentifier=win-x64 -p:Version=${VERSION}  -p:EnableWindowsTargeting=true
         artifacts:
-          - name: BUILD_ARTIFACT
+          - name: TrafficPilot
             path:
               - ./out/publish/
         caches:
@@ -36,7 +38,7 @@ stages:
       - step: publish@general_artifacts
         name: publish_general_artifacts
         displayName: 上传制品
-        dependArtifact: BUILD_ARTIFACT
+        dependArtifact: TrafficPilot
         artifactName: TrafficPilot
         strategy: {}
         dependsOn: build_dotnet
@@ -48,12 +50,13 @@ stages:
       - step: release@gitee
         name: release_gitee
         displayName: Gitee Release
-        releaseName: '{GITEE_BRANCH}'
-        description: '{GITEE_COMMIT_MESSAGE}'
-        tagName: '{GITEE_BRANCH}'
+        releaseName: {GITEE_BRANCH}
+        description: {GITEE_COMMIT_MESSAGE}
+        tagName: {GITEE_BRANCH}
         upstreamArtifact:
-          - BUILD_ARTIFACT
-        assertFiles: null
+          - TrafficPilot
+        assertFiles:
+          - TrafficPilot.tar.gz
         prerelease: true
         allowUpdate: true
         notify: []
