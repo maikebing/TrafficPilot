@@ -27,7 +27,7 @@ stages:
         artifacts:
           - name: BUILD_ARTIFACT
             path:
-              - ./out
+              - ./out/publish/
         caches:
           - ~/.nuget/packages
         notify: []
