@@ -76,6 +76,13 @@ internal sealed class GitHub520HostsProvider : IDisposable
 				_hostsMap[domain] = ip;
 	}
 
+	/// <summary>Returns a snapshot of the current hosts map for external use.</summary>
+	public Dictionary<string, byte[]> GetHostsMap()
+	{
+		lock (_lock)
+			return new Dictionary<string, byte[]>(_hostsMap, StringComparer.OrdinalIgnoreCase);
+	}
+
 	public void Dispose() => _http.Dispose();
 
 	private static Dictionary<string, byte[]> ParseHosts(string content)
@@ -315,10 +322,10 @@ internal sealed class IpFetchService : IDisposable
 		("Cloudflare",      "https://cloudflare-dns.com/dns-query?name={0}&type=A"),
 		// AliDNS may return incorrect IPs for GitHub domains in some regions
 		("AliDNS",          "https://dns.alidns.com/resolve?name={0}&type=A"),
-		// DNSPod (Tencent Cloud) — good coverage in mainland China
+		// DNSPod (Tencent Cloud) �?good coverage in mainland China
 		("DNSPod",          "https://doh.pub/dns-query?name={0}&type=A"),
 
-		// ── IP-based DoH — bypass DNS hijacking entirely ──────────────────────
+		// ── IP-based DoH �?bypass DNS hijacking entirely ──────────────────────
 		("Google-IP",       "https://8.8.8.8/resolve?name={0}&type=A"),
 		("Cloudflare-IP",   "https://1.1.1.1/dns-query?name={0}&type=A"),
 		("Quad101",         "https://101.101.101.101/dns-query?name={0}&type=A"),
@@ -326,7 +333,7 @@ internal sealed class IpFetchService : IDisposable
 		// DNSPod IP (Tencent)
 		("DNSPod-IP",       "https://119.29.29.29/dns-query?name={0}&type=A"),
 		("DNSPod-IP2",      "https://120.53.53.53/dns-query?name={0}&type=A"),
-		// 114DNS — traditional Chinese public DNS, DoH support may be limited
+		// 114DNS �?traditional Chinese public DNS, DoH support may be limited
 		("114DNS",          "https://114.114.114.114/dns-query?name={0}&type=A"),
 		("114DNS-Alt",      "https://114.114.115.115/dns-query?name={0}&type=A"),
 	];

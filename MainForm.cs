@@ -39,48 +39,13 @@ internal partial class MainForm : Form
 		InitializeComponent();
 		InitIpResultsColumns();
 		InitProxyHostComboBox();
+		InitializeHostsRedirectModeUI(); // 添加hosts模式UI
 		LoadApplicationIcon();
 		LoadVersionLabel();
 		CenterToScreen();
 		LoadConfigToUI();
 		RefreshConfigShortcutButtons();
 		UpdateTrayMenuState();
-	}
-
-	/// <summary>
-	/// Initializes ListView columns for IP results.
-	/// Must be called from the constructor — the WinForms designer regenerates
-	/// InitializeComponent and removes any Columns.Add calls placed there.
-	/// </summary>
-	private void InitIpResultsColumns()
-	{
-		_lvIpResults!.Columns.Clear();
-		_lvIpResults.Columns.Add("Domain",     220, HorizontalAlignment.Left);
-		_lvIpResults.Columns.Add("IP Address", 130, HorizontalAlignment.Left);
-		_lvIpResults.Columns.Add("Latency",     90, HorizontalAlignment.Right);
-		_lvIpResults.Columns.Add("Via Proxy",  100, HorizontalAlignment.Right);
-		_lvIpResults.Columns.Add("Source",     100, HorizontalAlignment.Left);
-	}
-
-	/// <summary>
-	/// Populates the Proxy Host ComboBox with local IPv4 addresses that have
-	/// a valid default gateway. Allows free-text entry for manual values.
-	/// </summary>
-	private void InitProxyHostComboBox()
-	{
-		_cmbProxyHost!.Items.Clear();
-		foreach (var ip in LocalNetworkHelper.GetLocalIpsWithGateway())
-			_cmbProxyHost.Items.Add(ip);
-
-		if (_cmbProxyHost.Items.Count > 0 && string.IsNullOrEmpty(_cmbProxyHost.Text))
-			_cmbProxyHost.SelectedIndex = 0;
-	}
-
-
-	private void LoadApplicationIcon()
-	{
-		_notifyIcon!.Icon = Resources.favicon;
-		Icon = Resources.favicon;
 	}
 
 	private void LoadVersionLabel()
@@ -291,6 +256,7 @@ internal partial class MainForm : Form
 			HostsRedirect = new HostsRedirectSettings
 			{
 				Enabled = _chkDNSRedirectEnabled!.Checked,
+				Mode = _rdoHostsFile?.Checked == true ? "HostsFile" : "DnsInterception",
 				HostsUrl = _txtHostsUrl!.Text.Trim(),
 				RefreshDomains = GetRefreshDomainsFromUi()
 			},
@@ -301,6 +267,10 @@ internal partial class MainForm : Form
 
 	private ProxyOptions BuildProxyOptions()
 	{
+		bool hostsEnabled = _chkDNSRedirectEnabled?.Checked ?? 
+			(_rdoDnsInterception?.Checked == true || _rdoHostsFile?.Checked == true);
+		string hostsMode = _rdoHostsFile?.Checked == true ? "HostsFile" : "DnsInterception";
+
 		return new ProxyOptions(
 			GetProcessNamesFromUi(),
 			GetDomainRulesFromUi(),
@@ -308,8 +278,9 @@ internal partial class MainForm : Form
 			(ushort)_numProxyPort!.Value,
 			_cmbProxyScheme!.SelectedItem?.ToString() ?? "socks4",
 			_chkProxyEnabled!.Checked,
-			_chkDNSRedirectEnabled!.Checked,
-			_txtHostsUrl!.Text.Trim()
+			hostsEnabled,
+			_txtHostsUrl!.Text.Trim(),
+			hostsMode
 		);
 	}
 
@@ -330,6 +301,16 @@ internal partial class MainForm : Form
 		_chkStartOnBoot!.Checked = StartupManager.IsEnabled();
 		_chkAutoStartProxy!.Checked = _currentConfig.AutoStartProxy;
 		_txtConfigName!.Text = _currentConfig.ConfigName;
+
+		// 加载hosts redirect模式
+		string mode = _currentConfig.HostsRedirect?.Mode ?? "DnsInterception";
+		if (_rdoHostsFile is not null && _rdoDnsInterception is not null)
+		{
+			if (mode.Equals("HostsFile", StringComparison.OrdinalIgnoreCase))
+				_rdoHostsFile.Checked = true;
+			else
+				_rdoDnsInterception.Checked = true;
+		}
 	}
 
 	private List<string> GetProcessNamesFromUi()
@@ -488,27 +469,6 @@ internal partial class MainForm : Form
 		}
 
 		return configPaths;
-	}
-
-	private Button CreateQuickConfigButton(string configPath)
-	{
-		Button button = new();
-		button.Margin = new Padding(2);
-		button.Name = $"_btnQuickConfig{_quickConfigPanel!.Controls.Count + 1}";
-		button.Size = new Size(72, 30);
-		button.TabIndex = _quickConfigPanel.Controls.Count;
-		button.Tag = configPath;
-		button.AutoEllipsis = true;
-		button.Text = GetQuickConfigButtonText(configPath);
-		button.UseVisualStyleBackColor = true;
-		button.Click += BtnQuickConfig_Click;
- 
-		return button;
-	}
-
-	private string GetQuickConfigButtonText(string configPath)
-	{
-		return _configManager.GetConfigDisplayName(configPath);
 	}
 
 	private string GetConfigDialogDirectory()
@@ -907,38 +867,7 @@ internal partial class MainForm : Form
 		_engine?.UpdateHostsEntries(updates);
 	}
 
-	private static ListViewItem CreateIpListViewItem(DomainIpResult result)
-	{
-		var item = new ListViewItem(result.Domain);
-		item.SubItems.Add("-");
-		item.SubItems.Add("-");
-		item.SubItems.Add("-");
-		item.SubItems.Add("-");
-		ApplyIpResultToItem(item, result);
-
-		return item;
-	}
-
-	private static void ApplyIpResultToItem(ListViewItem item, DomainIpResult result)
-	{
-		item.SubItems[1].Text = result.Ip ?? "-";
-		item.SubItems[2].Text = result.LatencyMs >= 0 ? $"{result.LatencyMs} ms" : result.Error ?? "Failed";
-		item.SubItems[3].Text = result.ProxyLatencyMs >= 0
-			? $"{result.ProxyLatencyMs} ms"
-			: result.ProxyError ?? "-";
-		item.SubItems[4].Text = result.DohSource ?? "-";
-
-		if (result.Ip is null)
-			item.ForeColor = Color.Red;
-		else if (result.LatencyMs is >= 0 and < 200)
-			item.ForeColor = Color.Green;
-		else if (result.LatencyMs is >= 200 and < 800)
-			item.ForeColor = Color.DarkOrange;
-		else
-			item.ForeColor = Color.Red;
-	}
-
-		private void BtnClearLogs_Click(object? sender, EventArgs e)
+	private void BtnClearLogs_Click(object? sender, EventArgs e)
 	{
 		_rtbLogs?.Clear();
 	}
@@ -1025,5 +954,73 @@ internal partial class MainForm : Form
 			}
 		}
 		catch (OperationCanceledException) { }
+	}
+
+	private void RdoDnsInterception_CheckedChanged(object? sender, EventArgs e)
+	{
+		if (_rdoDnsInterception?.Checked == true)
+		{
+			if (_engine?.IsRunning == true)
+			{
+				_lblHostsStatus!.Text = "Status: Mode changed. Please Stop and Start again to apply.";
+				_lblHostsStatus.ForeColor = Color.Orange;
+			}
+		}
+	}
+
+	private void RdoHostsFile_CheckedChanged(object? sender, EventArgs e)
+	{
+		if (_rdoHostsFile?.Checked == true)
+		{
+			if (_engine?.IsRunning == true)
+			{
+				_lblHostsStatus!.Text = "Status: Mode changed. Please Stop and Start again to apply.";
+				_lblHostsStatus.ForeColor = Color.Orange;
+			}
+		}
+	}
+
+	/// <summary>
+	/// Loads hosts redirect mode from configuration and updates UI
+	/// </summary>
+	private void LoadHostsRedirectMode()
+	{
+		if (_rdoDnsInterception is null || _rdoHostsFile is null)
+			return;
+
+		string mode = _currentConfig.HostsRedirect?.Mode ?? "DnsInterception";
+
+		if (mode.Equals("HostsFile", StringComparison.OrdinalIgnoreCase))
+			_rdoHostsFile.Checked = true;
+		else
+			_rdoDnsInterception.Checked = true;
+	}
+
+	/// <summary>
+	/// Returns the currently selected hosts redirect mode string from UI
+	/// </summary>
+	private string GetHostsRedirectModeFromUI()
+	{
+		if (_rdoHostsFile?.Checked == true)
+			return "HostsFile";
+		return "DnsInterception";
+	}
+
+	/// <summary>
+	/// Creates ProxyOptions with hosts redirect mode from UI
+	/// </summary>
+	private ProxyOptions CreateProxyOptionsFromUI()
+	{
+		return new ProxyOptions(
+			GetProcessNamesFromUi(),
+			GetDomainRulesFromUi(),
+			_cmbProxyHost!.Text.Trim(),
+			(ushort)_numProxyPort!.Value,
+			_cmbProxyScheme!.SelectedItem?.ToString() ?? "socks4",
+			ProxyEnabled: _chkProxyEnabled!.Checked,
+			HostsRedirectEnabled: _chkDNSRedirectEnabled?.Checked ?? (_rdoDnsInterception?.Checked == true || _rdoHostsFile?.Checked == true),
+			HostsRedirectUrl: _txtHostsUrl!.Text.Trim(),
+			HostsRedirectMode: GetHostsRedirectModeFromUI()
+		);
 	}
 }

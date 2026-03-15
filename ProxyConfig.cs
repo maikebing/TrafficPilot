@@ -82,6 +82,9 @@ internal class HostsRedirectSettings
 	[JsonPropertyName("enabled")]
 	public bool Enabled { get; set; } = false;
 
+	[JsonPropertyName("mode")]
+	public string Mode { get; set; } = "DnsInterception"; // "DnsInterception" or "HostsFile"
+
 	[JsonPropertyName("hostsUrl")]
 	public string HostsUrl { get; set; } = GitHub520HostsProvider.DefaultUrl;
 

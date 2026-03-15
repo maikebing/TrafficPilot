@@ -1,5 +1,6 @@
 #nullable enable
 using System.ComponentModel;
+using TrafficPilot.Properties;
 
 namespace TrafficPilot;
 
@@ -1305,4 +1306,169 @@ partial class MainForm
     private Label techContentLabel;
     private Button? _btnCheckUpdate;
     private Label? _lblUpdateStatus;
+
+    // Hosts Redirect Mode Selection (dynamically created)
+    private GroupBox? _grpRedirectMode;
+    private RadioButton? _rdoDnsInterception;
+    private RadioButton? _rdoHostsFile;
+    private Label? _lblHostsFileWarning;
+
+    // ── Control initialization helpers ──────────────────────────────────────
+
+    private void InitIpResultsColumns()
+    {
+        _lvIpResults!.Columns.Clear();
+        _lvIpResults.Columns.Add("Domain",     220, HorizontalAlignment.Left);
+        _lvIpResults.Columns.Add("IP Address", 130, HorizontalAlignment.Left);
+        _lvIpResults.Columns.Add("Latency",     90, HorizontalAlignment.Right);
+        _lvIpResults.Columns.Add("Via Proxy",  100, HorizontalAlignment.Right);
+        _lvIpResults.Columns.Add("Source",     100, HorizontalAlignment.Left);
+    }
+
+    private void InitProxyHostComboBox()
+    {
+        _cmbProxyHost!.Items.Clear();
+        foreach (var ip in LocalNetworkHelper.GetLocalIpsWithGateway())
+            _cmbProxyHost.Items.Add(ip);
+
+        if (_cmbProxyHost.Items.Count > 0 && string.IsNullOrEmpty(_cmbProxyHost.Text))
+            _cmbProxyHost.SelectedIndex = 0;
+    }
+
+    private void LoadApplicationIcon()
+    {
+        _notifyIcon!.Icon = Resources.favicon;
+        Icon = Resources.favicon;
+    }
+
+    private void InitializeHostsRedirectModeUI()
+    {
+        _grpRedirectMode = new GroupBox
+        {
+            Text = "Redirect Mode",
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            Margin = new Padding(3, 3, 3, 10),
+            Padding = new Padding(8, 5, 8, 8)
+        };
+
+        var modePanel = new FlowLayoutPanel
+        {
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            FlowDirection = FlowDirection.TopDown,
+            Dock = DockStyle.Fill,
+            WrapContents = false
+        };
+
+        _rdoDnsInterception = new RadioButton
+        {
+            Text = "DNS Interception (packet-level, no file modification)",
+            AutoSize = true,
+            Checked = true,
+            Margin = new Padding(3, 3, 3, 5)
+        };
+        _rdoDnsInterception.CheckedChanged += RdoDnsInterception_CheckedChanged;
+
+        _rdoHostsFile = new RadioButton
+        {
+            Text = "System Hosts File (write to C:\\Windows\\System32\\drivers\\etc\\hosts)",
+            AutoSize = true,
+            Margin = new Padding(3, 3, 3, 3)
+        };
+        _rdoHostsFile.CheckedChanged += RdoHostsFile_CheckedChanged;
+
+        _lblHostsFileWarning = new Label
+        {
+            Text = "⚠ Requires Administrator privileges. Creates backup before modifying.",
+            AutoSize = true,
+            ForeColor = SystemColors.GrayText,
+            Margin = new Padding(20, 0, 3, 3)
+        };
+
+        modePanel.Controls.Add(_rdoDnsInterception);
+        modePanel.Controls.Add(_rdoHostsFile);
+        modePanel.Controls.Add(_lblHostsFileWarning);
+        _grpRedirectMode.Controls.Add(modePanel);
+
+        if (_dnsRedirectPanel is not null)
+        {
+            _dnsRedirectPanel.Controls.Remove(_chkDNSRedirectEnabled);
+            _dnsRedirectPanel.Controls.Add(_grpRedirectMode, 0, 0);
+            _dnsRedirectPanel.SetColumnSpan(_grpRedirectMode, 2);
+        }
+
+        UpdateHostsFileModeUI();
+    }
+
+    private void UpdateHostsFileModeUI()
+    {
+        if (_lblHostsFileWarning is null || _rdoHostsFile is null)
+            return;
+
+        _lblHostsFileWarning.Visible = _rdoHostsFile.Checked;
+
+        if (_rdoHostsFile.Checked && !SystemHostsFileManager.HasWriteAccess())
+        {
+            _lblHostsFileWarning.Text = "⚠ Administrator privileges required! Please restart TrafficPilot as Administrator.";
+            _lblHostsFileWarning.ForeColor = Color.OrangeRed;
+        }
+        else if (_rdoHostsFile.Checked)
+        {
+            _lblHostsFileWarning.Text = "✓ Administrator access confirmed. Backups will be created automatically.";
+            _lblHostsFileWarning.ForeColor = Color.Green;
+        }
+    }
+
+    private Button CreateQuickConfigButton(string configPath)
+    {
+        Button button = new();
+        button.Margin = new Padding(2);
+        button.Name = $"_btnQuickConfig{_quickConfigPanel!.Controls.Count + 1}";
+        button.Size = new Size(72, 30);
+        button.TabIndex = _quickConfigPanel.Controls.Count;
+        button.Tag = configPath;
+        button.AutoEllipsis = true;
+        button.Text = GetQuickConfigButtonText(configPath);
+        button.UseVisualStyleBackColor = true;
+        button.Click += BtnQuickConfig_Click;
+
+        return button;
+    }
+
+    private string GetQuickConfigButtonText(string configPath)
+    {
+        return _configManager.GetConfigDisplayName(configPath);
+    }
+
+    private static ListViewItem CreateIpListViewItem(DomainIpResult result)
+    {
+        var item = new ListViewItem(result.Domain);
+        item.SubItems.Add("-");
+        item.SubItems.Add("-");
+        item.SubItems.Add("-");
+        item.SubItems.Add("-");
+        ApplyIpResultToItem(item, result);
+
+        return item;
+    }
+
+    private static void ApplyIpResultToItem(ListViewItem item, DomainIpResult result)
+    {
+        item.SubItems[1].Text = result.Ip ?? "-";
+        item.SubItems[2].Text = result.LatencyMs >= 0 ? $"{result.LatencyMs} ms" : result.Error ?? "Failed";
+        item.SubItems[3].Text = result.ProxyLatencyMs >= 0
+            ? $"{result.ProxyLatencyMs} ms"
+            : result.ProxyError ?? "-";
+        item.SubItems[4].Text = result.DohSource ?? "-";
+
+        if (result.Ip is null)
+            item.ForeColor = Color.Red;
+        else if (result.LatencyMs is >= 0 and < 200)
+            item.ForeColor = Color.Green;
+        else if (result.LatencyMs is >= 200 and < 800)
+            item.ForeColor = Color.DarkOrange;
+        else
+            item.ForeColor = Color.Red;
+    }
 }

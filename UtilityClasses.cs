@@ -286,7 +286,7 @@ internal static class StartupManager
 			?? Path.Combine(AppContext.BaseDirectory, $"{AppName}.exe");
 		using var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(RunKey, writable: true)
 			?? throw new InvalidOperationException("Cannot open registry startup key.");
-		key.SetValue(AppName, $"\"{exePath}\"");
+		key.SetValue(AppName, $"\"{exePath}\" --minimized");
 	}
 
 	/// <summary>Removes the startup registry entry if it exists.</summary>
@@ -349,7 +349,8 @@ internal sealed record ProxyOptions(
 	string ProxyHost, ushort ProxyPort, string ProxyScheme,
 	bool ProxyEnabled = true,
 	bool HostsRedirectEnabled = false,
-	string HostsRedirectUrl = GitHub520HostsProvider.DefaultUrl)
+	string HostsRedirectUrl = GitHub520HostsProvider.DefaultUrl,
+	string HostsRedirectMode = "DnsInterception") // "DnsInterception" or "HostsFile"
 {
     internal static readonly string[] DefaultProcessNames =
 	[

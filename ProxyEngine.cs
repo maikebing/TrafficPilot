@@ -48,17 +48,39 @@ internal sealed class ProxyEngine : IDisposable
 		if (!_options.ProxyEnabled && !_options.HostsRedirectEnabled)
 			throw new InvalidOperationException("Both proxy and hosts redirect are disabled.");
 
-		// Start DNS interceptor if hosts redirect is enabled
+		// Start hosts redirect in appropriate mode
 		if (_options.HostsRedirectEnabled)
 		{
 			_hostsProvider = new GitHub520HostsProvider(_options.HostsRedirectUrl);
 			_hostsProvider.OnLog += (msg) => OnLog?.Invoke($"[{DateTime.Now:HH:mm:ss.fff}] {msg}");
 			await _hostsProvider.RefreshAsync();
 
-			_dnsInterceptor = new DnsInterceptor(_hostsProvider);
-			_dnsInterceptor.OnLog += (msg) => OnLog?.Invoke($"[{DateTime.Now:HH:mm:ss.fff}] {msg}");
-			await _dnsInterceptor.StartAsync();
-			LogInfo($"DNS redirect started ({_hostsProvider.HostCount} hosts)");
+			bool useHostsFile = (_options.HostsRedirectMode ?? "DnsInterception")
+				.Equals("HostsFile", StringComparison.OrdinalIgnoreCase);
+
+			if (useHostsFile)
+			{
+				// Hosts file mode
+				try
+				{
+					SystemHostsFileManager.WriteHostsFile(_hostsProvider.GetHostsMap());
+					SystemHostsFileManager.FlushDnsCache();
+					LogInfo($"System hosts file updated ({_hostsProvider.HostCount} hosts)");
+				}
+				catch (Exception ex)
+				{
+					throw new InvalidOperationException(
+						$"Failed to write hosts file: {ex.Message}. Please run as Administrator.", ex);
+				}
+			}
+			else
+			{
+				// DNS interception mode
+				_dnsInterceptor = new DnsInterceptor(_hostsProvider);
+				_dnsInterceptor.OnLog += (msg) => OnLog?.Invoke($"[{DateTime.Now:HH:mm:ss.fff}] {msg}");
+				await _dnsInterceptor.StartAsync();
+				LogInfo($"DNS interception started ({_hostsProvider.HostCount} hosts)");
+			}
 		}
 
 		if (!_options.ProxyEnabled)
@@ -118,11 +140,45 @@ internal sealed class ProxyEngine : IDisposable
 		}
 		if (_dnsInterceptor != null)
 			await _dnsInterceptor.StopAsync();
+
+		// Clean up hosts file entries if in hosts file mode
+		if (_options.HostsRedirectEnabled && 
+			(_options.HostsRedirectMode ?? "DnsInterception").Equals("HostsFile", StringComparison.OrdinalIgnoreCase))
+		{
+			try
+			{
+				SystemHostsFileManager.RemoveTrafficPilotEntries();
+				SystemHostsFileManager.FlushDnsCache();
+				LogInfo("Removed TrafficPilot entries from system hosts file");
+			}
+			catch (Exception ex)
+			{
+				LogInfo($"Warning: Failed to clean up hosts file: {ex.Message}");
+			}
+		}
 	}
 
 	/// <summary>Pushes freshly resolved IPs into the live DNS interceptor without restarting it.</summary>
 	public void UpdateHostsEntries(IReadOnlyDictionary<string, byte[]> updates)
-		=> _hostsProvider?.BatchUpdate(updates);
+	{
+		_hostsProvider?.BatchUpdate(updates);
+
+		// If in hosts file mode, also update the system hosts file
+		if (_hostsProvider != null && 
+			(_options.HostsRedirectMode ?? "DnsInterception").Equals("HostsFile", StringComparison.OrdinalIgnoreCase))
+		{
+			try
+			{
+				SystemHostsFileManager.WriteHostsFile(_hostsProvider.GetHostsMap());
+				SystemHostsFileManager.FlushDnsCache();
+				LogInfo($"System hosts file refreshed ({_hostsProvider.HostCount} hosts)");
+			}
+			catch (Exception ex)
+			{
+				LogInfo($"Warning: Failed to update hosts file: {ex.Message}");
+			}
+		}
+	}
 
 	public void Dispose()
 	{
