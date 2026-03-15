@@ -6,7 +6,7 @@ namespace TrafficPilot;
 internal static class Program
 {
 	[STAThread]
-	static void Main()
+	static void Main(string[] args)
 	{
 		// Check Windows platform
 		if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
@@ -20,7 +20,15 @@ internal static class Program
 
 		ApplicationConfiguration.Initialize();
         NativeLibrary.SetDllImportResolver(typeof(Program).Assembly, MyDllImportResolver);
-        Application.Run(new MainForm());
+        
+        // Check for startup mode (minimized to tray)
+        bool startMinimized = args.Length > 0 && 
+            (args[0].Equals("--minimized", StringComparison.OrdinalIgnoreCase) ||
+             args[0].Equals("--startup", StringComparison.OrdinalIgnoreCase) ||
+             args[0].Equals("/minimized", StringComparison.OrdinalIgnoreCase) ||
+             args[0].Equals("/startup", StringComparison.OrdinalIgnoreCase));
+        
+        Application.Run(new MainForm(startMinimized));
 	}
     static nint windivhandle= nint.Zero;
     private static IntPtr MyDllImportResolver(string libraryName, Assembly assembly, DllImportSearchPath? searchPath)

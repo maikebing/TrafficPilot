@@ -22,13 +22,15 @@ internal partial class MainForm : Form
 
 	private bool _isStarting = false;
 	private bool _initialAutoStartHandled;
+	private bool _startMinimized;
 
 	private CancellationTokenSource? _ipFetchCts;
 	private CancellationTokenSource? _autoFetchCts;
 	private Task? _autoFetchTask;
 
-	public MainForm()
+	public MainForm(bool startMinimized = false)
 	{
+		_startMinimized = startMinimized;
 		_configManager = new ProxyConfigManager();
 		_activeConfigPath = _configManager.GetConfigPath();
 		_currentConfig = _configManager.Load(_activeConfigPath);
@@ -703,6 +705,12 @@ internal partial class MainForm : Form
 	protected override async void OnShown(EventArgs e)
 	{
 		base.OnShown(e);
+
+		// Handle minimized startup (e.g., from Windows startup)
+		if (_startMinimized)
+		{
+			HideWindow();
+		}
 
 		if (_initialAutoStartHandled || !_currentConfig.AutoStartProxy)
 			return;
