@@ -1,4 +1,4 @@
-using System.ComponentModel;
+﻿using System.ComponentModel;
 using System.Diagnostics;
 using System.Net;
 using System.Net.Sockets;
@@ -9,9 +9,9 @@ using System.Text.Json;
 
 namespace TrafficPilot;
 
-// ════════════════════════════════════════════════════════════════
+// -----------------------------------------------------------------------------
 //  GitHub520 Hosts Provider
-// ════════════════════════════════════════════════════════════════
+// -----------------------------------------------------------------------------
 
 internal sealed class GitHub520HostsProvider : IDisposable
 {
@@ -109,9 +109,9 @@ internal sealed class GitHub520HostsProvider : IDisposable
 	}
 }
 
-// ════════════════════════════════════════════════════════════════
+// -----------------------------------------------------------------------------
 //  DNS Interceptor
-// ════════════════════════════════════════════════════════════════
+// -----------------------------------------------------------------------------
 
 internal sealed class DnsInterceptor : IDisposable
 {
@@ -296,9 +296,9 @@ internal sealed class DnsInterceptor : IDisposable
 	}
 }
 
-// ════════════════════════════════════════════════════════════════
+// -----------------------------------------------------------------------------
 //  Domain IP Fetch Result
-// ════════════════════════════════════════════════════════════════
+// -----------------------------------------------------------------------------
 
 internal sealed record DomainIpResult(
 	string Domain,
@@ -309,34 +309,81 @@ internal sealed record DomainIpResult(
 	long ProxyLatencyMs = -1,
 	string? ProxyError = null);
 
-// ════════════════════════════════════════════════════════════════
+// -----------------------------------------------------------------------------
 //  IP Fetch Service  (GitHub520-style: multi-DoH + TCP latency)
-// ════════════════════════════════════════════════════════════════
+// -----------------------------------------------------------------------------
 
 internal sealed class IpFetchService : IDisposable
 {
 	private static readonly (string Name, string UrlTemplate)[] DoHProviders =
 	[
-		// ── Domain-based DoH (may fail if domain DNS itself is hijacked) ──────
+		// Domain-based DoH (may fail if domain DNS itself is hijacked)
 		("Google",          "https://dns.google/resolve?name={0}&type=A"),
 		("Cloudflare",      "https://cloudflare-dns.com/dns-query?name={0}&type=A"),
 		// AliDNS may return incorrect IPs for GitHub domains in some regions
 		("AliDNS",          "https://dns.alidns.com/resolve?name={0}&type=A"),
-		// DNSPod (Tencent Cloud) �?good coverage in mainland China
+		// DNSPod (Tencent Cloud) - good coverage in mainland China
 		("DNSPod",          "https://doh.pub/dns-query?name={0}&type=A"),
 
-		// ── IP-based DoH �?bypass DNS hijacking entirely ──────────────────────
+		// IP-based DoH - bypass DNS hijacking entirely
 		("Google-IP",       "https://8.8.8.8/resolve?name={0}&type=A"),
 		("Cloudflare-IP",   "https://1.1.1.1/dns-query?name={0}&type=A"),
+		("AliDNS-IP",       "https://223.5.5.5/resolve?name={0}&type=A"),
+		("AliDNS-IP2",      "https://223.6.6.6/resolve?name={0}&type=A"),
 		("Quad101",         "https://101.101.101.101/dns-query?name={0}&type=A"),
 		("Quad101-Alt",     "https://101.102.103.104/dns-query?name={0}&type=A"),
 		// DNSPod IP (Tencent)
 		("DNSPod-IP",       "https://119.29.29.29/dns-query?name={0}&type=A"),
 		("DNSPod-IP2",      "https://120.53.53.53/dns-query?name={0}&type=A"),
-		// 114DNS �?traditional Chinese public DNS, DoH support may be limited
+		// 114DNS traditional Chinese public DNS, DoH support may be limited
 		("114DNS",          "https://114.114.114.114/dns-query?name={0}&type=A"),
 		("114DNS-Alt",      "https://114.114.115.115/dns-query?name={0}&type=A"),
 	];
+
+	private static readonly string[] ClassicDnsServerIps =
+	[
+		// Public resolvers
+		"223.5.5.5", "223.6.6.6", "180.76.76.76",
+		"208.67.222.222", "208.67.220.220",
+		"8.8.8.8", "8.8.4.4",
+		"114.114.114.114", "114.114.115.115",
+		"1.1.1.1", "1.0.0.1",
+		"9.9.9.9", "149.112.112.112",
+		"119.29.29.29", "182.254.116.116",
+		"1.2.4.8", "210.2.4.8",
+		"117.50.11.11", "117.50.22.22",
+		"77.88.8.8", "77.88.8.1",
+		"101.226.4.6", "123.125.81.6",
+
+		// China Telecom samples
+		"202.96.209.5", "202.96.209.133", "202.97.7.6", "202.97.7.17",
+		"202.96.96.68", "202.96.103.36", "202.96.128.86", "202.96.134.33", "202.96.134.133",
+		"202.96.154.15", "202.100.192.68", "202.101.6.2", "202.101.98.55", "202.101.107.85",
+		"202.102.24.34", "202.102.192.68", "202.103.96.112", "202.103.225.68",
+		"218.2.135.1", "218.30.19.40", "218.85.152.99", "218.85.157.99", "218.89.0.124",
+		"220.168.208.3", "220.168.208.6", "220.170.64.68", "221.228.255.1", "222.85.85.85", "222.88.88.88",
+
+		// China Unicom samples
+		"124.161.97.234", "124.161.97.238", "124.161.97.242",
+		"202.96.64.68", "202.96.69.38", "202.96.86.18",
+		"202.99.96.68", "202.99.104.68", "202.99.160.68", "202.99.166.4", "202.99.168.8", "202.99.192.66",
+		"202.102.128.68", "202.102.134.68", "202.102.152.3", "202.102.154.3", "202.102.224.68", "202.102.227.68",
+		"202.106.0.20", "202.106.46.151", "202.106.196.115",
+		"210.21.4.130", "210.21.196.6",
+		"211.95.1.97", "211.95.72.1", "211.95.193.97", "211.97.96.65",
+		"218.104.32.106", "221.5.88.88", "221.6.4.66", "221.7.34.10", "221.7.92.86", "221.7.92.98",
+
+		// China Mobile samples
+		"203.142.100.18", "203.142.100.21",
+		"211.136.28.231", "211.136.28.234", "211.136.28.237", "211.136.112.50", "211.136.150.66",
+		"211.137.160.5", "211.137.160.185", "211.138.75.123", "211.138.91.1", "211.138.106.19", "211.138.145.194",
+		"211.139.1.3", "211.139.2.18", "211.139.29.68", "211.139.29.150", "211.139.29.170",
+		"218.201.17.2", "218.202.152.130", "218.203.101.3", "218.203.160.194",
+		"221.130.32.100", "221.130.32.103", "221.130.32.106", "221.130.33.52", "221.130.33.60",
+	];
+
+	private static readonly (string Name, string ServerIp)[] ClassicDnsProviders =
+		BuildClassicDnsProviders(ClassicDnsServerIps);
 
 	private readonly HttpClient _http;
 	private readonly int _tcpTimeoutMs;
@@ -344,8 +391,10 @@ internal sealed class IpFetchService : IDisposable
 	private readonly int _proxyPort;
 	private readonly string _proxyScheme;
 	private const int LatencyRounds = 2;  // TCP tests per candidate; best (min) result is kept
+	private const int DnsUdpTimeoutMs = 1800;
+	private const int MaxClassicDnsConcurrency = 24;
 
-	public IpFetchService(int tcpTimeoutMs = 1500, string? proxyHost = null, int proxyPort = 0, string proxyScheme = "socks4")
+	public IpFetchService(int tcpTimeoutMs = 1500, string? proxyHost = null, int proxyPort = 0, string proxyScheme = "socks5")
 	{
 		_http = new HttpClient { Timeout = TimeSpan.FromSeconds(8) };
 		_http.DefaultRequestHeaders.Add("Accept", "application/dns-json");
@@ -403,15 +452,18 @@ internal sealed class IpFetchService : IDisposable
 			var candidates = await ResolveAsync(domain, DoHProviders, ct);
 
 			// Round 2: if nothing resolved, retry with IP-based providers only.
-			// IP-based DoH bypasses local DNS hijacking and is the most reliable fallback.
 			if (candidates.Length == 0)
 			{
 				await Task.Delay(500, ct).ConfigureAwait(false);
 				var ipProviders = DoHProviders
 					.Where(static p => IsIpBasedUrl(p.UrlTemplate))
 					.ToArray();
-				candidates = await ResolveAsync(domain, ipProviders, ct);
+				candidates = await ResolveAsync(domain, ipProviders, ct).ConfigureAwait(false);
 			}
+
+			// Round 3: fallback to traditional UDP DNS resolvers.
+			if (candidates.Length == 0)
+				candidates = await ResolveClassicDnsAsync(domain, ClassicDnsProviders, ct).ConfigureAwait(false);
 
 			if (candidates.Length == 0)
 				return new DomainIpResult(domain, null, -1, null, "No IPs resolved");
@@ -463,6 +515,199 @@ internal sealed class IpFetchService : IDisposable
 			.DistinctBy(static x => x.Ip, StringComparer.OrdinalIgnoreCase)
 			.Select(static x => (x.Ip!, x.Source))
 			.ToArray();
+	}
+
+	/// <summary>
+	/// Queries traditional UDP DNS resolvers and returns distinct resolved IPv4 addresses.
+	/// </summary>
+	private async Task<(string Ip, string Source)[]> ResolveClassicDnsAsync(
+		string domain,
+		IEnumerable<(string Name, string ServerIp)> providers,
+		CancellationToken ct)
+	{
+		using var throttler = new SemaphoreSlim(MaxClassicDnsConcurrency);
+
+		var tasks = providers.Select(async p =>
+		{
+			await throttler.WaitAsync(ct).ConfigureAwait(false);
+			try
+			{
+				return await QueryClassicDnsAsync(p.Name, p.ServerIp, domain, ct).ConfigureAwait(false);
+			}
+			finally
+			{
+				throttler.Release();
+			}
+		}).ToArray();
+
+		var results = await Task.WhenAll(tasks).ConfigureAwait(false);
+
+		return results
+			.Where(static x => x.Ip is not null)
+			.DistinctBy(static x => x.Ip, StringComparer.OrdinalIgnoreCase)
+			.Select(static x => (x.Ip!, x.Source))
+			.ToArray();
+	}
+
+	private static (string Name, string ServerIp)[] BuildClassicDnsProviders(IEnumerable<string> ips)
+	{
+		ArgumentNullException.ThrowIfNull(ips);
+
+		return ips
+			.Where(static ip => !string.IsNullOrWhiteSpace(ip) && IPAddress.TryParse(ip, out var addr) && addr.AddressFamily == AddressFamily.InterNetwork)
+			.Distinct(StringComparer.OrdinalIgnoreCase)
+			.Select(static ip => ($"ClassicDNS-{ip}", ip))
+			.ToArray();
+	}
+
+	private async Task<(string? Ip, string Source)> QueryClassicDnsAsync(
+		string providerName,
+		string dnsServerIp,
+		string domain,
+		CancellationToken ct)
+	{
+		if (!IPAddress.TryParse(dnsServerIp, out var serverIp))
+			return (null, providerName);
+
+		var txId = (ushort)Random.Shared.Next(ushort.MinValue, ushort.MaxValue + 1);
+		var query = BuildDnsQueryPacket(domain, txId);
+		if (query.Length == 0)
+			return (null, providerName);
+
+		using var udp = new UdpClient(AddressFamily.InterNetwork);
+		udp.Connect(serverIp, 53);
+
+		using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+		cts.CancelAfter(DnsUdpTimeoutMs);
+
+		try
+		{
+			await udp.SendAsync(query, cts.Token).ConfigureAwait(false);
+			var result = await udp.ReceiveAsync(cts.Token).ConfigureAwait(false);
+
+			return TryExtractFirstARecord(result.Buffer, txId, out var ip)
+				? (ip, providerName)
+				: (null, providerName);
+		}
+		catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+		{
+			return (null, providerName);
+		}
+		catch (SocketException)
+		{
+			return (null, providerName);
+		}
+	}
+
+	private static byte[] BuildDnsQueryPacket(string domain, ushort txId)
+	{
+		var labels = domain.Split('.', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+		if (labels.Length == 0)
+			return [];
+
+		var questionLength = labels.Sum(static l => l.Length + 1) + 1 + 4;
+		var packet = new byte[12 + questionLength];
+
+		packet[0] = (byte)(txId >> 8);
+		packet[1] = (byte)(txId & 0xFF);
+		packet[2] = 0x01;
+		packet[3] = 0x00;
+		packet[5] = 0x01;
+
+		var pos = 12;
+		foreach (var label in labels)
+		{
+			if (label.Length is 0 or > 63)
+				return [];
+
+			var labelBytes = Encoding.ASCII.GetBytes(label);
+			packet[pos++] = (byte)labelBytes.Length;
+			Buffer.BlockCopy(labelBytes, 0, packet, pos, labelBytes.Length);
+			pos += labelBytes.Length;
+		}
+
+		packet[pos++] = 0;
+		packet[pos++] = 0;
+		packet[pos++] = 1;
+		packet[pos++] = 0;
+		packet[pos] = 1;
+
+		return packet;
+	}
+
+	private static bool TryExtractFirstARecord(byte[] response, ushort txId, out string ip)
+	{
+		ip = string.Empty;
+		if (response.Length < 12)
+			return false;
+
+		var respTxId = (ushort)((response[0] << 8) | response[1]);
+		if (respTxId != txId)
+			return false;
+
+		var qdCount = (response[4] << 8) | response[5];
+		var anCount = (response[6] << 8) | response[7];
+		if (anCount == 0)
+			return false;
+
+		var pos = 12;
+		for (var i = 0; i < qdCount; i++)
+		{
+			if (!SkipDnsName(response, ref pos))
+				return false;
+			if (pos + 4 > response.Length)
+				return false;
+			pos += 4;
+		}
+
+		for (var i = 0; i < anCount; i++)
+		{
+			if (!SkipDnsName(response, ref pos))
+				return false;
+			if (pos + 10 > response.Length)
+				return false;
+
+			var type = (response[pos] << 8) | response[pos + 1];
+			var dataLength = (response[pos + 8] << 8) | response[pos + 9];
+			pos += 10;
+
+			if (type == 1 && dataLength == 4 && pos + 4 <= response.Length)
+			{
+				ip = $"{response[pos]}.{response[pos + 1]}.{response[pos + 2]}.{response[pos + 3]}";
+				return true;
+			}
+
+			if (pos + dataLength > response.Length)
+				return false;
+			pos += dataLength;
+		}
+
+		return false;
+	}
+
+	private static bool SkipDnsName(byte[] buffer, ref int pos)
+	{
+		while (pos < buffer.Length)
+		{
+			var len = buffer[pos];
+			if (len == 0)
+			{
+				pos++;
+				return true;
+			}
+			if ((len & 0xC0) == 0xC0)
+			{
+				if (pos + 1 >= buffer.Length)
+					return false;
+				pos += 2;
+				return true;
+			}
+			if (pos + len >= buffer.Length)
+				return false;
+			pos += len + 1;
+		}
+
+		return false;
 	}
 
 	/// <summary>
@@ -641,3 +886,580 @@ internal sealed class IpFetchService : IDisposable
 		}
 	}
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

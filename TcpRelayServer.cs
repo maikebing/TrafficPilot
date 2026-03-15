@@ -70,6 +70,7 @@ internal sealed class TcpRelayServer
 	private async Task HandleClientAsync(TcpClient client, CancellationToken ct)
 	{
 		TcpClient? proxy = null;
+		string? targetText = null;
 		try
 		{
 			client.NoDelay = true;
@@ -104,7 +105,7 @@ internal sealed class TcpRelayServer
 			}
 
 			proxy = new TcpClient { NoDelay = true };
-			var targetText = DescribeTarget(domain, origDstAddr, origDstPort);
+			targetText = DescribeTarget(domain, origDstAddr, origDstPort);
 			var shouldProxy = !_domainRules.HasAnyRule || _domainRules.IsMatch(domain);
 			NetworkStream proxyStream;
 
@@ -127,7 +128,10 @@ internal sealed class TcpRelayServer
 			{
 				await proxy.ConnectAsync(new IPAddress(origDstAddr), origDstPort, ct);
 				proxyStream = proxy.GetStream();
-				LogInfo($"[direct] {targetText} (domain rule not matched)");
+				var directReason = domain is null && _domainRules.HasAnyRule
+					? "SNI not detected, bypassing proxy"
+					: "domain rule not matched";
+				LogInfo($"[direct] {targetText} ({directReason})");
 			}
 
 			if (firstLen > 0)
@@ -142,6 +146,7 @@ internal sealed class TcpRelayServer
 		catch (Exception ex) when (ex is not OperationCanceledException)
 		{
 			Interlocked.Increment(ref ProxiedFailed);
+			LogInfo($"[error] {targetText ?? "unknown"}: {ex.Message}");
 		}
 		finally
 		{

@@ -65,7 +65,7 @@ internal class ProxySettings
 	public uint  Port { get; set; } = 7890;
 
 	[JsonPropertyName("scheme")]
-	public string Scheme { get; set; } = "socks4";
+	public string Scheme { get; set; } = "socks5";
 }
 
 internal class TargetingSettings

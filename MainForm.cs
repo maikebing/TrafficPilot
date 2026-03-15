@@ -246,7 +246,7 @@ internal partial class MainForm : Form
 				Enabled = _chkProxyEnabled!.Checked,
 				Host = _cmbProxyHost!.Text,
 				Port = (ushort)_numProxyPort!.Value,
-				Scheme = _cmbProxyScheme!.SelectedItem?.ToString() ?? "socks4"
+				Scheme = _cmbProxyScheme!.SelectedItem?.ToString() ?? "socks5"
 			},
 			Targeting = new TargetingSettings
 			{
@@ -276,7 +276,7 @@ internal partial class MainForm : Form
 			GetDomainRulesFromUi(),
 			_cmbProxyHost!.Text,
 			(ushort)_numProxyPort!.Value,
-			_cmbProxyScheme!.SelectedItem?.ToString() ?? "socks4",
+			_cmbProxyScheme!.SelectedItem?.ToString() ?? "socks5",
 			_chkProxyEnabled!.Checked,
 			hostsEnabled,
 			_txtHostsUrl!.Text.Trim(),
@@ -289,7 +289,7 @@ internal partial class MainForm : Form
 		_chkProxyEnabled!.Checked = _currentConfig.Proxy?.Enabled ?? true;
 		_cmbProxyHost!.Text = _currentConfig.Proxy?.Host ?? "";
 		_numProxyPort!.Value = _currentConfig.Proxy?.Port ?? 7890;
-		_cmbProxyScheme!.SelectedItem = _currentConfig.Proxy?.Scheme ?? "socks4";
+		_cmbProxyScheme!.SelectedItem = _currentConfig.Proxy?.Scheme ?? "socks5";
 		_lblConfigFileValue!.Text = _activeConfigPath;
 
 		SetProcessNamesToUi(_currentConfig.Targeting?.ProcessNames);
@@ -782,13 +782,20 @@ internal partial class MainForm : Form
 			return;
 		}
 
-		var domains = GetRefreshDomainsFromUi();
+		var retryOnly = _chkRetestSlowOrTimeoutOnly?.Checked == true;
+		var domains = retryOnly
+			? GetDomainsForRetryFromResults()
+			: GetRefreshDomainsFromUi();
 
 		if (domains.Count == 0)
 		{
 			MessageBox.Show(
-				"No domains in the Refresh Domains list.",
-				"No Domains", MessageBoxButtons.OK, MessageBoxIcon.Information);
+				retryOnly
+					? "No timeout/high-latency domains available to retest."
+					: "No domains in the Refresh Domains list.",
+				retryOnly ? "No Retry Targets" : "No Domains",
+				MessageBoxButtons.OK,
+				MessageBoxIcon.Information);
 			return;
 		}
 
@@ -797,7 +804,7 @@ internal partial class MainForm : Form
 
 		try
 		{
-			await RunFetchCycleAsync(_ipFetchCts.Token);
+			await RunFetchCycleAsync(domains, _ipFetchCts.Token);
 		}
 		catch (OperationCanceledException)
 		{
@@ -812,10 +819,14 @@ internal partial class MainForm : Form
 	}
 
 	/// <summary>Resolves concrete domain IPs via DoH, updates the ListView, and pushes results to the running engine.</summary>
-	private async Task RunFetchCycleAsync(CancellationToken ct)
+	private Task RunFetchCycleAsync(CancellationToken ct)
 	{
 		var domains = GetRefreshDomainsFromUi();
+		return RunFetchCycleAsync(domains, ct);
+	}
 
+	private async Task RunFetchCycleAsync(IReadOnlyList<string> domains, CancellationToken ct)
+	{
 		if (domains.Count == 0)
 			return;
 
@@ -843,7 +854,7 @@ internal partial class MainForm : Form
 		using var service = new IpFetchService(
 				proxyHost: _currentConfig.Proxy?.Host,
 				proxyPort: (int)(_currentConfig.Proxy?.Port ?? 0),
-				proxyScheme: _currentConfig.Proxy?.Scheme ?? "socks4");
+				proxyScheme: _currentConfig.Proxy?.Scheme ?? "socks5");
 			await foreach (var result in service.FetchAllAsync(domains, ct))
 		{
 			if (result.Ip is not null && IPAddress.TryParse(result.Ip, out var addr))
@@ -1016,11 +1027,54 @@ internal partial class MainForm : Form
 			GetDomainRulesFromUi(),
 			_cmbProxyHost!.Text.Trim(),
 			(ushort)_numProxyPort!.Value,
-			_cmbProxyScheme!.SelectedItem?.ToString() ?? "socks4",
+			_cmbProxyScheme!.SelectedItem?.ToString() ?? "socks5",
 			ProxyEnabled: _chkProxyEnabled!.Checked,
 			HostsRedirectEnabled: _chkDNSRedirectEnabled?.Checked ?? (_rdoDnsInterception?.Checked == true || _rdoHostsFile?.Checked == true),
 			HostsRedirectUrl: _txtHostsUrl!.Text.Trim(),
 			HostsRedirectMode: GetHostsRedirectModeFromUI()
 		);
+	}
+
+	private List<string> GetDomainsForRetryFromResults()
+	{
+		if (_lvIpResults is null)
+			return [];
+
+		var domains = new List<string>();
+		foreach (ListViewItem item in _lvIpResults.Items)
+		{
+			if (item.SubItems.Count < 3)
+				continue;
+
+			var domain = TargetRuleNormalizer.NormalizeDomain(item.Text);
+			if (string.IsNullOrWhiteSpace(domain))
+				continue;
+
+			var latencyText = item.SubItems[2].Text.Trim();
+			var shouldRetry = item.ForeColor == Color.Red;
+
+			if (!shouldRetry && TryParseLatencyMs(latencyText, out var latencyMs))
+				shouldRetry = latencyMs >= 800;
+
+			if (!shouldRetry && (latencyText.Contains("Timeout", StringComparison.OrdinalIgnoreCase)
+				|| latencyText.Contains("Failed", StringComparison.OrdinalIgnoreCase)))
+				shouldRetry = true;
+
+			if (shouldRetry)
+				domains.Add(domain);
+		}
+
+		return domains
+			.Distinct(StringComparer.OrdinalIgnoreCase)
+			.ToList();
+	}
+
+	private static bool TryParseLatencyMs(string text, out long latencyMs)
+	{
+		latencyMs = -1;
+		if (!text.EndsWith(" ms", StringComparison.OrdinalIgnoreCase))
+			return false;
+
+		return long.TryParse(text[..^3].Trim(), out latencyMs);
 	}
 }

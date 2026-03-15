@@ -16,7 +16,7 @@ internal static class TargetRuleNormalizer
 		if (string.IsNullOrWhiteSpace(s))
 			return string.Empty;
 
-		s = s.Trim().ToLowerInvariant();
+		s = s.Trim();
 		return s.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) ? s : $"{s}.exe";
 	}
 
@@ -372,6 +372,8 @@ internal sealed record ProxyOptions(
 
 	internal static readonly string[] DefaultDomainRules =
 	[
+		"copilot.microsoft.com",
+		"*.copilot.microsoft.com",
 		"github.com",
 		"*.github.com",
 		"github.io",
@@ -436,7 +438,7 @@ internal sealed record ProxyOptions(
 		var domains = new HashSet<string>(DefaultDomainRules.Select(TargetRuleNormalizer.NormalizeDomain), StringComparer.OrdinalIgnoreCase);
 		string host = "host.docker.internal";
 		ushort port = 7890;
-		string scheme = "socks4";
+		string scheme = "socks5";
 
 		for (int i = 0; i < args.Length; i++)
 		{

@@ -1,4 +1,4 @@
-#nullable enable
+﻿#nullable enable
 using System.ComponentModel;
 using TrafficPilot.Properties;
 
@@ -102,6 +102,7 @@ partial class MainForm
 	private FlowLayoutPanel? _hostsRedirectBtnPanel;
 	private Button? _btnRefreshHosts;
 	private Button? _btnFetchIps;
+	private CheckBox? _chkRetestSlowOrTimeoutOnly;
 	private Label? _lblHostsStatus;
 	private ListView? _lvIpResults;
 	private Label? _lblRefreshDomains;
@@ -163,6 +164,7 @@ partial class MainForm
         _hostsRedirectBtnPanel = new FlowLayoutPanel();
         _btnRefreshHosts = new Button();
         _btnFetchIps = new Button();
+        _chkRetestSlowOrTimeoutOnly = new CheckBox();
         _lblHostsStatus = new Label();
         _autoFetchPanel = new FlowLayoutPanel();
         _chkAutoFetch = new CheckBox();
@@ -420,7 +422,7 @@ partial class MainForm
         // 
         _cmbProxyScheme.Dock = DockStyle.Fill;
         _cmbProxyScheme.DropDownStyle = ComboBoxStyle.DropDownList;
-        _cmbProxyScheme.Items.AddRange(new object[] { "socks4", "socks5", "http", "https" });
+        _cmbProxyScheme.Items.AddRange(new object[] { "socks5", "socks4", "http", "https" });
         _cmbProxyScheme.Location = new Point(165, 116);
         _cmbProxyScheme.Margin = new Padding(5);
         _cmbProxyScheme.Name = "_cmbProxyScheme";
@@ -459,7 +461,7 @@ partial class MainForm
         _txtProcesses.Location = new Point(3, 3);
         _txtProcesses.Multiline = true;
         _txtProcesses.Name = "_txtProcesses";
-        _txtProcesses.PlaceholderText = "每行一个进程名，例如:\r\ndevenv.exe\r\nservicehub*.exe";
+        _txtProcesses.PlaceholderText = "姣忚涓€涓繘绋嬪悕锛屼緥濡?\r\ndevenv.exe\r\nservicehub*.exe";
         _txtProcesses.ScrollBars = ScrollBars.Vertical;
         _txtProcesses.Size = new Size(583, 114);
         _txtProcesses.TabIndex = 0;
@@ -497,7 +499,7 @@ partial class MainForm
         _txtDomainRules.Location = new Point(3, 3);
         _txtDomainRules.Multiline = true;
         _txtDomainRules.Name = "_txtDomainRules";
-        _txtDomainRules.PlaceholderText = "每行一个域名规则，例如:\r\n*.github.com\r\nraw.githubusercontent.com";
+        _txtDomainRules.PlaceholderText = "姣忚涓€涓煙鍚嶈鍒欙紝渚嬪:\r\n*.github.com\r\nraw.githubusercontent.com";
         _txtDomainRules.ScrollBars = ScrollBars.Vertical;
         _txtDomainRules.Size = new Size(583, 114);
         _txtDomainRules.TabIndex = 0;
@@ -706,6 +708,7 @@ partial class MainForm
         _hostsRedirectBtnPanel.AutoSize = true;
         _hostsRedirectBtnPanel.Controls.Add(_btnRefreshHosts);
         _hostsRedirectBtnPanel.Controls.Add(_btnFetchIps);
+        _hostsRedirectBtnPanel.Controls.Add(_chkRetestSlowOrTimeoutOnly);
         _hostsRedirectBtnPanel.Dock = DockStyle.Fill;
         _hostsRedirectBtnPanel.Location = new Point(165, 82);
         _hostsRedirectBtnPanel.Margin = new Padding(5);
@@ -730,6 +733,16 @@ partial class MainForm
         _btnFetchIps.TabIndex = 1;
         _btnFetchIps.Text = "Fetch IPs via DoH";
         _btnFetchIps.Click += BtnFetchIps_Click;
+        // 
+        // _chkRetestSlowOrTimeoutOnly
+        // 
+        _chkRetestSlowOrTimeoutOnly.AutoSize = true;
+        _chkRetestSlowOrTimeoutOnly.Location = new Point(265, 7);
+        _chkRetestSlowOrTimeoutOnly.Margin = new Padding(3, 7, 3, 3);
+        _chkRetestSlowOrTimeoutOnly.Name = "_chkRetestSlowOrTimeoutOnly";
+        _chkRetestSlowOrTimeoutOnly.Size = new Size(245, 21);
+        _chkRetestSlowOrTimeoutOnly.TabIndex = 2;
+        _chkRetestSlowOrTimeoutOnly.Text = "Only retest timeout/high-latency domains";
         // 
         // _lblHostsStatus
         // 
@@ -805,7 +818,7 @@ partial class MainForm
         _txtRefreshDomains.Margin = new Padding(5);
         _txtRefreshDomains.Multiline = true;
         _txtRefreshDomains.Name = "_txtRefreshDomains";
-        _txtRefreshDomains.PlaceholderText = "每行一个域名，例如:\nalive.github.com\ngithub.com";
+        _txtRefreshDomains.PlaceholderText = "姣忚涓€涓煙鍚嶏紝渚嬪:\nalive.github.com\ngithub.com";
         _txtRefreshDomains.ScrollBars = ScrollBars.Vertical;
         _txtRefreshDomains.Size = new Size(589, 92);
         _txtRefreshDomains.TabIndex = 7;
@@ -1045,7 +1058,7 @@ partial class MainForm
         contribContentLabel.Name = "contribContentLabel";
         contribContentLabel.Size = new Size(290, 68);
         contribContentLabel.TabIndex = 5;
-        contribContentLabel.Text = "• Original Author: maikebing\n• Repository: github.com/maikebing/TrafficPilot\n• WinDivert: Windows Packet Divert library\n• Contributors: Community members and testers";
+        contribContentLabel.Text = "鈥?Original Author: maikebing\n鈥?Repository: github.com/maikebing/TrafficPilot\n鈥?WinDivert: Windows Packet Divert library\n鈥?Contributors: Community members and testers";
         // 
         // techLabel
         // 
@@ -1313,7 +1326,7 @@ partial class MainForm
     private RadioButton? _rdoHostsFile;
     private Label? _lblHostsFileWarning;
 
-    // ── Control initialization helpers ──────────────────────────────────────
+    // 鈹€鈹€ Control initialization helpers 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
     private void InitIpResultsColumns()
     {
@@ -1380,7 +1393,7 @@ partial class MainForm
 
         _lblHostsFileWarning = new Label
         {
-            Text = "⚠ Requires Administrator privileges. Creates backup before modifying.",
+            Text = "鈿?Requires Administrator privileges. Creates backup before modifying.",
             AutoSize = true,
             ForeColor = SystemColors.GrayText,
             Margin = new Padding(20, 0, 3, 3)
@@ -1410,17 +1423,17 @@ partial class MainForm
 
         if (_rdoHostsFile.Checked && !SystemHostsFileManager.HasWriteAccess())
         {
-            _lblHostsFileWarning.Text = "⚠ Administrator privileges required! Please restart TrafficPilot as Administrator.";
+            _lblHostsFileWarning.Text = "鈿?Administrator privileges required! Please restart TrafficPilot as Administrator.";
             _lblHostsFileWarning.ForeColor = Color.OrangeRed;
         }
         else if (_rdoHostsFile.Checked)
         {
-            _lblHostsFileWarning.Text = "✓ Administrator access confirmed. Backups will be created automatically.";
+            _lblHostsFileWarning.Text = "鉁?Administrator access confirmed. Backups will be created automatically.";
             _lblHostsFileWarning.ForeColor = Color.Green;
         }
     }
 
-    private Button CreateQuickConfigButton(string configPath)
+    private Button CreateQuickConfigButton(String configPath)
     {
         Button button = new();
         button.Margin = new Padding(2);
@@ -1472,3 +1485,20 @@ partial class MainForm
             item.ForeColor = Color.Red;
     }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
