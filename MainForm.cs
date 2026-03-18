@@ -208,6 +208,22 @@ internal partial class MainForm : Form
 		SaveConfig(_activeConfigPath, "Save Config");
 	}
 
+	private void BtnResetConfig_Click(object? sender, EventArgs e)
+	{
+		var result = MessageBox.Show(
+			"This will reset process rules, domain rules, and DNS refresh domains to their defaults. Continue?",
+			"Reset to Defaults",
+			MessageBoxButtons.YesNo,
+			MessageBoxIcon.Warning);
+
+		if (result != DialogResult.Yes)
+			return;
+
+		SetProcessNamesToUi(ProxyOptions.DefaultProcessNames);
+		SetDomainRulesToUi(ProxyOptions.DefaultDomainRules);
+		SetRefreshDomainsToUi(null);
+	}
+
 	private void BtnLoadConfig_Click(object? sender, EventArgs e)
 	{
 		using OpenFileDialog dialog = new();
