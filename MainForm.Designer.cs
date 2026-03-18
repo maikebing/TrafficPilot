@@ -190,6 +190,11 @@ partial class MainForm
         _dnsRedirectTab = new TabPage();
         _dnsRedirectPanel = new TableLayoutPanel();
         _chkDNSRedirectEnabled = new CheckBox();
+        _grpRedirectMode = new GroupBox();
+        _modePanelRedirectMode = new FlowLayoutPanel();
+        _rdoDnsInterception = new RadioButton();
+        _rdoHostsFile = new RadioButton();
+        _lblHostsFileWarning = new Label();
         _lblHostsUrl = new Label();
         _txtHostsUrl = new TextBox();
         _hostsRedirectBtnPanel = new FlowLayoutPanel();
@@ -829,7 +834,7 @@ partial class MainForm
         _dnsRedirectPanel.ColumnCount = 2;
         _dnsRedirectPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 150F));
         _dnsRedirectPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-        _dnsRedirectPanel.Controls.Add(_chkDNSRedirectEnabled, 0, 0);
+        _dnsRedirectPanel.Controls.Add(_grpRedirectMode, 0, 0);
         _dnsRedirectPanel.Controls.Add(_lblHostsUrl, 0, 1);
         _dnsRedirectPanel.Controls.Add(_txtHostsUrl, 1, 1);
         _dnsRedirectPanel.Controls.Add(_hostsRedirectBtnPanel, 1, 2);
@@ -853,16 +858,55 @@ partial class MainForm
         _dnsRedirectPanel.Size = new Size(769, 530);
         _dnsRedirectPanel.TabIndex = 0;
         // 
-        // _chkDNSRedirectEnabled
+        // _grpRedirectMode
         // 
-        _chkDNSRedirectEnabled.AutoSize = true;
-        _dnsRedirectPanel.SetColumnSpan(_chkDNSRedirectEnabled, 2);
-        _chkDNSRedirectEnabled.Location = new Point(13, 13);
-        _chkDNSRedirectEnabled.Margin = new Padding(3, 3, 3, 10);
-        _chkDNSRedirectEnabled.Name = "_chkDNSRedirectEnabled";
-        _chkDNSRedirectEnabled.Size = new Size(263, 21);
-        _chkDNSRedirectEnabled.TabIndex = 0;
-        _chkDNSRedirectEnabled.Text = "Enable  DNS Redirect (DNS interception)";
+        _dnsRedirectPanel.SetColumnSpan(_grpRedirectMode, 2);
+        _grpRedirectMode.AutoSize = true;
+        _grpRedirectMode.AutoSizeMode = AutoSizeMode.GrowAndShrink;
+        _grpRedirectMode.Dock = DockStyle.Fill;
+        _grpRedirectMode.Margin = new Padding(3, 3, 3, 10);
+        _grpRedirectMode.Name = "_grpRedirectMode";
+        _grpRedirectMode.Padding = new Padding(8, 5, 8, 8);
+        _grpRedirectMode.TabIndex = 0;
+        _grpRedirectMode.TabStop = false;
+        _grpRedirectMode.Text = "Redirect Mode";
+        // 
+        // _rdoDnsInterception
+        // 
+        _rdoDnsInterception.AutoSize = true;
+        _rdoDnsInterception.Checked = true;
+        _rdoDnsInterception.Margin = new Padding(3, 3, 3, 5);
+        _rdoDnsInterception.Name = "_rdoDnsInterception";
+        _rdoDnsInterception.TabIndex = 0;
+        _rdoDnsInterception.TabStop = true;
+        _rdoDnsInterception.Text = "DNS Interception (packet-level, no file modification)";
+        // 
+        // _rdoHostsFile
+        // 
+        _rdoHostsFile.AutoSize = true;
+        _rdoHostsFile.Margin = new Padding(3, 3, 3, 3);
+        _rdoHostsFile.Name = "_rdoHostsFile";
+        _rdoHostsFile.TabIndex = 1;
+        _rdoHostsFile.Text = "System Hosts File (write to C:\\Windows\\System32\\drivers\\etc\\hosts)";
+        // 
+        // _lblHostsFileWarning
+        // 
+        _lblHostsFileWarning.AutoSize = true;
+        _lblHostsFileWarning.ForeColor = SystemColors.GrayText;
+        _lblHostsFileWarning.Margin = new Padding(20, 0, 3, 3);
+        _lblHostsFileWarning.Name = "_lblHostsFileWarning";
+        _lblHostsFileWarning.Text = "⚠ Requires Administrator privileges. Creates backup before modifying.";
+        _lblHostsFileWarning.Visible = false;
+        _modePanelRedirectMode.AutoSize = true;
+        _modePanelRedirectMode.AutoSizeMode = AutoSizeMode.GrowAndShrink;
+        _modePanelRedirectMode.FlowDirection = FlowDirection.TopDown;
+        _modePanelRedirectMode.Dock = DockStyle.Fill;
+        _modePanelRedirectMode.Name = "_modePanelRedirectMode";
+        _modePanelRedirectMode.WrapContents = false;
+        _modePanelRedirectMode.Controls.Add(_rdoDnsInterception);
+        _modePanelRedirectMode.Controls.Add(_rdoHostsFile);
+        _modePanelRedirectMode.Controls.Add(_lblHostsFileWarning);
+        _grpRedirectMode.Controls.Add(_modePanelRedirectMode);
         // 
         // _lblHostsUrl
         // 
@@ -1549,6 +1593,7 @@ partial class MainForm
 
     // Hosts Redirect Mode Selection (dynamically created)
     private GroupBox? _grpRedirectMode;
+    private FlowLayoutPanel? _modePanelRedirectMode;
     private RadioButton? _rdoDnsInterception;
     private RadioButton? _rdoHostsFile;
     private Label? _lblHostsFileWarning;
@@ -1583,61 +1628,8 @@ partial class MainForm
 
     private void InitializeHostsRedirectModeUI()
     {
-        _grpRedirectMode = new GroupBox
-        {
-            Text = "Redirect Mode",
-            AutoSize = true,
-            AutoSizeMode = AutoSizeMode.GrowAndShrink,
-            Margin = new Padding(3, 3, 3, 10),
-            Padding = new Padding(8, 5, 8, 8)
-        };
-
-        var modePanel = new FlowLayoutPanel
-        {
-            AutoSize = true,
-            AutoSizeMode = AutoSizeMode.GrowAndShrink,
-            FlowDirection = FlowDirection.TopDown,
-            Dock = DockStyle.Fill,
-            WrapContents = false
-        };
-
-        _rdoDnsInterception = new RadioButton
-        {
-            Text = "DNS Interception (packet-level, no file modification)",
-            AutoSize = true,
-            Checked = true,
-            Margin = new Padding(3, 3, 3, 5)
-        };
-        _rdoDnsInterception.CheckedChanged += RdoDnsInterception_CheckedChanged;
-
-        _rdoHostsFile = new RadioButton
-        {
-            Text = "System Hosts File (write to C:\\Windows\\System32\\drivers\\etc\\hosts)",
-            AutoSize = true,
-            Margin = new Padding(3, 3, 3, 3)
-        };
-        _rdoHostsFile.CheckedChanged += RdoHostsFile_CheckedChanged;
-
-        _lblHostsFileWarning = new Label
-        {
-            Text = "鈿?Requires Administrator privileges. Creates backup before modifying.",
-            AutoSize = true,
-            ForeColor = SystemColors.GrayText,
-            Margin = new Padding(20, 0, 3, 3)
-        };
-
-        modePanel.Controls.Add(_rdoDnsInterception);
-        modePanel.Controls.Add(_rdoHostsFile);
-        modePanel.Controls.Add(_lblHostsFileWarning);
-        _grpRedirectMode.Controls.Add(modePanel);
-
-        if (_dnsRedirectPanel is not null)
-        {
-            _dnsRedirectPanel.Controls.Remove(_chkDNSRedirectEnabled);
-            _dnsRedirectPanel.Controls.Add(_grpRedirectMode, 0, 0);
-            _dnsRedirectPanel.SetColumnSpan(_grpRedirectMode, 2);
-        }
-
+        _rdoDnsInterception!.CheckedChanged += RdoDnsInterception_CheckedChanged;
+        _rdoHostsFile!.CheckedChanged += RdoHostsFile_CheckedChanged;
         UpdateHostsFileModeUI();
     }
 
