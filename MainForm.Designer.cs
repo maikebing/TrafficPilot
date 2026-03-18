@@ -182,6 +182,7 @@ partial class MainForm
         _configActionPanel = new TableLayoutPanel();
         _quickConfigPanel = new FlowLayoutPanel();
         _configBtnPanel = new FlowLayoutPanel();
+        btnResetConfig = new Button();
         _btnLoadConfig = new Button();
         _btnSaveConfigAs = new Button();
         _btnSaveConfig = new Button();
@@ -255,7 +256,6 @@ partial class MainForm
         _trayBottomSeparator = new ToolStripSeparator();
         _trayExitMenuItem = new ToolStripMenuItem();
         _notifyIcon = new NotifyIcon(components);
-        btnResetConfig = new Button();
         _mainPanel.SuspendLayout();
         _tabControl.SuspendLayout();
         _configTab.SuspendLayout();
@@ -780,6 +780,16 @@ partial class MainForm
         _configBtnPanel.Size = new Size(278, 36);
         _configBtnPanel.TabIndex = 18;
         _configBtnPanel.WrapContents = false;
+        // 
+        // btnResetConfig
+        // 
+        btnResetConfig.Location = new Point(210, 3);
+        btnResetConfig.Name = "btnResetConfig";
+        btnResetConfig.Size = new Size(65, 30);
+        btnResetConfig.TabIndex = 4;
+        btnResetConfig.Text = "Reset";
+        btnResetConfig.UseVisualStyleBackColor = true;
+        btnResetConfig.Click += BtnResetConfig_Click;
         // 
         // _btnLoadConfig
         // 
@@ -1535,16 +1545,6 @@ partial class MainForm
         _notifyIcon.Text = "TrafficPilot";
         _notifyIcon.Visible = true;
         _notifyIcon.DoubleClick += NotifyIcon_DoubleClick;
-        // 
-        // btnResetConfig
-        // 
-        btnResetConfig.Location = new Point(210, 3);
-        btnResetConfig.Name = "btnResetConfig";
-        btnResetConfig.Size = new Size(65, 30);
-        btnResetConfig.TabIndex = 4;
-        btnResetConfig.Text = "Reset";
-        btnResetConfig.UseVisualStyleBackColor = true;
-        btnResetConfig.Click += new EventHandler(BtnResetConfig_Click);
         // 
         // MainForm
         // 

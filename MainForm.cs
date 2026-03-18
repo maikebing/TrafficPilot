@@ -221,7 +221,7 @@ internal partial class MainForm : Form
 
 		SetProcessNamesToUi(ProxyOptions.DefaultProcessNames);
 		SetDomainRulesToUi(ProxyOptions.DefaultDomainRules);
-		SetRefreshDomainsToUi(null);
+		SetRefreshDomainsToUi(ProxyOptions.DefaultRefreshDomains);
 	}
 
 	private void BtnLoadConfig_Click(object? sender, EventArgs e)
