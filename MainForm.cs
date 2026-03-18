@@ -660,6 +660,7 @@ internal partial class MainForm : Form
 		}
 
 		_lblStats.Text = $"Redirected: {stats.Redirected} | Proxied: {stats.ProxiedOk} | Failed: {stats.ProxiedFail}";
+		lblBytes.Text = RedirectStats.FormatBytes(stats.Bytes);
 	}
 
 	private void ShowWindow()
