@@ -354,6 +354,7 @@ internal sealed record ProxyOptions(
 {
     internal static readonly string[] DefaultProcessNames =
 	[
+       // Visual Studio / IDE
 		"devenv.exe",
 		"blend.exe",
 		"servicehub*.exe",
@@ -364,6 +365,28 @@ internal sealed record ProxyOptions(
 		"devhub.exe",
 		"msbuild*.exe",
 		"vstest*.exe",
+        "code.exe",
+
+		// Git
+		"git.exe",
+		"git-remote-http.exe",
+		"git-remote-https.exe",
+		"git-lfs.exe",
+
+		// NuGet
+		"nuget.exe",
+		"dotnet.exe",
+
+		// Docker
+		"docker.exe",
+		"docker-compose.exe",
+		"docker desktop.exe",
+		"com.docker.cli.exe",
+		"com.docker.backend.exe",
+		"com.docker.build.exe",
+		"docker-credential-desktop.exe",
+
+		// Microsoft 365 / WebView
 		"m365copilot.exe",
 		"m365copilot_autostarter.exe",
 		"m365copilot_widget.exe",
@@ -372,6 +395,7 @@ internal sealed record ProxyOptions(
 
 	internal static readonly string[] DefaultDomainRules =
 	[
+        // Copilot / GitHub
 		"copilot.microsoft.com",
 		"*.copilot.microsoft.com",
 		"github.com",
@@ -385,11 +409,32 @@ internal sealed record ProxyOptions(
 		"*.githubcopilot.com",
 		"*.s3.amazonaws.com",
 		"*.fastly.net",
-		"vscode.dev"
+
+		// VS Code
+		"vscode.dev",
+		"*.vscode.dev",
+
+		// NuGet
+		"nuget.org",
+		"*.nuget.org",
+		"api.nuget.org",
+		"globalcdn.nuget.org",
+
+		// Docker
+		"docker.com",
+		"*.docker.com",
+		"docker.io",
+		"*.docker.io",
+		"auth.docker.io",
+		"hub.docker.com",
+		"index.docker.io",
+		"registry-1.docker.io",
+		"production.cloudflare.docker.com"
 	];
 
 	internal static readonly string[] DefaultRefreshDomains =
 	[
+     // GitHub / Copilot
 		"alive.github.com",
 		"api.github.com",
 		"api.individual.githubcopilot.com",
@@ -427,9 +472,25 @@ internal sealed record ProxyOptions(
 		"pipelines.actions.githubusercontent.com",
 		"raw.githubusercontent.com",
 		"user-images.githubusercontent.com",
-		"vscode.dev",
 		"education.github.com",
 		"private-user-images.githubusercontent.com",
+
+		// VS Code
+		"vscode.dev",
+
+		// NuGet
+		"api.nuget.org",
+		"globalcdn.nuget.org",
+		"nuget.org",
+		"www.nuget.org",
+
+		// Docker
+		"auth.docker.io",
+		"index.docker.io",
+		"registry-1.docker.io",
+		"production.cloudflare.docker.com",
+		"hub.docker.com",
+		"desktop.docker.com",
 	];
 
 	public static ProxyOptions? Parse(string[] args)

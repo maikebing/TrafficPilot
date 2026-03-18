@@ -141,7 +141,7 @@ internal sealed class ProxyEngine : IDisposable
 		if (_dnsInterceptor != null)
 			await _dnsInterceptor.StopAsync();
 
-		// Clean up hosts file entries if in hosts file mode
+        // Clean up hosts file entries if in hosts file mode
 		if (_options.HostsRedirectEnabled && 
 			(_options.HostsRedirectMode ?? "DnsInterception").Equals("HostsFile", StringComparison.OrdinalIgnoreCase))
 		{
@@ -149,11 +149,11 @@ internal sealed class ProxyEngine : IDisposable
 			{
 				SystemHostsFileManager.RemoveTrafficPilotEntries();
 				SystemHostsFileManager.FlushDnsCache();
-				LogInfo("Removed TrafficPilot entries from system hosts file");
+             LogInfo("Removed TrafficPilot entries from Windows/WSL hosts files");
 			}
 			catch (Exception ex)
 			{
-				LogInfo($"Warning: Failed to clean up hosts file: {ex.Message}");
+               LogInfo($"Warning: Failed to clean up Windows/WSL hosts files: {ex.Message}");
 			}
 		}
 	}
@@ -163,7 +163,7 @@ internal sealed class ProxyEngine : IDisposable
 	{
 		_hostsProvider?.BatchUpdate(updates);
 
-		// If in hosts file mode, also update the system hosts file
+     // If in hosts file mode, also update the Windows and WSL hosts files
 		if (_hostsProvider != null && 
 			(_options.HostsRedirectMode ?? "DnsInterception").Equals("HostsFile", StringComparison.OrdinalIgnoreCase))
 		{
@@ -171,11 +171,11 @@ internal sealed class ProxyEngine : IDisposable
 			{
 				SystemHostsFileManager.WriteHostsFile(_hostsProvider.GetHostsMap());
 				SystemHostsFileManager.FlushDnsCache();
-				LogInfo($"System hosts file refreshed ({_hostsProvider.HostCount} hosts)");
+             LogInfo($"Windows/WSL hosts files refreshed ({_hostsProvider.HostCount} hosts)");
 			}
 			catch (Exception ex)
 			{
-				LogInfo($"Warning: Failed to update hosts file: {ex.Message}");
+             LogInfo($"Warning: Failed to update Windows/WSL hosts files: {ex.Message}");
 			}
 		}
 	}
