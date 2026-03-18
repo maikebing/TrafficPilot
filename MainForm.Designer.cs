@@ -1542,8 +1542,9 @@ partial class MainForm
         btnResetConfig.Name = "btnResetConfig";
         btnResetConfig.Size = new Size(65, 30);
         btnResetConfig.TabIndex = 4;
-        btnResetConfig.Text = "Retset";
+        btnResetConfig.Text = "Reset";
         btnResetConfig.UseVisualStyleBackColor = true;
+        btnResetConfig.Click += new EventHandler(BtnResetConfig_Click);
         // 
         // MainForm
         // 
