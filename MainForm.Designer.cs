@@ -612,7 +612,7 @@ partial class MainForm
         _txtGistId.Dock = DockStyle.Fill;
         _txtGistId.Margin = new Padding(5);
         _txtGistId.Name = "_txtGistId";
-        _txtGistId.PlaceholderText = "Remote gist/snippet ID (filled automatically after first push)";
+        _txtGistId.PlaceholderText = "Optional – auto-discovered or filled automatically after first push";
         _txtGistId.Size = new Size(589, 23);
         _txtGistId.TabIndex = 21;
         // 
