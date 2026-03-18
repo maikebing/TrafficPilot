@@ -50,6 +50,7 @@ partial class MainForm
 	private TextBox? _txtConfigName;
 
 	// Config tab - Proxy Host
+	private CheckBox? _chkLocalProxy;
 	private Label? _lblProxyHost;
 	private ComboBox? _cmbProxyHost;
 
@@ -153,6 +154,7 @@ partial class MainForm
         _lblConfigName = new Label();
         _txtConfigName = new TextBox();
         _proxySettingsPanel = new TableLayoutPanel();
+        _chkLocalProxy = new CheckBox();
         _lblProxyHost = new Label();
         _cmbProxyHost = new ComboBox();
         _lblProxyPort = new Label();
@@ -410,20 +412,22 @@ partial class MainForm
         // 
         // _proxySettingsPanel
         // 
-        _proxySettingsPanel.ColumnCount = 6;
+        _proxySettingsPanel.ColumnCount = 7;
         _configPanel.SetColumnSpan(_proxySettingsPanel, 2);
-        _proxySettingsPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 105F));
+        _proxySettingsPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 95F));
+        _proxySettingsPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 45F));
         _proxySettingsPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
         _proxySettingsPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 50F));
         _proxySettingsPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 78F));
         _proxySettingsPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 68F));
         _proxySettingsPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 118F));
-        _proxySettingsPanel.Controls.Add(_lblProxyHost, 0, 0);
-        _proxySettingsPanel.Controls.Add(_cmbProxyHost, 1, 0);
-        _proxySettingsPanel.Controls.Add(_lblProxyPort, 2, 0);
-        _proxySettingsPanel.Controls.Add(_numProxyPort, 3, 0);
-        _proxySettingsPanel.Controls.Add(_lblProxyScheme, 4, 0);
-        _proxySettingsPanel.Controls.Add(_cmbProxyScheme, 5, 0);
+        _proxySettingsPanel.Controls.Add(_chkLocalProxy, 0, 0);
+        _proxySettingsPanel.Controls.Add(_lblProxyHost, 1, 0);
+        _proxySettingsPanel.Controls.Add(_cmbProxyHost, 2, 0);
+        _proxySettingsPanel.Controls.Add(_lblProxyPort, 3, 0);
+        _proxySettingsPanel.Controls.Add(_numProxyPort, 4, 0);
+        _proxySettingsPanel.Controls.Add(_lblProxyScheme, 5, 0);
+        _proxySettingsPanel.Controls.Add(_cmbProxyScheme, 6, 0);
         _proxySettingsPanel.Dock = DockStyle.Fill;
         _proxySettingsPanel.Location = new Point(13, 45);
         _proxySettingsPanel.Margin = new Padding(3, 0, 3, 3);
@@ -433,24 +437,36 @@ partial class MainForm
         _proxySettingsPanel.Size = new Size(743, 33);
         _proxySettingsPanel.TabIndex = 1;
         // 
+        // _chkLocalProxy
+        // 
+        _chkLocalProxy.Anchor = AnchorStyles.Left | AnchorStyles.Right;
+        _chkLocalProxy.AutoSize = false;
+        _chkLocalProxy.Location = new Point(3, 6);
+        _chkLocalProxy.Margin = new Padding(3, 6, 3, 3);
+        _chkLocalProxy.Name = "_chkLocalProxy";
+        _chkLocalProxy.Size = new Size(89, 21);
+        _chkLocalProxy.TabIndex = 0;
+        _chkLocalProxy.Text = "Local Proxy";
+        _chkLocalProxy.CheckedChanged += ChkLocalProxy_CheckedChanged;
+        // 
         // _lblProxyHost
         // 
         _lblProxyHost.Anchor = AnchorStyles.Left | AnchorStyles.Right;
-        _lblProxyHost.Location = new Point(3, 6);
+        _lblProxyHost.Location = new Point(98, 6);
         _lblProxyHost.Name = "_lblProxyHost";
-        _lblProxyHost.Size = new Size(99, 23);
-        _lblProxyHost.TabIndex = 0;
-        _lblProxyHost.Text = "Proxy Host:";
+        _lblProxyHost.Size = new Size(39, 23);
+        _lblProxyHost.TabIndex = 1;
+        _lblProxyHost.Text = "Host:";
         _lblProxyHost.TextAlign = ContentAlignment.MiddleRight;
         // 
         // _cmbProxyHost
         // 
         _cmbProxyHost.Dock = DockStyle.Fill;
-        _cmbProxyHost.Location = new Point(108, 5);
+        _cmbProxyHost.Location = new Point(143, 5);
         _cmbProxyHost.Margin = new Padding(3, 5, 3, 5);
         _cmbProxyHost.Name = "_cmbProxyHost";
-        _cmbProxyHost.Size = new Size(318, 25);
-        _cmbProxyHost.TabIndex = 1;
+        _cmbProxyHost.Size = new Size(310, 25);
+        _cmbProxyHost.TabIndex = 2;
         // 
         // _lblProxyPort
         // 
@@ -458,7 +474,7 @@ partial class MainForm
         _lblProxyPort.Location = new Point(432, 6);
         _lblProxyPort.Name = "_lblProxyPort";
         _lblProxyPort.Size = new Size(44, 23);
-        _lblProxyPort.TabIndex = 2;
+        _lblProxyPort.TabIndex = 3;
         _lblProxyPort.Text = "Port:";
         _lblProxyPort.TextAlign = ContentAlignment.MiddleRight;
         // 
@@ -470,7 +486,7 @@ partial class MainForm
         _numProxyPort.Maximum = new decimal(new int[] { 65535, 0, 0, 0 });
         _numProxyPort.Name = "_numProxyPort";
         _numProxyPort.Size = new Size(72, 23);
-        _numProxyPort.TabIndex = 3;
+        _numProxyPort.TabIndex = 4;
         _numProxyPort.Value = new decimal(new int[] { 7890, 0, 0, 0 });
         // 
         // _lblProxyScheme
@@ -479,7 +495,7 @@ partial class MainForm
         _lblProxyScheme.Location = new Point(560, 6);
         _lblProxyScheme.Name = "_lblProxyScheme";
         _lblProxyScheme.Size = new Size(62, 23);
-        _lblProxyScheme.TabIndex = 4;
+        _lblProxyScheme.TabIndex = 5;
         _lblProxyScheme.Text = "Scheme:";
         _lblProxyScheme.TextAlign = ContentAlignment.MiddleRight;
         // 
@@ -492,7 +508,7 @@ partial class MainForm
         _cmbProxyScheme.Margin = new Padding(3, 5, 5, 5);
         _cmbProxyScheme.Name = "_cmbProxyScheme";
         _cmbProxyScheme.Size = new Size(110, 25);
-        _cmbProxyScheme.TabIndex = 5;
+        _cmbProxyScheme.TabIndex = 6;
         // 
         // _lblProcesses
         // 

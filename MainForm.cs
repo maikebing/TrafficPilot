@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Net;
+using System.Net.NetworkInformation;
 using System.Reflection;
 using TrafficPilot.Properties;
 
@@ -27,6 +28,9 @@ internal partial class MainForm : Form
 	private CancellationTokenSource? _ipFetchCts;
 	private CancellationTokenSource? _autoFetchCts;
 	private Task? _autoFetchTask;
+
+	private bool _localProxySubscribed;
+	private CancellationTokenSource? _networkChangeCts;
 
 	public MainForm(bool startMinimized = false)
 	{
@@ -371,7 +375,8 @@ internal partial class MainForm : Form
 				Enabled = _chkProxyEnabled!.Checked,
 				Host = _cmbProxyHost!.Text,
 				Port = (ushort)_numProxyPort!.Value,
-				Scheme = _cmbProxyScheme!.SelectedItem?.ToString() ?? "socks5"
+				Scheme = _cmbProxyScheme!.SelectedItem?.ToString() ?? "socks5",
+				IsLocalProxy = _chkLocalProxy!.Checked
 			},
 			Targeting = new TargetingSettings
 			{
@@ -435,6 +440,7 @@ internal partial class MainForm : Form
 		_cmbProxyHost!.Text = _currentConfig.Proxy?.Host ?? "";
 		_numProxyPort!.Value = _currentConfig.Proxy?.Port ?? 7890;
 		_cmbProxyScheme!.SelectedItem = _currentConfig.Proxy?.Scheme ?? "socks5";
+		_chkLocalProxy!.Checked = _currentConfig.Proxy?.IsLocalProxy ?? false;
 		_lblConfigFileValue!.Text = _activeConfigPath;
 
 		SetProcessNamesToUi(_currentConfig.Targeting?.ProcessNames);
@@ -788,6 +794,13 @@ internal partial class MainForm : Form
 	{
 		if (disposing)
 		{
+			if (_localProxySubscribed)
+			{
+				NetworkChange.NetworkAddressChanged -= OnNetworkAddressChanged;
+				_localProxySubscribed = false;
+			}
+			_networkChangeCts?.Cancel();
+			_networkChangeCts?.Dispose();
 			_logBuffer?.Dispose();
 			_engine?.Dispose();
 			components?.Dispose();
@@ -1059,6 +1072,65 @@ internal partial class MainForm : Form
 	private void ChkAutoStartProxy_CheckedChanged(object? sender, EventArgs e)
 	{
 		UpdateTrayMenuState();
+	}
+
+	private void ChkLocalProxy_CheckedChanged(object? sender, EventArgs e)
+	{
+		if (_chkLocalProxy!.Checked)
+		{
+			UpdateProxyHostToLocalIp();
+			if (!_localProxySubscribed)
+			{
+				NetworkChange.NetworkAddressChanged += OnNetworkAddressChanged;
+				_localProxySubscribed = true;
+			}
+		}
+		else
+		{
+			if (_localProxySubscribed)
+			{
+				NetworkChange.NetworkAddressChanged -= OnNetworkAddressChanged;
+				_localProxySubscribed = false;
+			}
+			_networkChangeCts?.Cancel();
+		}
+	}
+
+	private void OnNetworkAddressChanged(object? sender, EventArgs e)
+	{
+		if (!(_chkLocalProxy?.Checked ?? false))
+			return;
+
+		// Cancel any pending update and schedule a fresh one after a short delay
+		// so the OS finishes reconfiguring the interface before we query IP addresses
+		_networkChangeCts?.Cancel();
+		_networkChangeCts?.Dispose();
+		var cts = new CancellationTokenSource();
+		_networkChangeCts = cts;
+
+		Task.Delay(1000, cts.Token).ContinueWith(t =>
+		{
+			if (t.IsCanceled || IsDisposed) return;
+			try
+			{
+				Invoke(UpdateProxyHostToLocalIp);
+			}
+			catch (ObjectDisposedException) { }
+			catch (InvalidOperationException) { }
+		}, TaskScheduler.Default);
+	}
+
+	private void UpdateProxyHostToLocalIp()
+	{
+		var ips = LocalNetworkHelper.GetLocalIpsWithGateway();
+		if (ips.Count == 0)
+			return;
+
+		var firstIp = ips[0];
+		_cmbProxyHost!.Items.Clear();
+		foreach (var ip in ips)
+			_cmbProxyHost.Items.Add(ip);
+		_cmbProxyHost.Text = firstIp;
 	}
 
 	private async void BtnRefreshHosts_Click(object? sender, EventArgs e)
