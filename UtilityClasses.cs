@@ -1,6 +1,8 @@
 using System.Diagnostics;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
+using System.Runtime.InteropServices;
+using System.Text;
 using System.Text.RegularExpressions;
 
 namespace TrafficPilot;
@@ -592,5 +594,122 @@ internal static class LocalNetworkHelper
 		}
 
 		return result;
+	}
+}
+
+// ════════════════════════════════════════════════════════════════
+//  Windows Credential Manager helper (advapi32 P/Invoke)
+// ════════════════════════════════════════════════════════════════
+
+internal static class CredentialManager
+{
+	private const int CredTypeGeneric = 1;
+	private const int CredPersistLocalMachine = 2;
+
+	[StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+	private struct NativeCredential
+	{
+		public uint Flags;
+		public uint Type;
+		public IntPtr TargetName;
+		public IntPtr Comment;
+		public System.Runtime.InteropServices.ComTypes.FILETIME LastWritten;
+		public uint CredentialBlobSize;
+		public IntPtr CredentialBlob;
+		public uint Persist;
+		public uint AttributeCount;
+		public IntPtr Attributes;
+		public IntPtr TargetAlias;
+		public IntPtr UserName;
+	}
+
+	[DllImport("advapi32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+	[return: MarshalAs(UnmanagedType.Bool)]
+	private static extern bool CredWriteW(ref NativeCredential userCredential, uint flags);
+
+	[DllImport("advapi32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+	[return: MarshalAs(UnmanagedType.Bool)]
+	private static extern bool CredReadW(string target, uint type, uint reservedFlag, out IntPtr credentialPtr);
+
+	[DllImport("advapi32.dll", SetLastError = true)]
+	[return: MarshalAs(UnmanagedType.Bool)]
+	private static extern bool CredDeleteW([MarshalAs(UnmanagedType.LPWStr)] string target, uint type, uint flags);
+
+	[DllImport("advapi32.dll", SetLastError = true)]
+	private static extern void CredFree(IntPtr cred);
+
+	/// <summary>Stores a secret in Windows Credential Manager under the given target name.</summary>
+	public static void SaveToken(string targetName, string token)
+	{
+		ArgumentNullException.ThrowIfNull(targetName);
+		ArgumentNullException.ThrowIfNull(token);
+
+		byte[] blob = Encoding.Unicode.GetBytes(token);
+
+		var cred = new NativeCredential
+		{
+			Type = CredTypeGeneric,
+			TargetName = Marshal.StringToCoTaskMemUni(targetName),
+			CredentialBlobSize = (uint)blob.Length,
+			CredentialBlob = Marshal.AllocCoTaskMem(blob.Length),
+			Persist = CredPersistLocalMachine,
+			UserName = Marshal.StringToCoTaskMemUni(Environment.UserName)
+		};
+
+		try
+		{
+			Marshal.Copy(blob, 0, cred.CredentialBlob, blob.Length);
+			if (!CredWriteW(ref cred, 0))
+				throw new InvalidOperationException(
+					$"CredWriteW failed with error {Marshal.GetLastWin32Error()}");
+		}
+		finally
+		{
+			Marshal.FreeCoTaskMem(cred.TargetName);
+			Marshal.FreeCoTaskMem(cred.CredentialBlob);
+			Marshal.FreeCoTaskMem(cred.UserName);
+		}
+	}
+
+	/// <summary>Reads a secret from Windows Credential Manager; returns <see langword="null"/> if not found.</summary>
+	public static string? LoadToken(string targetName)
+	{
+		ArgumentNullException.ThrowIfNull(targetName);
+
+		if (!CredReadW(targetName, CredTypeGeneric, 0, out IntPtr credPtr))
+			return null;
+
+		try
+		{
+			var native = Marshal.PtrToStructure<NativeCredential>(credPtr);
+			if (native.CredentialBlobSize == 0 || native.CredentialBlob == IntPtr.Zero)
+				return string.Empty;
+
+			byte[] blob = new byte[native.CredentialBlobSize];
+			Marshal.Copy(native.CredentialBlob, blob, 0, blob.Length);
+			return Encoding.Unicode.GetString(blob);
+		}
+		finally
+		{
+			CredFree(credPtr);
+		}
+	}
+
+	/// <summary>Deletes a stored credential; silently succeeds if it does not exist.</summary>
+	public static void DeleteToken(string targetName)
+	{
+		ArgumentNullException.ThrowIfNull(targetName);
+		CredDeleteW(targetName, CredTypeGeneric, 0);
+	}
+
+	/// <summary>Returns the Credential Manager target name for a given sync provider.</summary>
+	public static string GetTargetName(string provider)
+	{
+		ArgumentNullException.ThrowIfNull(provider);
+		// Only allow known providers to prevent unexpected credential target names
+		if (!provider.Equals("GitHub", StringComparison.Ordinal) &&
+			!provider.Equals("Gitee", StringComparison.Ordinal))
+			throw new ArgumentException($"Unknown sync provider: {provider}", nameof(provider));
+		return $"TrafficPilot_ConfigSync_{provider}";
 	}
 }

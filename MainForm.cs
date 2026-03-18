@@ -270,9 +270,17 @@ internal partial class MainForm : Form
 	{
 		string provider = _cmbSyncProvider!.SelectedItem?.ToString() ?? "GitHub";
 		string token = _txtSyncToken!.Text.Trim();
-		if (string.IsNullOrEmpty(token) && provider == "GitHub")
+
+		// Save token to Windows Credential Manager (never in config file)
+		string targetName = CredentialManager.GetTargetName(provider);
+		if (string.IsNullOrEmpty(token))
+			CredentialManager.DeleteToken(targetName);
+		else
+			CredentialManager.SaveToken(targetName, token);
+
+		if (provider == "GitHub" && string.IsNullOrEmpty(token))
 			return null;
-		return new ConfigSyncSettings { Provider = provider, Token = token };
+		return new ConfigSyncSettings { Provider = provider };
 	}
 
 	private ProxyOptions BuildProxyOptions()
@@ -315,7 +323,7 @@ internal partial class MainForm : Form
 		// Load sync settings
 		string syncProvider = _currentConfig.ConfigSync?.Provider ?? "GitHub";
 		_cmbSyncProvider!.SelectedItem = _cmbSyncProvider.Items.Contains(syncProvider) ? syncProvider : "GitHub";
-		_txtSyncToken!.Text = _currentConfig.ConfigSync?.Token ?? string.Empty;
+		_txtSyncToken!.Text = CredentialManager.LoadToken(CredentialManager.GetTargetName(syncProvider)) ?? string.Empty;
 
 		// 加载hosts redirect模式
 		string mode = _currentConfig.HostsRedirect?.Mode ?? "DnsInterception";

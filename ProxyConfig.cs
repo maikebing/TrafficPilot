@@ -99,9 +99,6 @@ internal class ConfigSyncSettings
 {
 	[JsonPropertyName("provider")]
 	public string Provider { get; set; } = "GitHub"; // "GitHub" or "Gitee"
-
-	[JsonPropertyName("token")]
-	public string Token { get; set; } = string.Empty;
 }
 
 internal sealed class ProxyConfigManager
