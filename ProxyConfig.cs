@@ -69,6 +69,9 @@ internal class ProxySettings
 
 	[JsonPropertyName("scheme")]
 	public string Scheme { get; set; } = "socks5";
+
+	[JsonPropertyName("isLocalProxy")]
+	public bool IsLocalProxy { get; set; } = false;
 }
 
 internal class TargetingSettings
