@@ -28,6 +28,9 @@ internal class ProxyConfigModel
 	[JsonPropertyName("autoStartProxy")]
 	public bool AutoStartProxy { get; set; } = false;
 
+	[JsonPropertyName("configSync")]
+	public ConfigSyncSettings? ConfigSync { get; set; }
+
 	public ProxyConfigModel() { }
 
 	public ProxyConfigModel(ProxyOptions opts)
@@ -90,6 +93,16 @@ internal class HostsRedirectSettings
 
 	[JsonPropertyName("refreshDomains")]
 	public List<string> RefreshDomains { get; set; } = [];
+}
+
+internal class ConfigSyncSettings
+{
+	[JsonPropertyName("provider")]
+	public string Provider { get; set; } = "GitHub"; // "GitHub" or "Gitee"
+
+	[JsonPropertyName("gistId")]
+	[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+	public string? GistId { get; set; } // Remote gist / snippet ID — not sensitive, stored in config
 }
 
 internal sealed class ProxyConfigManager
