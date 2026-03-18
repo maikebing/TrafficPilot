@@ -279,6 +279,7 @@ internal sealed class ProxyEngine : IDisposable
 				WinDivertNative.WinDivertHelperCalcChecksums(packet, recvLen, ref addr, 0UL);
 				WinDivertNative.WinDivertSend(_winDivertHandle, packet, recvLen, out _, ref addr);
 				_stats.Redirected++;
+				_stats.Bytes += recvLen;
 				_stats.ProxiedOk = Interlocked.Read(ref _relay!.ProxiedSuccess);
 				_stats.ProxiedFail = Interlocked.Read(ref _relay.ProxiedFailed);
 

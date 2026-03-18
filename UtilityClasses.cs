@@ -317,6 +317,22 @@ internal sealed class RedirectStats
 	public long InboundRewritten;
 	public long ProxiedOk;
 	public long ProxiedFail;
+	public long Bytes;
+
+	public static string FormatBytes(long bytes)
+	{
+		const long KB = 1024L;
+		const long MB = 1024L * 1024;
+		const long GB = 1024L * 1024 * 1024;
+
+		if (bytes >= GB)
+			return $"{bytes / (double)GB:F2} GB";
+		if (bytes >= MB)
+			return $"{bytes / (double)MB:F2} MB";
+		if (bytes >= KB)
+			return $"{bytes / (double)KB:F2} KB";
+		return $"{bytes} B";
+	}
 }
 
 // ════════════════════════════════════════════════════════════════
