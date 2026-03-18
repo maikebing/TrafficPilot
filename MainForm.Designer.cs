@@ -80,6 +80,12 @@ partial class MainForm
 	private CheckBox? _chkStartOnBoot;
 	private CheckBox? _chkAutoStartProxy;
 
+	// Config tab - Sync Settings
+	private Label? _lblSyncProvider;
+	private ComboBox? _cmbSyncProvider;
+	private Label? _lblSyncToken;
+	private TextBox? _txtSyncToken;
+
 	// Config tab - Buttons
 	private TableLayoutPanel? _configActionPanel;
 	private FlowLayoutPanel? _configBtnPanel;
@@ -147,6 +153,10 @@ partial class MainForm
         _txtDomainRules = new TextBox();
         _lblConfigFile = new Label();
         _lblConfigFileValue = new Label();
+        _lblSyncProvider = new Label();
+        _cmbSyncProvider = new ComboBox();
+        _lblSyncToken = new Label();
+        _txtSyncToken = new TextBox();
         _startupOptionsPanel = new FlowLayoutPanel();
         _chkStartOnBoot = new CheckBox();
         _chkAutoStartProxy = new CheckBox();
@@ -304,19 +314,25 @@ partial class MainForm
         _configPanel.Controls.Add(_domainRulesPanel, 1, 5);
         _configPanel.Controls.Add(_lblConfigFile, 0, 6);
         _configPanel.Controls.Add(_lblConfigFileValue, 1, 6);
-        _configPanel.Controls.Add(_startupOptionsPanel, 0, 7);
-        _configPanel.Controls.Add(_configActionPanel, 0, 8);
+        _configPanel.Controls.Add(_lblSyncProvider, 0, 7);
+        _configPanel.Controls.Add(_cmbSyncProvider, 1, 7);
+        _configPanel.Controls.Add(_lblSyncToken, 0, 8);
+        _configPanel.Controls.Add(_txtSyncToken, 1, 8);
+        _configPanel.Controls.Add(_startupOptionsPanel, 0, 9);
+        _configPanel.Controls.Add(_configActionPanel, 0, 10);
         _configPanel.Dock = DockStyle.Fill;
         _configPanel.Location = new Point(0, 0);
         _configPanel.Name = "_configPanel";
         _configPanel.Padding = new Padding(10);
-        _configPanel.RowCount = 9;
+        _configPanel.RowCount = 11;
         _configPanel.RowStyles.Add(new RowStyle());
         _configPanel.RowStyles.Add(new RowStyle());
         _configPanel.RowStyles.Add(new RowStyle());
         _configPanel.RowStyles.Add(new RowStyle());
         _configPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 50F));
         _configPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 50F));
+        _configPanel.RowStyles.Add(new RowStyle());
+        _configPanel.RowStyles.Add(new RowStyle());
         _configPanel.RowStyles.Add(new RowStyle());
         _configPanel.RowStyles.Add(new RowStyle());
         _configPanel.RowStyles.Add(new RowStyle());
@@ -525,6 +541,44 @@ partial class MainForm
         _lblConfigFileValue.Size = new Size(589, 23);
         _lblConfigFileValue.TabIndex = 15;
         _lblConfigFileValue.TextAlign = ContentAlignment.MiddleLeft;
+        // 
+        // _lblSyncProvider
+        // 
+        _lblSyncProvider.Anchor = AnchorStyles.Left | AnchorStyles.Right;
+        _lblSyncProvider.Name = "_lblSyncProvider";
+        _lblSyncProvider.Size = new Size(144, 23);
+        _lblSyncProvider.TabIndex = 16;
+        _lblSyncProvider.Text = "Sync Provider:";
+        _lblSyncProvider.TextAlign = ContentAlignment.MiddleRight;
+        // 
+        // _cmbSyncProvider
+        // 
+        _cmbSyncProvider.Dock = DockStyle.Fill;
+        _cmbSyncProvider.DropDownStyle = ComboBoxStyle.DropDownList;
+        _cmbSyncProvider.Items.AddRange(new object[] { "GitHub", "Gitee" });
+        _cmbSyncProvider.Margin = new Padding(5);
+        _cmbSyncProvider.Name = "_cmbSyncProvider";
+        _cmbSyncProvider.Size = new Size(589, 25);
+        _cmbSyncProvider.TabIndex = 17;
+        // 
+        // _lblSyncToken
+        // 
+        _lblSyncToken.Anchor = AnchorStyles.Left | AnchorStyles.Right;
+        _lblSyncToken.Name = "_lblSyncToken";
+        _lblSyncToken.Size = new Size(144, 23);
+        _lblSyncToken.TabIndex = 18;
+        _lblSyncToken.Text = "Sync Token:";
+        _lblSyncToken.TextAlign = ContentAlignment.MiddleRight;
+        // 
+        // _txtSyncToken
+        // 
+        _txtSyncToken.Dock = DockStyle.Fill;
+        _txtSyncToken.Margin = new Padding(5);
+        _txtSyncToken.Name = "_txtSyncToken";
+        _txtSyncToken.PasswordChar = '●';
+        _txtSyncToken.PlaceholderText = "Enter GitHub or Gitee personal access token";
+        _txtSyncToken.Size = new Size(589, 23);
+        _txtSyncToken.TabIndex = 19;
         // 
         // _startupOptionsPanel
         // 

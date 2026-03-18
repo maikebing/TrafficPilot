@@ -261,8 +261,18 @@ internal partial class MainForm : Form
 				RefreshDomains = GetRefreshDomainsFromUi()
 			},
 			StartOnBoot = _chkStartOnBoot!.Checked,
-			AutoStartProxy = _chkAutoStartProxy!.Checked
+			AutoStartProxy = _chkAutoStartProxy!.Checked,
+			ConfigSync = BuildConfigSyncSettings()
 		};
+	}
+
+	private ConfigSyncSettings? BuildConfigSyncSettings()
+	{
+		string provider = _cmbSyncProvider!.SelectedItem?.ToString() ?? "GitHub";
+		string token = _txtSyncToken!.Text.Trim();
+		if (string.IsNullOrEmpty(token) && provider == "GitHub")
+			return null;
+		return new ConfigSyncSettings { Provider = provider, Token = token };
 	}
 
 	private ProxyOptions BuildProxyOptions()
@@ -301,6 +311,11 @@ internal partial class MainForm : Form
 		_chkStartOnBoot!.Checked = StartupManager.IsEnabled();
 		_chkAutoStartProxy!.Checked = _currentConfig.AutoStartProxy;
 		_txtConfigName!.Text = _currentConfig.ConfigName;
+
+		// Load sync settings
+		string syncProvider = _currentConfig.ConfigSync?.Provider ?? "GitHub";
+		_cmbSyncProvider!.SelectedItem = _cmbSyncProvider.Items.Contains(syncProvider) ? syncProvider : "GitHub";
+		_txtSyncToken!.Text = _currentConfig.ConfigSync?.Token ?? string.Empty;
 
 		// 加载hosts redirect模式
 		string mode = _currentConfig.HostsRedirect?.Mode ?? "DnsInterception";
