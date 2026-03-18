@@ -236,6 +236,107 @@ internal partial class MainForm : Form
 		SaveConfig(dialog.FileName, "Save Config");
 	}
 
+	private async void BtnSyncPush_Click(object? sender, EventArgs e)
+	{
+		string provider = _cmbSyncProvider!.SelectedItem?.ToString() ?? "GitHub";
+		string token = _txtSyncToken!.Text.Trim();
+		string? gistId = _txtGistId!.Text.Trim();
+		if (string.IsNullOrEmpty(gistId)) gistId = null;
+
+		if (string.IsNullOrEmpty(token))
+		{
+			MessageBox.Show("Please enter a personal access token before pushing.", "Sync Error",
+				MessageBoxButtons.OK, MessageBoxIcon.Warning);
+			return;
+		}
+
+		_btnSyncPush!.Enabled = false;
+		_btnSyncPull!.Enabled = false;
+
+		try
+		{
+			// Save current config to a JSON string
+			var model = BuildConfigModel();
+			var json = System.Text.Json.JsonSerializer.Serialize(model,
+				new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+
+			using var syncProvider = ConfigSyncProviderFactory.Create(provider, token);
+			string newId = await syncProvider.PushAsync(json, gistId).ConfigureAwait(true);
+
+			// Persist the returned gist ID back to the config
+			_txtGistId.Text = newId;
+			_currentConfig.ConfigSync = new ConfigSyncSettings { Provider = provider, GistId = newId };
+			_configManager.Save(_currentConfig, _activeConfigPath);
+
+			MessageBox.Show($"Config pushed successfully to {provider}.\nGist/Snippet ID: {newId}",
+				"Sync Push", MessageBoxButtons.OK, MessageBoxIcon.Information);
+		}
+		catch (Exception ex)
+		{
+			MessageBox.Show($"Push failed: {ex.Message}", "Sync Error",
+				MessageBoxButtons.OK, MessageBoxIcon.Error);
+		}
+		finally
+		{
+			_btnSyncPush.Enabled = true;
+			_btnSyncPull!.Enabled = true;
+		}
+	}
+
+	private async void BtnSyncPull_Click(object? sender, EventArgs e)
+	{
+		string provider = _cmbSyncProvider!.SelectedItem?.ToString() ?? "GitHub";
+		string token = _txtSyncToken!.Text.Trim();
+		string gistId = _txtGistId!.Text.Trim();
+
+		if (string.IsNullOrEmpty(token))
+		{
+			MessageBox.Show("Please enter a personal access token before pulling.", "Sync Error",
+				MessageBoxButtons.OK, MessageBoxIcon.Warning);
+			return;
+		}
+
+		if (string.IsNullOrEmpty(gistId))
+		{
+			MessageBox.Show("Please enter a Gist/Snippet ID to pull from.", "Sync Error",
+				MessageBoxButtons.OK, MessageBoxIcon.Warning);
+			return;
+		}
+
+		_btnSyncPush!.Enabled = false;
+		_btnSyncPull!.Enabled = false;
+
+		try
+		{
+			using var syncProvider = ConfigSyncProviderFactory.Create(provider, token);
+			string json = await syncProvider.PullAsync(gistId).ConfigureAwait(true);
+
+			var options = new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+			var model = System.Text.Json.JsonSerializer.Deserialize<ProxyConfigModel>(json, options);
+			if (model is null)
+				throw new InvalidOperationException("Remote config could not be deserialized.");
+
+			// Preserve sync settings from the current session
+			model.ConfigSync = new ConfigSyncSettings { Provider = provider, GistId = gistId };
+			_currentConfig = model;
+			_configManager.Save(_currentConfig, _activeConfigPath);
+			LoadConfigToUI();
+
+			MessageBox.Show("Config pulled and applied successfully.", "Sync Pull",
+				MessageBoxButtons.OK, MessageBoxIcon.Information);
+		}
+		catch (Exception ex)
+		{
+			MessageBox.Show($"Pull failed: {ex.Message}", "Sync Error",
+				MessageBoxButtons.OK, MessageBoxIcon.Error);
+		}
+		finally
+		{
+			_btnSyncPush.Enabled = true;
+			_btnSyncPull!.Enabled = true;
+		}
+	}
+
 	private ProxyConfigModel BuildConfigModel()
 	{
 		return new ProxyConfigModel
@@ -270,6 +371,8 @@ internal partial class MainForm : Form
 	{
 		string provider = _cmbSyncProvider!.SelectedItem?.ToString() ?? "GitHub";
 		string token = _txtSyncToken!.Text.Trim();
+		string? gistId = _txtGistId!.Text.Trim();
+		if (string.IsNullOrEmpty(gistId)) gistId = null;
 
 		// Save token to Windows Credential Manager (never in config file)
 		string targetName = CredentialManager.GetTargetName(provider);
@@ -278,9 +381,9 @@ internal partial class MainForm : Form
 		else
 			CredentialManager.SaveToken(targetName, token);
 
-		if (provider == "GitHub" && string.IsNullOrEmpty(token))
+		if (string.IsNullOrEmpty(token) && gistId is null)
 			return null;
-		return new ConfigSyncSettings { Provider = provider };
+		return new ConfigSyncSettings { Provider = provider, GistId = gistId };
 	}
 
 	private ProxyOptions BuildProxyOptions()
@@ -324,6 +427,7 @@ internal partial class MainForm : Form
 		string syncProvider = _currentConfig.ConfigSync?.Provider ?? "GitHub";
 		_cmbSyncProvider!.SelectedItem = _cmbSyncProvider.Items.Contains(syncProvider) ? syncProvider : "GitHub";
 		_txtSyncToken!.Text = CredentialManager.LoadToken(CredentialManager.GetTargetName(syncProvider)) ?? string.Empty;
+		_txtGistId!.Text = _currentConfig.ConfigSync?.GistId ?? string.Empty;
 
 		// 加载hosts redirect模式
 		string mode = _currentConfig.HostsRedirect?.Mode ?? "DnsInterception";

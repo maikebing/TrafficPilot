@@ -99,6 +99,10 @@ internal class ConfigSyncSettings
 {
 	[JsonPropertyName("provider")]
 	public string Provider { get; set; } = "GitHub"; // "GitHub" or "Gitee"
+
+	[JsonPropertyName("gistId")]
+	[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+	public string? GistId { get; set; } // Remote gist / snippet ID — not sensitive, stored in config
 }
 
 internal sealed class ProxyConfigManager

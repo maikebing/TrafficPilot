@@ -85,6 +85,12 @@ partial class MainForm
 	private ComboBox? _cmbSyncProvider;
 	private Label? _lblSyncToken;
 	private TextBox? _txtSyncToken;
+	private Label? _lblGistId;
+	private TextBox? _txtGistId;
+	private Label? _lblSyncActions;
+	private FlowLayoutPanel? _syncActionsPanel;
+	private Button? _btnSyncPush;
+	private Button? _btnSyncPull;
 
 	// Config tab - Buttons
 	private TableLayoutPanel? _configActionPanel;
@@ -157,6 +163,12 @@ partial class MainForm
         _cmbSyncProvider = new ComboBox();
         _lblSyncToken = new Label();
         _txtSyncToken = new TextBox();
+        _lblGistId = new Label();
+        _txtGistId = new TextBox();
+        _lblSyncActions = new Label();
+        _syncActionsPanel = new FlowLayoutPanel();
+        _btnSyncPush = new Button();
+        _btnSyncPull = new Button();
         _startupOptionsPanel = new FlowLayoutPanel();
         _chkStartOnBoot = new CheckBox();
         _chkAutoStartProxy = new CheckBox();
@@ -318,19 +330,25 @@ partial class MainForm
         _configPanel.Controls.Add(_cmbSyncProvider, 1, 7);
         _configPanel.Controls.Add(_lblSyncToken, 0, 8);
         _configPanel.Controls.Add(_txtSyncToken, 1, 8);
-        _configPanel.Controls.Add(_startupOptionsPanel, 0, 9);
-        _configPanel.Controls.Add(_configActionPanel, 0, 10);
+        _configPanel.Controls.Add(_lblGistId, 0, 9);
+        _configPanel.Controls.Add(_txtGistId, 1, 9);
+        _configPanel.Controls.Add(_lblSyncActions, 0, 10);
+        _configPanel.Controls.Add(_syncActionsPanel, 1, 10);
+        _configPanel.Controls.Add(_startupOptionsPanel, 0, 11);
+        _configPanel.Controls.Add(_configActionPanel, 0, 12);
         _configPanel.Dock = DockStyle.Fill;
         _configPanel.Location = new Point(0, 0);
         _configPanel.Name = "_configPanel";
         _configPanel.Padding = new Padding(10);
-        _configPanel.RowCount = 11;
+        _configPanel.RowCount = 13;
         _configPanel.RowStyles.Add(new RowStyle());
         _configPanel.RowStyles.Add(new RowStyle());
         _configPanel.RowStyles.Add(new RowStyle());
         _configPanel.RowStyles.Add(new RowStyle());
         _configPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 50F));
         _configPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 50F));
+        _configPanel.RowStyles.Add(new RowStyle());
+        _configPanel.RowStyles.Add(new RowStyle());
         _configPanel.RowStyles.Add(new RowStyle());
         _configPanel.RowStyles.Add(new RowStyle());
         _configPanel.RowStyles.Add(new RowStyle());
@@ -579,6 +597,66 @@ partial class MainForm
         _txtSyncToken.PlaceholderText = "Enter GitHub or Gitee personal access token";
         _txtSyncToken.Size = new Size(589, 23);
         _txtSyncToken.TabIndex = 19;
+        // 
+        // _lblGistId
+        // 
+        _lblGistId.Anchor = AnchorStyles.Left | AnchorStyles.Right;
+        _lblGistId.Name = "_lblGistId";
+        _lblGistId.Size = new Size(144, 23);
+        _lblGistId.TabIndex = 20;
+        _lblGistId.Text = "Gist / Snippet ID:";
+        _lblGistId.TextAlign = ContentAlignment.MiddleRight;
+        // 
+        // _txtGistId
+        // 
+        _txtGistId.Dock = DockStyle.Fill;
+        _txtGistId.Margin = new Padding(5);
+        _txtGistId.Name = "_txtGistId";
+        _txtGistId.PlaceholderText = "Remote gist/snippet ID (filled automatically after first push)";
+        _txtGistId.Size = new Size(589, 23);
+        _txtGistId.TabIndex = 21;
+        // 
+        // _lblSyncActions
+        // 
+        _lblSyncActions.Anchor = AnchorStyles.Left | AnchorStyles.Right;
+        _lblSyncActions.Name = "_lblSyncActions";
+        _lblSyncActions.Size = new Size(144, 23);
+        _lblSyncActions.TabIndex = 22;
+        _lblSyncActions.Text = "Sync:";
+        _lblSyncActions.TextAlign = ContentAlignment.MiddleRight;
+        // 
+        // _syncActionsPanel
+        // 
+        _syncActionsPanel.AutoSize = true;
+        _syncActionsPanel.Controls.Add(_btnSyncPush);
+        _syncActionsPanel.Controls.Add(_btnSyncPull);
+        _syncActionsPanel.Dock = DockStyle.Fill;
+        _syncActionsPanel.Margin = new Padding(5);
+        _syncActionsPanel.Name = "_syncActionsPanel";
+        _syncActionsPanel.TabIndex = 23;
+        _syncActionsPanel.WrapContents = false;
+        // 
+        // _btnSyncPush
+        // 
+        _btnSyncPush.AutoSize = true;
+        _btnSyncPush.Margin = new Padding(0, 0, 6, 0);
+        _btnSyncPush.Name = "_btnSyncPush";
+        _btnSyncPush.Size = new Size(120, 27);
+        _btnSyncPush.TabIndex = 0;
+        _btnSyncPush.Text = "⬆ Push Config";
+        _btnSyncPush.UseVisualStyleBackColor = true;
+        _btnSyncPush.Click += BtnSyncPush_Click;
+        // 
+        // _btnSyncPull
+        // 
+        _btnSyncPull.AutoSize = true;
+        _btnSyncPull.Margin = new Padding(0, 0, 6, 0);
+        _btnSyncPull.Name = "_btnSyncPull";
+        _btnSyncPull.Size = new Size(120, 27);
+        _btnSyncPull.TabIndex = 1;
+        _btnSyncPull.Text = "⬇ Pull Config";
+        _btnSyncPull.UseVisualStyleBackColor = true;
+        _btnSyncPull.Click += BtnSyncPull_Click;
         // 
         // _startupOptionsPanel
         // 
