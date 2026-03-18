@@ -25,6 +25,13 @@ internal interface IConfigSyncProvider : IDisposable
 
 	/// <summary>Downloads and returns the raw JSON for the entry identified by <paramref name="remoteId"/>.</summary>
 	Task<string> PullAsync(string remoteId, CancellationToken ct = default);
+
+	/// <summary>
+	/// Searches the authenticated user's gists/snippets for the TrafficPilot entry
+	/// (matched by description and filename) and returns its remote ID, or
+	/// <see langword="null"/> if no such entry exists yet.
+	/// </summary>
+	Task<string?> FindGistIdAsync(CancellationToken ct = default);
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -49,6 +56,10 @@ internal abstract class GistProviderBase : IConfigSyncProvider
 	public async Task<string> PushAsync(string configJson, string? existingId = null, CancellationToken ct = default)
 	{
 		ArgumentNullException.ThrowIfNull(configJson);
+
+		// Auto-discover an existing TrafficPilot gist when no ID is provided
+		if (string.IsNullOrWhiteSpace(existingId))
+			existingId = await FindGistIdAsync(ct).ConfigureAwait(false);
 
 		var body = BuildGistBody(configJson);
 		using var content = new StringContent(body, Encoding.UTF8, "application/json");
@@ -111,6 +122,46 @@ internal abstract class GistProviderBase : IConfigSyncProvider
 	}
 
 	public void Dispose() => Http.Dispose();
+
+	public async Task<string?> FindGistIdAsync(CancellationToken ct = default)
+	{
+		int page = 1;
+		const int perPage = 100;
+		const int maxPages = 10; // cap at 1,000 gists to avoid excessive API calls
+
+		while (page <= maxPages)
+		{
+			using var response = await Http.GetAsync($"gists?per_page={perPage}&page={page}", ct).ConfigureAwait(false);
+			await EnsureSuccessAsync(response, ct).ConfigureAwait(false);
+
+			await using var stream = await response.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
+			using var doc = await JsonDocument.ParseAsync(stream, cancellationToken: ct).ConfigureAwait(false);
+
+			var items = doc.RootElement;
+			if (items.ValueKind != JsonValueKind.Array || items.GetArrayLength() == 0)
+				return null;
+
+			foreach (var item in items.EnumerateArray())
+			{
+				if (item.TryGetProperty("description", out var descProp)
+					&& descProp.GetString() == GistDescription
+					&& item.TryGetProperty("files", out var filesProp)
+					&& filesProp.TryGetProperty(FileName, out _)
+					&& item.TryGetProperty("id", out var idProp)
+					&& idProp.GetString() is { } id)
+				{
+					return id;
+				}
+			}
+
+			if (items.GetArrayLength() < perPage)
+				return null;
+
+			page++;
+		}
+
+		return null; // maxPages exhausted without finding a match
+	}
 
 	private static string BuildGistBody(string configJson)
 	{

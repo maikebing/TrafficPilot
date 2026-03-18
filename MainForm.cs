@@ -296,19 +296,27 @@ internal partial class MainForm : Form
 			return;
 		}
 
-		if (string.IsNullOrEmpty(gistId))
-		{
-			MessageBox.Show("Please enter a Gist/Snippet ID to pull from.", "Sync Error",
-				MessageBoxButtons.OK, MessageBoxIcon.Warning);
-			return;
-		}
-
 		_btnSyncPush!.Enabled = false;
 		_btnSyncPull!.Enabled = false;
 
 		try
 		{
 			using var syncProvider = ConfigSyncProviderFactory.Create(provider, token);
+
+			// Auto-discover the TrafficPilot gist when no ID is supplied
+			if (string.IsNullOrEmpty(gistId))
+			{
+				string? discoveredId = await syncProvider.FindGistIdAsync().ConfigureAwait(true);
+				if (discoveredId is null)
+				{
+					MessageBox.Show(
+						$"No TrafficPilot configuration found in your {provider} gists.\nPlease push your config first.",
+						"Sync Pull", MessageBoxButtons.OK, MessageBoxIcon.Information);
+					return;
+				}
+				gistId = discoveredId;
+			}
+
 			string json = await syncProvider.PullAsync(gistId).ConfigureAwait(true);
 
 			var options = new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true };
