@@ -98,7 +98,6 @@ partial class MainForm
 	// Config tab - Sync combined rows
 	private TableLayoutPanel? _syncProviderTokenPanel;
 	private TableLayoutPanel? _gistIdActionPanel;
-	private Label? _lblGistSeparator;
 
 	// Config tab - Buttons
 	private TableLayoutPanel? _configActionPanel;
@@ -178,7 +177,6 @@ partial class MainForm
         _lblGistId = new Label();
         _gistIdActionPanel = new TableLayoutPanel();
         _txtGistId = new TextBox();
-        _lblGistSeparator = new Label();
         _btnSyncPush = new Button();
         _lblConfigFile = new Label();
         _configActionPanel = new TableLayoutPanel();
@@ -189,7 +187,6 @@ partial class MainForm
         _btnSaveConfig = new Button();
         _dnsRedirectTab = new TabPage();
         _dnsRedirectPanel = new TableLayoutPanel();
-        _chkDNSRedirectEnabled = new CheckBox();
         _grpRedirectMode = new GroupBox();
         _modePanelRedirectMode = new FlowLayoutPanel();
         _rdoDnsInterception = new RadioButton();
@@ -232,9 +229,11 @@ partial class MainForm
         _statusPanel = new FlowLayoutPanel();
         _lblStatus = new Label();
         _lblStats = new Label();
+        lblBytes = new Label();
         label1 = new Label();
         _btnStartStop = new Button();
         _controlPanel = new FlowLayoutPanel();
+        _chkDNSRedirectEnabled = new CheckBox();
         _lblConfigFileValue = new Label();
         _lblSyncActions = new Label();
         _syncActionsPanel = new FlowLayoutPanel();
@@ -256,7 +255,7 @@ partial class MainForm
         _trayBottomSeparator = new ToolStripSeparator();
         _trayExitMenuItem = new ToolStripMenuItem();
         _notifyIcon = new NotifyIcon(components);
-        lblBytes = new Label();
+        btnResetConfig = new Button();
         _mainPanel.SuspendLayout();
         _tabControl.SuspendLayout();
         _configTab.SuspendLayout();
@@ -273,6 +272,8 @@ partial class MainForm
         _configBtnPanel.SuspendLayout();
         _dnsRedirectTab.SuspendLayout();
         _dnsRedirectPanel.SuspendLayout();
+        _grpRedirectMode.SuspendLayout();
+        _modePanelRedirectMode.SuspendLayout();
         _hostsRedirectBtnPanel.SuspendLayout();
         _autoFetchPanel.SuspendLayout();
         ((ISupportInitialize)_numAutoFetchInterval).BeginInit();
@@ -616,9 +617,9 @@ partial class MainForm
         // _syncProviderTokenPanel
         // 
         _syncProviderTokenPanel.ColumnCount = 4;
-        _syncProviderTokenPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 100F));
-        _syncProviderTokenPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 82F));
-        _syncProviderTokenPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+        _syncProviderTokenPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 87F));
+        _syncProviderTokenPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 21.4117641F));
+        _syncProviderTokenPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 78.5882339F));
         _syncProviderTokenPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 105F));
         _syncProviderTokenPanel.Controls.Add(_cmbSyncProvider, 0, 0);
         _syncProviderTokenPanel.Controls.Add(_lblSyncToken, 1, 0);
@@ -641,37 +642,37 @@ partial class MainForm
         _cmbSyncProvider.Location = new Point(3, 5);
         _cmbSyncProvider.Margin = new Padding(3, 5, 3, 5);
         _cmbSyncProvider.Name = "_cmbSyncProvider";
-        _cmbSyncProvider.Size = new Size(94, 25);
+        _cmbSyncProvider.Size = new Size(81, 25);
         _cmbSyncProvider.TabIndex = 17;
         // 
         // _lblSyncToken
         // 
         _lblSyncToken.Anchor = AnchorStyles.Left | AnchorStyles.Right;
-        _lblSyncToken.Location = new Point(103, 6);
+        _lblSyncToken.Location = new Point(90, 6);
         _lblSyncToken.Name = "_lblSyncToken";
-        _lblSyncToken.Size = new Size(76, 23);
+        _lblSyncToken.Size = new Size(87, 23);
         _lblSyncToken.TabIndex = 18;
         _lblSyncToken.Text = "Sync Token:";
-        _lblSyncToken.TextAlign = ContentAlignment.MiddleRight;
+        _lblSyncToken.TextAlign = ContentAlignment.MiddleCenter;
         // 
         // _txtSyncToken
         // 
         _txtSyncToken.Dock = DockStyle.Fill;
-        _txtSyncToken.Location = new Point(185, 5);
+        _txtSyncToken.Location = new Point(183, 5);
         _txtSyncToken.Margin = new Padding(3, 5, 3, 5);
         _txtSyncToken.Name = "_txtSyncToken";
         _txtSyncToken.PasswordChar = '●';
         _txtSyncToken.PlaceholderText = "Enter GitHub or Gitee personal access token";
-        _txtSyncToken.Size = new Size(338, 23);
+        _txtSyncToken.Size = new Size(339, 23);
         _txtSyncToken.TabIndex = 19;
         // 
         // _btnSyncPull
         // 
         _btnSyncPull.Dock = DockStyle.Fill;
-        _btnSyncPull.Location = new Point(529, 2);
+        _btnSyncPull.Location = new Point(528, 2);
         _btnSyncPull.Margin = new Padding(3, 2, 3, 2);
         _btnSyncPull.Name = "_btnSyncPull";
-        _btnSyncPull.Size = new Size(99, 31);
+        _btnSyncPull.Size = new Size(100, 31);
         _btnSyncPull.TabIndex = 20;
         _btnSyncPull.Text = "⬇ Pull Config";
         _btnSyncPull.UseVisualStyleBackColor = true;
@@ -689,13 +690,12 @@ partial class MainForm
         // 
         // _gistIdActionPanel
         // 
-        _gistIdActionPanel.ColumnCount = 3;
+        _gistIdActionPanel.ColumnCount = 2;
         _gistIdActionPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-        _gistIdActionPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 25F));
         _gistIdActionPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 105F));
+        _gistIdActionPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 20F));
         _gistIdActionPanel.Controls.Add(_txtGistId, 0, 0);
-        _gistIdActionPanel.Controls.Add(_lblGistSeparator, 1, 0);
-        _gistIdActionPanel.Controls.Add(_btnSyncPush, 2, 0);
+        _gistIdActionPanel.Controls.Add(_btnSyncPush, 1, 0);
         _gistIdActionPanel.Dock = DockStyle.Fill;
         _gistIdActionPanel.Location = new Point(123, 439);
         _gistIdActionPanel.Margin = new Padding(5);
@@ -712,18 +712,8 @@ partial class MainForm
         _txtGistId.Margin = new Padding(3, 5, 3, 5);
         _txtGistId.Name = "_txtGistId";
         _txtGistId.PlaceholderText = "Optional – auto-discovered or filled automatically after first push";
-        _txtGistId.Size = new Size(495, 23);
+        _txtGistId.Size = new Size(520, 23);
         _txtGistId.TabIndex = 22;
-        // 
-        // _lblGistSeparator
-        // 
-        _lblGistSeparator.Anchor = AnchorStyles.Left | AnchorStyles.Right;
-        _lblGistSeparator.Location = new Point(504, 5);
-        _lblGistSeparator.Name = "_lblGistSeparator";
-        _lblGistSeparator.Size = new Size(19, 23);
-        _lblGistSeparator.TabIndex = 23;
-        _lblGistSeparator.Text = "::";
-        _lblGistSeparator.TextAlign = ContentAlignment.MiddleCenter;
         // 
         // _btnSyncPush
         // 
@@ -771,41 +761,42 @@ partial class MainForm
         _quickConfigPanel.Location = new Point(0, 0);
         _quickConfigPanel.Margin = new Padding(0);
         _quickConfigPanel.Name = "_quickConfigPanel";
-        _quickConfigPanel.Size = new Size(315, 44);
+        _quickConfigPanel.Size = new Size(347, 46);
         _quickConfigPanel.TabIndex = 0;
         _quickConfigPanel.WrapContents = false;
         // 
         // _configBtnPanel
         // 
         _configBtnPanel.AutoSize = true;
+        _configBtnPanel.Controls.Add(btnResetConfig);
         _configBtnPanel.Controls.Add(_btnLoadConfig);
         _configBtnPanel.Controls.Add(_btnSaveConfigAs);
         _configBtnPanel.Controls.Add(_btnSaveConfig);
         _configBtnPanel.Dock = DockStyle.Top;
         _configBtnPanel.FlowDirection = FlowDirection.RightToLeft;
-        _configBtnPanel.Location = new Point(320, 5);
+        _configBtnPanel.Location = new Point(352, 5);
         _configBtnPanel.Margin = new Padding(5);
         _configBtnPanel.Name = "_configBtnPanel";
-        _configBtnPanel.Size = new Size(310, 34);
+        _configBtnPanel.Size = new Size(278, 36);
         _configBtnPanel.TabIndex = 18;
         _configBtnPanel.WrapContents = false;
         // 
         // _btnLoadConfig
         // 
-        _btnLoadConfig.Location = new Point(208, 2);
+        _btnLoadConfig.Location = new Point(140, 2);
         _btnLoadConfig.Margin = new Padding(2);
         _btnLoadConfig.Name = "_btnLoadConfig";
-        _btnLoadConfig.Size = new Size(100, 30);
+        _btnLoadConfig.Size = new Size(65, 30);
         _btnLoadConfig.TabIndex = 1;
-        _btnLoadConfig.Text = "Load Config";
+        _btnLoadConfig.Text = "Load";
         _btnLoadConfig.Click += BtnLoadConfig_Click;
         // 
         // _btnSaveConfigAs
         // 
-        _btnSaveConfigAs.Location = new Point(106, 2);
+        _btnSaveConfigAs.Location = new Point(71, 2);
         _btnSaveConfigAs.Margin = new Padding(2);
         _btnSaveConfigAs.Name = "_btnSaveConfigAs";
-        _btnSaveConfigAs.Size = new Size(98, 30);
+        _btnSaveConfigAs.Size = new Size(65, 30);
         _btnSaveConfigAs.TabIndex = 2;
         _btnSaveConfigAs.Text = "Save As";
         _btnSaveConfigAs.Click += BtnSaveConfigAs_Click;
@@ -815,9 +806,9 @@ partial class MainForm
         _btnSaveConfig.Location = new Point(2, 2);
         _btnSaveConfig.Margin = new Padding(2);
         _btnSaveConfig.Name = "_btnSaveConfig";
-        _btnSaveConfig.Size = new Size(100, 30);
+        _btnSaveConfig.Size = new Size(65, 30);
         _btnSaveConfig.TabIndex = 3;
-        _btnSaveConfig.Text = "Save Config";
+        _btnSaveConfig.Text = "Save";
         _btnSaveConfig.Click += BtnSaveConfig_Click;
         // 
         // _dnsRedirectTab
@@ -860,23 +851,43 @@ partial class MainForm
         // 
         // _grpRedirectMode
         // 
-        _dnsRedirectPanel.SetColumnSpan(_grpRedirectMode, 2);
         _grpRedirectMode.AutoSize = true;
         _grpRedirectMode.AutoSizeMode = AutoSizeMode.GrowAndShrink;
+        _dnsRedirectPanel.SetColumnSpan(_grpRedirectMode, 2);
+        _grpRedirectMode.Controls.Add(_modePanelRedirectMode);
         _grpRedirectMode.Dock = DockStyle.Fill;
+        _grpRedirectMode.Location = new Point(13, 13);
         _grpRedirectMode.Margin = new Padding(3, 3, 3, 10);
         _grpRedirectMode.Name = "_grpRedirectMode";
         _grpRedirectMode.Padding = new Padding(8, 5, 8, 8);
+        _grpRedirectMode.Size = new Size(743, 105);
         _grpRedirectMode.TabIndex = 0;
         _grpRedirectMode.TabStop = false;
         _grpRedirectMode.Text = "Redirect Mode";
+        // 
+        // _modePanelRedirectMode
+        // 
+        _modePanelRedirectMode.AutoSize = true;
+        _modePanelRedirectMode.AutoSizeMode = AutoSizeMode.GrowAndShrink;
+        _modePanelRedirectMode.Controls.Add(_rdoDnsInterception);
+        _modePanelRedirectMode.Controls.Add(_rdoHostsFile);
+        _modePanelRedirectMode.Controls.Add(_lblHostsFileWarning);
+        _modePanelRedirectMode.Dock = DockStyle.Fill;
+        _modePanelRedirectMode.FlowDirection = FlowDirection.TopDown;
+        _modePanelRedirectMode.Location = new Point(8, 21);
+        _modePanelRedirectMode.Name = "_modePanelRedirectMode";
+        _modePanelRedirectMode.Size = new Size(727, 76);
+        _modePanelRedirectMode.TabIndex = 0;
+        _modePanelRedirectMode.WrapContents = false;
         // 
         // _rdoDnsInterception
         // 
         _rdoDnsInterception.AutoSize = true;
         _rdoDnsInterception.Checked = true;
+        _rdoDnsInterception.Location = new Point(3, 3);
         _rdoDnsInterception.Margin = new Padding(3, 3, 3, 5);
         _rdoDnsInterception.Name = "_rdoDnsInterception";
+        _rdoDnsInterception.Size = new Size(327, 21);
         _rdoDnsInterception.TabIndex = 0;
         _rdoDnsInterception.TabStop = true;
         _rdoDnsInterception.Text = "DNS Interception (packet-level, no file modification)";
@@ -884,8 +895,9 @@ partial class MainForm
         // _rdoHostsFile
         // 
         _rdoHostsFile.AutoSize = true;
-        _rdoHostsFile.Margin = new Padding(3, 3, 3, 3);
+        _rdoHostsFile.Location = new Point(3, 32);
         _rdoHostsFile.Name = "_rdoHostsFile";
+        _rdoHostsFile.Size = new Size(419, 21);
         _rdoHostsFile.TabIndex = 1;
         _rdoHostsFile.Text = "System Hosts File (write to C:\\Windows\\System32\\drivers\\etc\\hosts)";
         // 
@@ -893,25 +905,18 @@ partial class MainForm
         // 
         _lblHostsFileWarning.AutoSize = true;
         _lblHostsFileWarning.ForeColor = SystemColors.GrayText;
+        _lblHostsFileWarning.Location = new Point(20, 56);
         _lblHostsFileWarning.Margin = new Padding(20, 0, 3, 3);
         _lblHostsFileWarning.Name = "_lblHostsFileWarning";
+        _lblHostsFileWarning.Size = new Size(428, 17);
+        _lblHostsFileWarning.TabIndex = 2;
         _lblHostsFileWarning.Text = "⚠ Requires Administrator privileges. Creates backup before modifying.";
         _lblHostsFileWarning.Visible = false;
-        _modePanelRedirectMode.AutoSize = true;
-        _modePanelRedirectMode.AutoSizeMode = AutoSizeMode.GrowAndShrink;
-        _modePanelRedirectMode.FlowDirection = FlowDirection.TopDown;
-        _modePanelRedirectMode.Dock = DockStyle.Fill;
-        _modePanelRedirectMode.Name = "_modePanelRedirectMode";
-        _modePanelRedirectMode.WrapContents = false;
-        _modePanelRedirectMode.Controls.Add(_rdoDnsInterception);
-        _modePanelRedirectMode.Controls.Add(_rdoHostsFile);
-        _modePanelRedirectMode.Controls.Add(_lblHostsFileWarning);
-        _grpRedirectMode.Controls.Add(_modePanelRedirectMode);
         // 
         // _lblHostsUrl
         // 
         _lblHostsUrl.Anchor = AnchorStyles.Left | AnchorStyles.Right;
-        _lblHostsUrl.Location = new Point(13, 49);
+        _lblHostsUrl.Location = new Point(13, 133);
         _lblHostsUrl.Name = "_lblHostsUrl";
         _lblHostsUrl.Size = new Size(144, 23);
         _lblHostsUrl.TabIndex = 1;
@@ -921,7 +926,7 @@ partial class MainForm
         // _txtHostsUrl
         // 
         _txtHostsUrl.Dock = DockStyle.Fill;
-        _txtHostsUrl.Location = new Point(165, 49);
+        _txtHostsUrl.Location = new Point(165, 133);
         _txtHostsUrl.Margin = new Padding(5);
         _txtHostsUrl.Name = "_txtHostsUrl";
         _txtHostsUrl.Size = new Size(589, 23);
@@ -935,7 +940,7 @@ partial class MainForm
         _hostsRedirectBtnPanel.Controls.Add(_btnFetchIps);
         _hostsRedirectBtnPanel.Controls.Add(_chkRetestSlowOrTimeoutOnly);
         _hostsRedirectBtnPanel.Dock = DockStyle.Fill;
-        _hostsRedirectBtnPanel.Location = new Point(165, 82);
+        _hostsRedirectBtnPanel.Location = new Point(165, 166);
         _hostsRedirectBtnPanel.Margin = new Padding(5);
         _hostsRedirectBtnPanel.Name = "_hostsRedirectBtnPanel";
         _hostsRedirectBtnPanel.Size = new Size(589, 36);
@@ -973,7 +978,7 @@ partial class MainForm
         // 
         _lblHostsStatus.AutoSize = true;
         _dnsRedirectPanel.SetColumnSpan(_lblHostsStatus, 2);
-        _lblHostsStatus.Location = new Point(13, 128);
+        _lblHostsStatus.Location = new Point(13, 212);
         _lblHostsStatus.Margin = new Padding(3, 5, 3, 3);
         _lblHostsStatus.Name = "_lblHostsStatus";
         _lblHostsStatus.Size = new Size(117, 17);
@@ -988,7 +993,7 @@ partial class MainForm
         _autoFetchPanel.Controls.Add(_numAutoFetchInterval);
         _autoFetchPanel.Controls.Add(_lblAutoFetchMinutes);
         _autoFetchPanel.Dock = DockStyle.Fill;
-        _autoFetchPanel.Location = new Point(13, 151);
+        _autoFetchPanel.Location = new Point(13, 235);
         _autoFetchPanel.Name = "_autoFetchPanel";
         _autoFetchPanel.Size = new Size(743, 29);
         _autoFetchPanel.TabIndex = 6;
@@ -1028,7 +1033,7 @@ partial class MainForm
         // _lblRefreshDomains
         // 
         _lblRefreshDomains.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
-        _lblRefreshDomains.Location = new Point(13, 183);
+        _lblRefreshDomains.Location = new Point(13, 267);
         _lblRefreshDomains.Name = "_lblRefreshDomains";
         _lblRefreshDomains.Size = new Size(144, 23);
         _lblRefreshDomains.TabIndex = 6;
@@ -1039,13 +1044,13 @@ partial class MainForm
         // 
         _txtRefreshDomains.AcceptsReturn = true;
         _txtRefreshDomains.Dock = DockStyle.Fill;
-        _txtRefreshDomains.Location = new Point(165, 188);
+        _txtRefreshDomains.Location = new Point(165, 272);
         _txtRefreshDomains.Margin = new Padding(5);
         _txtRefreshDomains.Multiline = true;
         _txtRefreshDomains.Name = "_txtRefreshDomains";
-        _txtRefreshDomains.PlaceholderText = "姣忚涓€涓煙鍚嶏紝渚嬪:\nalive.github.com\ngithub.com";
+        _txtRefreshDomains.PlaceholderText = "\nalive.github.com\ngithub.com";
         _txtRefreshDomains.ScrollBars = ScrollBars.Vertical;
-        _txtRefreshDomains.Size = new Size(589, 92);
+        _txtRefreshDomains.Size = new Size(589, 66);
         _txtRefreshDomains.TabIndex = 7;
         _txtRefreshDomains.WordWrap = false;
         // 
@@ -1055,9 +1060,9 @@ partial class MainForm
         _lvIpResults.Dock = DockStyle.Fill;
         _lvIpResults.FullRowSelect = true;
         _lvIpResults.GridLines = true;
-        _lvIpResults.Location = new Point(13, 288);
+        _lvIpResults.Location = new Point(13, 346);
         _lvIpResults.Name = "_lvIpResults";
-        _lvIpResults.Size = new Size(743, 229);
+        _lvIpResults.Size = new Size(743, 171);
         _lvIpResults.TabIndex = 8;
         _lvIpResults.UseCompatibleStateImageBehavior = false;
         _lvIpResults.View = View.Details;
@@ -1342,6 +1347,15 @@ partial class MainForm
         _lblStats.Text = "Stats: -";
         _lblStats.TextAlign = ContentAlignment.MiddleLeft;
         // 
+        // lblBytes
+        // 
+        lblBytes.Location = new Point(369, 0);
+        lblBytes.Name = "lblBytes";
+        lblBytes.Size = new Size(100, 43);
+        lblBytes.TabIndex = 3;
+        lblBytes.Text = "bytes";
+        lblBytes.TextAlign = ContentAlignment.MiddleLeft;
+        // 
         // label1
         // 
         label1.Location = new Point(475, 0);
@@ -1370,6 +1384,13 @@ partial class MainForm
         _controlPanel.Size = new Size(777, 50);
         _controlPanel.TabIndex = 2;
         _controlPanel.WrapContents = false;
+        // 
+        // _chkDNSRedirectEnabled
+        // 
+        _chkDNSRedirectEnabled.Location = new Point(0, 0);
+        _chkDNSRedirectEnabled.Name = "_chkDNSRedirectEnabled";
+        _chkDNSRedirectEnabled.Size = new Size(104, 24);
+        _chkDNSRedirectEnabled.TabIndex = 0;
         // 
         // _lblConfigFileValue
         // 
@@ -1515,14 +1536,14 @@ partial class MainForm
         _notifyIcon.Visible = true;
         _notifyIcon.DoubleClick += NotifyIcon_DoubleClick;
         // 
-        // lblBytes
+        // btnResetConfig
         // 
-        lblBytes.Location = new Point(369, 0);
-        lblBytes.Name = "lblBytes";
-        lblBytes.Size = new Size(100, 43);
-        lblBytes.TabIndex = 3;
-        lblBytes.Text = "bytes";
-        lblBytes.TextAlign = ContentAlignment.MiddleLeft;
+        btnResetConfig.Location = new Point(210, 3);
+        btnResetConfig.Name = "btnResetConfig";
+        btnResetConfig.Size = new Size(65, 30);
+        btnResetConfig.TabIndex = 4;
+        btnResetConfig.Text = "Retset";
+        btnResetConfig.UseVisualStyleBackColor = true;
         // 
         // MainForm
         // 
@@ -1558,6 +1579,10 @@ partial class MainForm
         _dnsRedirectTab.ResumeLayout(false);
         _dnsRedirectPanel.ResumeLayout(false);
         _dnsRedirectPanel.PerformLayout();
+        _grpRedirectMode.ResumeLayout(false);
+        _grpRedirectMode.PerformLayout();
+        _modePanelRedirectMode.ResumeLayout(false);
+        _modePanelRedirectMode.PerformLayout();
         _hostsRedirectBtnPanel.ResumeLayout(false);
         _hostsRedirectBtnPanel.PerformLayout();
         _autoFetchPanel.ResumeLayout(false);
@@ -1706,6 +1731,7 @@ partial class MainForm
 
     private Label label1;
     private Label lblBytes;
+    private Button btnResetConfig;
 }
 
 
