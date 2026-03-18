@@ -153,6 +153,7 @@ partial class MainForm
         _chkProxyEnabled = new CheckBox();
         _lblConfigName = new Label();
         _txtConfigName = new TextBox();
+        _proxySettingsPanel = new TableLayoutPanel();
         _lblProxyHost = new Label();
         _cmbProxyHost = new ComboBox();
         _lblProxyPort = new Label();
@@ -165,25 +166,21 @@ partial class MainForm
         _lblDomainRules = new Label();
         _domainRulesPanel = new TableLayoutPanel();
         _txtDomainRules = new TextBox();
-        _lblConfigFile = new Label();
-        _lblConfigFileValue = new Label();
-        _lblSyncProvider = new Label();
-        _cmbSyncProvider = new ComboBox();
-        _lblSyncToken = new Label();
-        _txtSyncToken = new TextBox();
-        _lblGistId = new Label();
-        _txtGistId = new TextBox();
-        _lblSyncActions = new Label();
-        _syncActionsPanel = new FlowLayoutPanel();
-        _btnSyncPush = new Button();
-        _btnSyncPull = new Button();
-        _proxySettingsPanel = new TableLayoutPanel();
-        _syncProviderTokenPanel = new TableLayoutPanel();
-        _gistIdActionPanel = new TableLayoutPanel();
-        _lblGistSeparator = new Label();
         _startupOptionsPanel = new FlowLayoutPanel();
         _chkStartOnBoot = new CheckBox();
         _chkAutoStartProxy = new CheckBox();
+        _lblSyncProvider = new Label();
+        _syncProviderTokenPanel = new TableLayoutPanel();
+        _cmbSyncProvider = new ComboBox();
+        _lblSyncToken = new Label();
+        _txtSyncToken = new TextBox();
+        _btnSyncPull = new Button();
+        _lblGistId = new Label();
+        _gistIdActionPanel = new TableLayoutPanel();
+        _txtGistId = new TextBox();
+        _lblGistSeparator = new Label();
+        _btnSyncPush = new Button();
+        _lblConfigFile = new Label();
         _configActionPanel = new TableLayoutPanel();
         _quickConfigPanel = new FlowLayoutPanel();
         _configBtnPanel = new FlowLayoutPanel();
@@ -230,8 +227,12 @@ partial class MainForm
         _statusPanel = new FlowLayoutPanel();
         _lblStatus = new Label();
         _lblStats = new Label();
-        _controlPanel = new FlowLayoutPanel();
+        label1 = new Label();
         _btnStartStop = new Button();
+        _controlPanel = new FlowLayoutPanel();
+        _lblConfigFileValue = new Label();
+        _lblSyncActions = new Label();
+        _syncActionsPanel = new FlowLayoutPanel();
         _contextMenu = new ContextMenuStrip(components);
         _trayShowMenuItem = new ToolStripMenuItem();
         _trayHideMenuItem = new ToolStripMenuItem();
@@ -250,16 +251,17 @@ partial class MainForm
         _trayBottomSeparator = new ToolStripSeparator();
         _trayExitMenuItem = new ToolStripMenuItem();
         _notifyIcon = new NotifyIcon(components);
+        lblBytes = new Label();
         _mainPanel.SuspendLayout();
         _tabControl.SuspendLayout();
         _configTab.SuspendLayout();
         _configPanel.SuspendLayout();
         _proxyHeaderPanel.SuspendLayout();
+        _proxySettingsPanel.SuspendLayout();
         ((ISupportInitialize)_numProxyPort).BeginInit();
         _procPanel.SuspendLayout();
         _domainRulesPanel.SuspendLayout();
         _startupOptionsPanel.SuspendLayout();
-        _proxySettingsPanel.SuspendLayout();
         _syncProviderTokenPanel.SuspendLayout();
         _gistIdActionPanel.SuspendLayout();
         _configActionPanel.SuspendLayout();
@@ -277,7 +279,6 @@ partial class MainForm
         _aboutContentPanel.SuspendLayout();
         _versionPanel.SuspendLayout();
         _statusPanel.SuspendLayout();
-        _controlPanel.SuspendLayout();
         _contextMenu.SuspendLayout();
         SuspendLayout();
         // 
@@ -326,7 +327,7 @@ partial class MainForm
         // _configPanel
         // 
         _configPanel.ColumnCount = 2;
-        _configPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 150F));
+        _configPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 108F));
         _configPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
         _configPanel.Controls.Add(_proxyHeaderPanel, 0, 0);
         _configPanel.Controls.Add(_proxySettingsPanel, 0, 1);
@@ -347,13 +348,13 @@ partial class MainForm
         _configPanel.Padding = new Padding(10);
         _configPanel.RowCount = 8;
         _configPanel.RowStyles.Add(new RowStyle());
-        _configPanel.RowStyles.Add(new RowStyle());
-        _configPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 50F));
-        _configPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 50F));
-        _configPanel.RowStyles.Add(new RowStyle());
-        _configPanel.RowStyles.Add(new RowStyle());
-        _configPanel.RowStyles.Add(new RowStyle());
-        _configPanel.RowStyles.Add(new RowStyle());
+        _configPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 36F));
+        _configPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 132F));
+        _configPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 143F));
+        _configPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 34F));
+        _configPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 44F));
+        _configPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 44F));
+        _configPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 42F));
         _configPanel.Size = new Size(769, 530);
         _configPanel.TabIndex = 0;
         // 
@@ -418,15 +419,18 @@ partial class MainForm
         _proxySettingsPanel.Controls.Add(_lblProxyScheme, 4, 0);
         _proxySettingsPanel.Controls.Add(_cmbProxyScheme, 5, 0);
         _proxySettingsPanel.Dock = DockStyle.Fill;
+        _proxySettingsPanel.Location = new Point(13, 45);
         _proxySettingsPanel.Margin = new Padding(3, 0, 3, 3);
         _proxySettingsPanel.Name = "_proxySettingsPanel";
         _proxySettingsPanel.RowCount = 1;
         _proxySettingsPanel.RowStyles.Add(new RowStyle());
+        _proxySettingsPanel.Size = new Size(743, 33);
         _proxySettingsPanel.TabIndex = 1;
         // 
         // _lblProxyHost
         // 
         _lblProxyHost.Anchor = AnchorStyles.Left | AnchorStyles.Right;
+        _lblProxyHost.Location = new Point(3, 6);
         _lblProxyHost.Name = "_lblProxyHost";
         _lblProxyHost.Size = new Size(99, 23);
         _lblProxyHost.TabIndex = 0;
@@ -436,14 +440,16 @@ partial class MainForm
         // _cmbProxyHost
         // 
         _cmbProxyHost.Dock = DockStyle.Fill;
-        _cmbProxyHost.DropDownStyle = ComboBoxStyle.DropDown;
+        _cmbProxyHost.Location = new Point(108, 5);
         _cmbProxyHost.Margin = new Padding(3, 5, 3, 5);
         _cmbProxyHost.Name = "_cmbProxyHost";
+        _cmbProxyHost.Size = new Size(318, 25);
         _cmbProxyHost.TabIndex = 1;
         // 
         // _lblProxyPort
         // 
         _lblProxyPort.Anchor = AnchorStyles.Left | AnchorStyles.Right;
+        _lblProxyPort.Location = new Point(432, 6);
         _lblProxyPort.Name = "_lblProxyPort";
         _lblProxyPort.Size = new Size(44, 23);
         _lblProxyPort.TabIndex = 2;
@@ -453,15 +459,18 @@ partial class MainForm
         // _numProxyPort
         // 
         _numProxyPort.Dock = DockStyle.Fill;
+        _numProxyPort.Location = new Point(482, 5);
         _numProxyPort.Margin = new Padding(3, 5, 3, 5);
         _numProxyPort.Maximum = new decimal(new int[] { 65535, 0, 0, 0 });
         _numProxyPort.Name = "_numProxyPort";
+        _numProxyPort.Size = new Size(72, 23);
         _numProxyPort.TabIndex = 3;
         _numProxyPort.Value = new decimal(new int[] { 7890, 0, 0, 0 });
         // 
         // _lblProxyScheme
         // 
         _lblProxyScheme.Anchor = AnchorStyles.Left | AnchorStyles.Right;
+        _lblProxyScheme.Location = new Point(560, 6);
         _lblProxyScheme.Name = "_lblProxyScheme";
         _lblProxyScheme.Size = new Size(62, 23);
         _lblProxyScheme.TabIndex = 4;
@@ -473,16 +482,18 @@ partial class MainForm
         _cmbProxyScheme.Dock = DockStyle.Fill;
         _cmbProxyScheme.DropDownStyle = ComboBoxStyle.DropDownList;
         _cmbProxyScheme.Items.AddRange(new object[] { "socks5", "socks4", "http", "https" });
+        _cmbProxyScheme.Location = new Point(628, 5);
         _cmbProxyScheme.Margin = new Padding(3, 5, 5, 5);
         _cmbProxyScheme.Name = "_cmbProxyScheme";
+        _cmbProxyScheme.Size = new Size(110, 25);
         _cmbProxyScheme.TabIndex = 5;
         // 
         // _lblProcesses
         // 
         _lblProcesses.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
-        _lblProcesses.Location = new Point(13, 146);
+        _lblProcesses.Location = new Point(13, 81);
         _lblProcesses.Name = "_lblProcesses";
-        _lblProcesses.Size = new Size(144, 23);
+        _lblProcesses.Size = new Size(102, 23);
         _lblProcesses.TabIndex = 6;
         _lblProcesses.Text = "Process Name List:";
         _lblProcesses.TextAlign = ContentAlignment.TopRight;
@@ -493,12 +504,12 @@ partial class MainForm
         _procPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
         _procPanel.Controls.Add(_txtProcesses, 0, 0);
         _procPanel.Dock = DockStyle.Fill;
-        _procPanel.Location = new Point(165, 151);
+        _procPanel.Location = new Point(123, 86);
         _procPanel.Margin = new Padding(5);
         _procPanel.Name = "_procPanel";
         _procPanel.RowCount = 1;
         _procPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
-        _procPanel.Size = new Size(589, 120);
+        _procPanel.Size = new Size(631, 122);
         _procPanel.TabIndex = 7;
         // 
         // _txtProcesses
@@ -509,18 +520,18 @@ partial class MainForm
         _txtProcesses.Location = new Point(3, 3);
         _txtProcesses.Multiline = true;
         _txtProcesses.Name = "_txtProcesses";
-        _txtProcesses.PlaceholderText = "姣忚涓€涓繘绋嬪悕锛屼緥濡?\r\ndevenv.exe\r\nservicehub*.exe";
+        _txtProcesses.PlaceholderText = "\r\ndevenv.exe\r\nservicehub*.exe";
         _txtProcesses.ScrollBars = ScrollBars.Vertical;
-        _txtProcesses.Size = new Size(583, 114);
+        _txtProcesses.Size = new Size(625, 116);
         _txtProcesses.TabIndex = 0;
         _txtProcesses.WordWrap = false;
         // 
         // _lblDomainRules
         // 
         _lblDomainRules.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
-        _lblDomainRules.Location = new Point(13, 276);
+        _lblDomainRules.Location = new Point(13, 213);
         _lblDomainRules.Name = "_lblDomainRules";
-        _lblDomainRules.Size = new Size(144, 23);
+        _lblDomainRules.Size = new Size(102, 23);
         _lblDomainRules.TabIndex = 8;
         _lblDomainRules.Text = "Domain Rule List:";
         _lblDomainRules.TextAlign = ContentAlignment.TopRight;
@@ -531,12 +542,12 @@ partial class MainForm
         _domainRulesPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
         _domainRulesPanel.Controls.Add(_txtDomainRules, 0, 0);
         _domainRulesPanel.Dock = DockStyle.Fill;
-        _domainRulesPanel.Location = new Point(165, 281);
+        _domainRulesPanel.Location = new Point(123, 218);
         _domainRulesPanel.Margin = new Padding(5);
         _domainRulesPanel.Name = "_domainRulesPanel";
         _domainRulesPanel.RowCount = 1;
         _domainRulesPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
-        _domainRulesPanel.Size = new Size(589, 120);
+        _domainRulesPanel.Size = new Size(631, 133);
         _domainRulesPanel.TabIndex = 9;
         // 
         // _txtDomainRules
@@ -547,146 +558,11 @@ partial class MainForm
         _txtDomainRules.Location = new Point(3, 3);
         _txtDomainRules.Multiline = true;
         _txtDomainRules.Name = "_txtDomainRules";
-        _txtDomainRules.PlaceholderText = "姣忚涓€涓煙鍚嶈鍒欙紝渚嬪:\r\n*.github.com\r\nraw.githubusercontent.com";
+        _txtDomainRules.PlaceholderText = ":\r\n*.github.com\r\nraw.githubusercontent.com";
         _txtDomainRules.ScrollBars = ScrollBars.Vertical;
-        _txtDomainRules.Size = new Size(583, 114);
+        _txtDomainRules.Size = new Size(625, 127);
         _txtDomainRules.TabIndex = 0;
         _txtDomainRules.WordWrap = false;
-        // 
-        // _lblConfigFile
-        // 
-        _lblConfigFile.Anchor = AnchorStyles.Left | AnchorStyles.Right;
-        _lblConfigFile.Location = new Point(13, 411);
-        _lblConfigFile.Name = "_lblConfigFile";
-        _lblConfigFile.Size = new Size(144, 23);
-        _lblConfigFile.TabIndex = 14;
-        _lblConfigFile.Text = "Config File:";
-        _lblConfigFile.TextAlign = ContentAlignment.MiddleRight;
-        // 
-        // _lblConfigFileValue
-        // 
-        _lblConfigFileValue.AutoEllipsis = true;
-        _lblConfigFileValue.Dock = DockStyle.Fill;
-        _lblConfigFileValue.Location = new Point(165, 411);
-        _lblConfigFileValue.Margin = new Padding(5);
-        _lblConfigFileValue.Name = "_lblConfigFileValue";
-        _lblConfigFileValue.Size = new Size(589, 23);
-        _lblConfigFileValue.TabIndex = 15;
-        _lblConfigFileValue.TextAlign = ContentAlignment.MiddleLeft;
-        // 
-        // _lblSyncProvider
-        // 
-        _lblSyncProvider.Anchor = AnchorStyles.Left | AnchorStyles.Right;
-        _lblSyncProvider.Name = "_lblSyncProvider";
-        _lblSyncProvider.Size = new Size(144, 23);
-        _lblSyncProvider.TabIndex = 16;
-        _lblSyncProvider.Text = "Sync Provider:";
-        _lblSyncProvider.TextAlign = ContentAlignment.MiddleRight;
-        // 
-        // _cmbSyncProvider
-        // 
-        _cmbSyncProvider.DropDownStyle = ComboBoxStyle.DropDownList;
-        _cmbSyncProvider.Items.AddRange(new object[] { "GitHub", "Gitee" });
-        _cmbSyncProvider.Dock = DockStyle.Fill;
-        _cmbSyncProvider.Margin = new Padding(3, 5, 3, 5);
-        _cmbSyncProvider.Name = "_cmbSyncProvider";
-        _cmbSyncProvider.TabIndex = 17;
-        // 
-        // _lblSyncToken
-        // 
-        _lblSyncToken.Anchor = AnchorStyles.Left | AnchorStyles.Right;
-        _lblSyncToken.Name = "_lblSyncToken";
-        _lblSyncToken.Size = new Size(76, 23);
-        _lblSyncToken.TabIndex = 18;
-        _lblSyncToken.Text = "Sync Token:";
-        _lblSyncToken.TextAlign = ContentAlignment.MiddleRight;
-        // 
-        // _txtSyncToken
-        // 
-        _txtSyncToken.Dock = DockStyle.Fill;
-        _txtSyncToken.Margin = new Padding(3, 5, 3, 5);
-        _txtSyncToken.Name = "_txtSyncToken";
-        _txtSyncToken.PasswordChar = '●';
-        _txtSyncToken.PlaceholderText = "Enter GitHub or Gitee personal access token";
-        _txtSyncToken.TabIndex = 19;
-        // 
-        // _btnSyncPull
-        // 
-        _btnSyncPull.Dock = DockStyle.Fill;
-        _btnSyncPull.Margin = new Padding(3, 2, 3, 2);
-        _btnSyncPull.Name = "_btnSyncPull";
-        _btnSyncPull.TabIndex = 20;
-        _btnSyncPull.Text = "⬇ Pull Config";
-        _btnSyncPull.UseVisualStyleBackColor = true;
-        _btnSyncPull.Click += BtnSyncPull_Click;
-        // 
-        // _syncProviderTokenPanel
-        // 
-        _syncProviderTokenPanel.ColumnCount = 4;
-        _syncProviderTokenPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 100F));
-        _syncProviderTokenPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 82F));
-        _syncProviderTokenPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-        _syncProviderTokenPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 105F));
-        _syncProviderTokenPanel.Controls.Add(_cmbSyncProvider, 0, 0);
-        _syncProviderTokenPanel.Controls.Add(_lblSyncToken, 1, 0);
-        _syncProviderTokenPanel.Controls.Add(_txtSyncToken, 2, 0);
-        _syncProviderTokenPanel.Controls.Add(_btnSyncPull, 3, 0);
-        _syncProviderTokenPanel.Dock = DockStyle.Fill;
-        _syncProviderTokenPanel.Margin = new Padding(5);
-        _syncProviderTokenPanel.Name = "_syncProviderTokenPanel";
-        _syncProviderTokenPanel.RowCount = 1;
-        _syncProviderTokenPanel.RowStyles.Add(new RowStyle());
-        _syncProviderTokenPanel.TabIndex = 17;
-        // 
-        // _lblGistId
-        // 
-        _lblGistId.Anchor = AnchorStyles.Left | AnchorStyles.Right;
-        _lblGistId.Name = "_lblGistId";
-        _lblGistId.Size = new Size(144, 23);
-        _lblGistId.TabIndex = 21;
-        _lblGistId.Text = "Gist / Snippet ID:";
-        _lblGistId.TextAlign = ContentAlignment.MiddleRight;
-        // 
-        // _txtGistId
-        // 
-        _txtGistId.Dock = DockStyle.Fill;
-        _txtGistId.Margin = new Padding(3, 5, 3, 5);
-        _txtGistId.Name = "_txtGistId";
-        _txtGistId.PlaceholderText = "Optional – auto-discovered or filled automatically after first push";
-        _txtGistId.TabIndex = 22;
-        // 
-        // _lblGistSeparator
-        // 
-        _lblGistSeparator.Anchor = AnchorStyles.Left | AnchorStyles.Right;
-        _lblGistSeparator.Name = "_lblGistSeparator";
-        _lblGistSeparator.Text = "::";
-        _lblGistSeparator.TextAlign = ContentAlignment.MiddleCenter;
-        // 
-        // _btnSyncPush
-        // 
-        _btnSyncPush.Dock = DockStyle.Fill;
-        _btnSyncPush.Margin = new Padding(3, 2, 3, 2);
-        _btnSyncPush.Name = "_btnSyncPush";
-        _btnSyncPush.TabIndex = 23;
-        _btnSyncPush.Text = "⬆ Push Config";
-        _btnSyncPush.UseVisualStyleBackColor = true;
-        _btnSyncPush.Click += BtnSyncPush_Click;
-        // 
-        // _gistIdActionPanel
-        // 
-        _gistIdActionPanel.ColumnCount = 3;
-        _gistIdActionPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-        _gistIdActionPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 25F));
-        _gistIdActionPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 105F));
-        _gistIdActionPanel.Controls.Add(_txtGistId, 0, 0);
-        _gistIdActionPanel.Controls.Add(_lblGistSeparator, 1, 0);
-        _gistIdActionPanel.Controls.Add(_btnSyncPush, 2, 0);
-        _gistIdActionPanel.Dock = DockStyle.Fill;
-        _gistIdActionPanel.Margin = new Padding(5);
-        _gistIdActionPanel.Name = "_gistIdActionPanel";
-        _gistIdActionPanel.RowCount = 1;
-        _gistIdActionPanel.RowStyles.Add(new RowStyle());
-        _gistIdActionPanel.TabIndex = 18;
         // 
         // _startupOptionsPanel
         // 
@@ -695,7 +571,7 @@ partial class MainForm
         _startupOptionsPanel.Controls.Add(_chkStartOnBoot);
         _startupOptionsPanel.Controls.Add(_chkAutoStartProxy);
         _startupOptionsPanel.Dock = DockStyle.Top;
-        _startupOptionsPanel.Location = new Point(13, 442);
+        _startupOptionsPanel.Location = new Point(13, 359);
         _startupOptionsPanel.Name = "_startupOptionsPanel";
         _startupOptionsPanel.Size = new Size(743, 27);
         _startupOptionsPanel.TabIndex = 17;
@@ -722,6 +598,150 @@ partial class MainForm
         _chkAutoStartProxy.Text = "Start Proxy after launch";
         _chkAutoStartProxy.CheckedChanged += ChkAutoStartProxy_CheckedChanged;
         // 
+        // _lblSyncProvider
+        // 
+        _lblSyncProvider.Anchor = AnchorStyles.Left | AnchorStyles.Right;
+        _lblSyncProvider.Location = new Point(13, 400);
+        _lblSyncProvider.Name = "_lblSyncProvider";
+        _lblSyncProvider.Size = new Size(102, 23);
+        _lblSyncProvider.TabIndex = 16;
+        _lblSyncProvider.Text = "Sync Provider:";
+        _lblSyncProvider.TextAlign = ContentAlignment.MiddleRight;
+        // 
+        // _syncProviderTokenPanel
+        // 
+        _syncProviderTokenPanel.ColumnCount = 4;
+        _syncProviderTokenPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 100F));
+        _syncProviderTokenPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 82F));
+        _syncProviderTokenPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+        _syncProviderTokenPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 105F));
+        _syncProviderTokenPanel.Controls.Add(_cmbSyncProvider, 0, 0);
+        _syncProviderTokenPanel.Controls.Add(_lblSyncToken, 1, 0);
+        _syncProviderTokenPanel.Controls.Add(_txtSyncToken, 2, 0);
+        _syncProviderTokenPanel.Controls.Add(_btnSyncPull, 3, 0);
+        _syncProviderTokenPanel.Dock = DockStyle.Fill;
+        _syncProviderTokenPanel.Location = new Point(123, 395);
+        _syncProviderTokenPanel.Margin = new Padding(5);
+        _syncProviderTokenPanel.Name = "_syncProviderTokenPanel";
+        _syncProviderTokenPanel.RowCount = 1;
+        _syncProviderTokenPanel.RowStyles.Add(new RowStyle());
+        _syncProviderTokenPanel.Size = new Size(631, 34);
+        _syncProviderTokenPanel.TabIndex = 17;
+        // 
+        // _cmbSyncProvider
+        // 
+        _cmbSyncProvider.Dock = DockStyle.Fill;
+        _cmbSyncProvider.DropDownStyle = ComboBoxStyle.DropDownList;
+        _cmbSyncProvider.Items.AddRange(new object[] { "GitHub", "Gitee" });
+        _cmbSyncProvider.Location = new Point(3, 5);
+        _cmbSyncProvider.Margin = new Padding(3, 5, 3, 5);
+        _cmbSyncProvider.Name = "_cmbSyncProvider";
+        _cmbSyncProvider.Size = new Size(94, 25);
+        _cmbSyncProvider.TabIndex = 17;
+        // 
+        // _lblSyncToken
+        // 
+        _lblSyncToken.Anchor = AnchorStyles.Left | AnchorStyles.Right;
+        _lblSyncToken.Location = new Point(103, 6);
+        _lblSyncToken.Name = "_lblSyncToken";
+        _lblSyncToken.Size = new Size(76, 23);
+        _lblSyncToken.TabIndex = 18;
+        _lblSyncToken.Text = "Sync Token:";
+        _lblSyncToken.TextAlign = ContentAlignment.MiddleRight;
+        // 
+        // _txtSyncToken
+        // 
+        _txtSyncToken.Dock = DockStyle.Fill;
+        _txtSyncToken.Location = new Point(185, 5);
+        _txtSyncToken.Margin = new Padding(3, 5, 3, 5);
+        _txtSyncToken.Name = "_txtSyncToken";
+        _txtSyncToken.PasswordChar = '●';
+        _txtSyncToken.PlaceholderText = "Enter GitHub or Gitee personal access token";
+        _txtSyncToken.Size = new Size(338, 23);
+        _txtSyncToken.TabIndex = 19;
+        // 
+        // _btnSyncPull
+        // 
+        _btnSyncPull.Dock = DockStyle.Fill;
+        _btnSyncPull.Location = new Point(529, 2);
+        _btnSyncPull.Margin = new Padding(3, 2, 3, 2);
+        _btnSyncPull.Name = "_btnSyncPull";
+        _btnSyncPull.Size = new Size(99, 31);
+        _btnSyncPull.TabIndex = 20;
+        _btnSyncPull.Text = "⬇ Pull Config";
+        _btnSyncPull.UseVisualStyleBackColor = true;
+        _btnSyncPull.Click += BtnSyncPull_Click;
+        // 
+        // _lblGistId
+        // 
+        _lblGistId.Anchor = AnchorStyles.Left | AnchorStyles.Right;
+        _lblGistId.Location = new Point(13, 444);
+        _lblGistId.Name = "_lblGistId";
+        _lblGistId.Size = new Size(102, 23);
+        _lblGistId.TabIndex = 21;
+        _lblGistId.Text = "Gist / Snippet ID:";
+        _lblGistId.TextAlign = ContentAlignment.MiddleRight;
+        // 
+        // _gistIdActionPanel
+        // 
+        _gistIdActionPanel.ColumnCount = 3;
+        _gistIdActionPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+        _gistIdActionPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 25F));
+        _gistIdActionPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 105F));
+        _gistIdActionPanel.Controls.Add(_txtGistId, 0, 0);
+        _gistIdActionPanel.Controls.Add(_lblGistSeparator, 1, 0);
+        _gistIdActionPanel.Controls.Add(_btnSyncPush, 2, 0);
+        _gistIdActionPanel.Dock = DockStyle.Fill;
+        _gistIdActionPanel.Location = new Point(123, 439);
+        _gistIdActionPanel.Margin = new Padding(5);
+        _gistIdActionPanel.Name = "_gistIdActionPanel";
+        _gistIdActionPanel.RowCount = 1;
+        _gistIdActionPanel.RowStyles.Add(new RowStyle());
+        _gistIdActionPanel.Size = new Size(631, 34);
+        _gistIdActionPanel.TabIndex = 18;
+        // 
+        // _txtGistId
+        // 
+        _txtGistId.Dock = DockStyle.Fill;
+        _txtGistId.Location = new Point(3, 5);
+        _txtGistId.Margin = new Padding(3, 5, 3, 5);
+        _txtGistId.Name = "_txtGistId";
+        _txtGistId.PlaceholderText = "Optional – auto-discovered or filled automatically after first push";
+        _txtGistId.Size = new Size(495, 23);
+        _txtGistId.TabIndex = 22;
+        // 
+        // _lblGistSeparator
+        // 
+        _lblGistSeparator.Anchor = AnchorStyles.Left | AnchorStyles.Right;
+        _lblGistSeparator.Location = new Point(504, 5);
+        _lblGistSeparator.Name = "_lblGistSeparator";
+        _lblGistSeparator.Size = new Size(19, 23);
+        _lblGistSeparator.TabIndex = 23;
+        _lblGistSeparator.Text = "::";
+        _lblGistSeparator.TextAlign = ContentAlignment.MiddleCenter;
+        // 
+        // _btnSyncPush
+        // 
+        _btnSyncPush.Dock = DockStyle.Fill;
+        _btnSyncPush.Location = new Point(529, 2);
+        _btnSyncPush.Margin = new Padding(3, 2, 3, 2);
+        _btnSyncPush.Name = "_btnSyncPush";
+        _btnSyncPush.Size = new Size(99, 30);
+        _btnSyncPush.TabIndex = 23;
+        _btnSyncPush.Text = "⬆ Push Config";
+        _btnSyncPush.UseVisualStyleBackColor = true;
+        _btnSyncPush.Click += BtnSyncPush_Click;
+        // 
+        // _lblConfigFile
+        // 
+        _lblConfigFile.Anchor = AnchorStyles.Left | AnchorStyles.Right;
+        _lblConfigFile.Location = new Point(13, 487);
+        _lblConfigFile.Name = "_lblConfigFile";
+        _lblConfigFile.Size = new Size(102, 23);
+        _lblConfigFile.TabIndex = 14;
+        _lblConfigFile.Text = "Config File:";
+        _lblConfigFile.TextAlign = ContentAlignment.MiddleRight;
+        // 
         // _configActionPanel
         // 
         _configActionPanel.AutoSize = true;
@@ -731,11 +751,12 @@ partial class MainForm
         _configActionPanel.Controls.Add(_quickConfigPanel, 0, 0);
         _configActionPanel.Controls.Add(_configBtnPanel, 1, 0);
         _configActionPanel.Dock = DockStyle.Fill;
+        _configActionPanel.Location = new Point(121, 478);
         _configActionPanel.Margin = new Padding(3, 0, 3, 3);
         _configActionPanel.Name = "_configActionPanel";
         _configActionPanel.RowCount = 1;
         _configActionPanel.RowStyles.Add(new RowStyle());
-        _configActionPanel.Size = new Size(743, 44);
+        _configActionPanel.Size = new Size(635, 39);
         _configActionPanel.TabIndex = 18;
         // 
         // _quickConfigPanel
@@ -745,7 +766,7 @@ partial class MainForm
         _quickConfigPanel.Location = new Point(0, 0);
         _quickConfigPanel.Margin = new Padding(0);
         _quickConfigPanel.Name = "_quickConfigPanel";
-        _quickConfigPanel.Size = new Size(423, 44);
+        _quickConfigPanel.Size = new Size(315, 44);
         _quickConfigPanel.TabIndex = 0;
         _quickConfigPanel.WrapContents = false;
         // 
@@ -757,7 +778,7 @@ partial class MainForm
         _configBtnPanel.Controls.Add(_btnSaveConfig);
         _configBtnPanel.Dock = DockStyle.Top;
         _configBtnPanel.FlowDirection = FlowDirection.RightToLeft;
-        _configBtnPanel.Location = new Point(428, 5);
+        _configBtnPanel.Location = new Point(320, 5);
         _configBtnPanel.Margin = new Padding(5);
         _configBtnPanel.Name = "_configBtnPanel";
         _configBtnPanel.Size = new Size(310, 34);
@@ -900,7 +921,7 @@ partial class MainForm
         _chkRetestSlowOrTimeoutOnly.Location = new Point(265, 7);
         _chkRetestSlowOrTimeoutOnly.Margin = new Padding(3, 7, 3, 3);
         _chkRetestSlowOrTimeoutOnly.Name = "_chkRetestSlowOrTimeoutOnly";
-        _chkRetestSlowOrTimeoutOnly.Size = new Size(245, 21);
+        _chkRetestSlowOrTimeoutOnly.Size = new Size(267, 21);
         _chkRetestSlowOrTimeoutOnly.TabIndex = 2;
         _chkRetestSlowOrTimeoutOnly.Text = "Only retest timeout/high-latency domains";
         // 
@@ -1216,7 +1237,7 @@ partial class MainForm
         contribContentLabel.Margin = new Padding(10, 0, 0, 15);
         contribContentLabel.MaximumSize = new Size(450, 0);
         contribContentLabel.Name = "contribContentLabel";
-        contribContentLabel.Size = new Size(290, 68);
+        contribContentLabel.Size = new Size(299, 68);
         contribContentLabel.TabIndex = 5;
         contribContentLabel.Text = "鈥?Original Author: maikebing\n鈥?Repository: github.com/maikebing/TrafficPilot\n鈥?WinDivert: Windows Packet Divert library\n鈥?Contributors: Community members and testers";
         // 
@@ -1247,6 +1268,9 @@ partial class MainForm
         _statusPanel.AutoScroll = true;
         _statusPanel.Controls.Add(_lblStatus);
         _statusPanel.Controls.Add(_lblStats);
+        _statusPanel.Controls.Add(lblBytes);
+        _statusPanel.Controls.Add(label1);
+        _statusPanel.Controls.Add(_btnStartStop);
         _statusPanel.Dock = DockStyle.Fill;
         _statusPanel.Location = new Point(5, 570);
         _statusPanel.Margin = new Padding(0);
@@ -1259,25 +1283,41 @@ partial class MainForm
         // 
         _lblStatus.Location = new Point(3, 0);
         _lblStatus.Name = "_lblStatus";
-        _lblStatus.Size = new Size(200, 40);
+        _lblStatus.Size = new Size(211, 40);
         _lblStatus.TabIndex = 0;
         _lblStatus.Text = "Status: Stopped";
         _lblStatus.TextAlign = ContentAlignment.MiddleLeft;
         // 
         // _lblStats
         // 
-        _lblStats.AutoSize = true;
-        _lblStats.Location = new Point(226, 0);
+        _lblStats.Location = new Point(237, 0);
         _lblStats.Margin = new Padding(20, 0, 0, 0);
         _lblStats.Name = "_lblStats";
-        _lblStats.Size = new Size(48, 17);
+        _lblStats.Size = new Size(129, 40);
         _lblStats.TabIndex = 1;
         _lblStats.Text = "Stats: -";
         _lblStats.TextAlign = ContentAlignment.MiddleLeft;
         // 
+        // label1
+        // 
+        label1.Location = new Point(475, 0);
+        label1.Name = "label1";
+        label1.Size = new Size(175, 40);
+        label1.TabIndex = 2;
+        // 
+        // _btnStartStop
+        // 
+        _btnStartStop.BackColor = Color.LimeGreen;
+        _btnStartStop.Location = new Point(656, 3);
+        _btnStartStop.Name = "_btnStartStop";
+        _btnStartStop.Size = new Size(100, 40);
+        _btnStartStop.TabIndex = 0;
+        _btnStartStop.Text = "Start Proxy";
+        _btnStartStop.UseVisualStyleBackColor = false;
+        _btnStartStop.Click += BtnStartStop_Click;
+        // 
         // _controlPanel
         // 
-        _controlPanel.Controls.Add(_btnStartStop);
         _controlPanel.Dock = DockStyle.Fill;
         _controlPanel.FlowDirection = FlowDirection.RightToLeft;
         _controlPanel.Location = new Point(5, 620);
@@ -1287,16 +1327,30 @@ partial class MainForm
         _controlPanel.TabIndex = 2;
         _controlPanel.WrapContents = false;
         // 
-        // _btnStartStop
+        // _lblConfigFileValue
         // 
-        _btnStartStop.BackColor = Color.LimeGreen;
-        _btnStartStop.Location = new Point(674, 3);
-        _btnStartStop.Name = "_btnStartStop";
-        _btnStartStop.Size = new Size(100, 40);
-        _btnStartStop.TabIndex = 0;
-        _btnStartStop.Text = "Start Proxy";
-        _btnStartStop.UseVisualStyleBackColor = false;
-        _btnStartStop.Click += BtnStartStop_Click;
+        _lblConfigFileValue.AutoEllipsis = true;
+        _lblConfigFileValue.Dock = DockStyle.Fill;
+        _lblConfigFileValue.Location = new Point(165, 411);
+        _lblConfigFileValue.Margin = new Padding(5);
+        _lblConfigFileValue.Name = "_lblConfigFileValue";
+        _lblConfigFileValue.Size = new Size(589, 23);
+        _lblConfigFileValue.TabIndex = 15;
+        _lblConfigFileValue.TextAlign = ContentAlignment.MiddleLeft;
+        // 
+        // _lblSyncActions
+        // 
+        _lblSyncActions.Location = new Point(0, 0);
+        _lblSyncActions.Name = "_lblSyncActions";
+        _lblSyncActions.Size = new Size(100, 23);
+        _lblSyncActions.TabIndex = 0;
+        // 
+        // _syncActionsPanel
+        // 
+        _syncActionsPanel.Location = new Point(0, 0);
+        _syncActionsPanel.Name = "_syncActionsPanel";
+        _syncActionsPanel.Size = new Size(200, 100);
+        _syncActionsPanel.TabIndex = 0;
         // 
         // _contextMenu
         // 
@@ -1417,6 +1471,15 @@ partial class MainForm
         _notifyIcon.Visible = true;
         _notifyIcon.DoubleClick += NotifyIcon_DoubleClick;
         // 
+        // lblBytes
+        // 
+        lblBytes.Location = new Point(369, 0);
+        lblBytes.Name = "lblBytes";
+        lblBytes.Size = new Size(100, 43);
+        lblBytes.TabIndex = 3;
+        lblBytes.Text = "bytes";
+        lblBytes.TextAlign = ContentAlignment.MiddleLeft;
+        // 
         // MainForm
         // 
         ClientSize = new Size(787, 675);
@@ -1433,6 +1496,7 @@ partial class MainForm
         _configPanel.PerformLayout();
         _proxyHeaderPanel.ResumeLayout(false);
         _proxyHeaderPanel.PerformLayout();
+        _proxySettingsPanel.ResumeLayout(false);
         ((ISupportInitialize)_numProxyPort).EndInit();
         _procPanel.ResumeLayout(false);
         _procPanel.PerformLayout();
@@ -1440,8 +1504,6 @@ partial class MainForm
         _domainRulesPanel.PerformLayout();
         _startupOptionsPanel.ResumeLayout(false);
         _startupOptionsPanel.PerformLayout();
-        _proxySettingsPanel.ResumeLayout(false);
-        _proxySettingsPanel.PerformLayout();
         _syncProviderTokenPanel.ResumeLayout(false);
         _syncProviderTokenPanel.PerformLayout();
         _gistIdActionPanel.ResumeLayout(false);
@@ -1453,6 +1515,7 @@ partial class MainForm
         _dnsRedirectPanel.ResumeLayout(false);
         _dnsRedirectPanel.PerformLayout();
         _hostsRedirectBtnPanel.ResumeLayout(false);
+        _hostsRedirectBtnPanel.PerformLayout();
         _autoFetchPanel.ResumeLayout(false);
         _autoFetchPanel.PerformLayout();
         ((ISupportInitialize)_numAutoFetchInterval).EndInit();
@@ -1467,8 +1530,6 @@ partial class MainForm
         _versionPanel.ResumeLayout(false);
         _versionPanel.PerformLayout();
         _statusPanel.ResumeLayout(false);
-        _statusPanel.PerformLayout();
-        _controlPanel.ResumeLayout(false);
         _contextMenu.ResumeLayout(false);
         ResumeLayout(false);
     }
@@ -1650,6 +1711,9 @@ partial class MainForm
         else
             item.ForeColor = Color.Red;
     }
+
+    private Label label1;
+    private Label lblBytes;
 }
 
 
