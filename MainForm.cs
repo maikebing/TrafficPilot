@@ -711,9 +711,23 @@ internal partial class MainForm : Form
 
 	private void BatchAppendLogs(List<string> messages)
 	{
+		if (_rtbLogs is null || _rtbLogs.IsDisposed || !_rtbLogs.IsHandleCreated)
+			return;
+
 		if (_rtbLogs!.InvokeRequired)
 		{
-			_rtbLogs.Invoke(() => BatchAppendLogs(messages));
+			try
+			{
+				_rtbLogs.BeginInvoke(() => BatchAppendLogs(messages));
+			}
+			catch (ObjectDisposedException)
+			{
+				return;
+			}
+			catch (InvalidOperationException)
+			{
+				return;
+			}
 			return;
 		}
 
@@ -1261,7 +1275,7 @@ internal partial class MainForm : Form
 		}
 		catch (Exception ex)
 		{
-			AppendLog($"[{DateTime.Now:HH:mm:ss.fff}] [Config] Upstream model refresh failed: {ex.Message}");
+			AppendLog($"[{DateTime.Now:HH:mm:ss.fff}] [Config] Upstream model refresh failed: {ex}");
 			MessageBox.Show(
 				$"Failed to refresh upstream models: {ex.Message}",
 				"Local API Models",

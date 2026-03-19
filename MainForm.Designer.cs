@@ -440,8 +440,7 @@ partial class MainForm
         // _chkLocalProxy
         // 
         _chkLocalProxy.Anchor = AnchorStyles.Left | AnchorStyles.Right;
-        _chkLocalProxy.AutoSize = false;
-        _chkLocalProxy.Location = new Point(3, 6);
+        _chkLocalProxy.Location = new Point(3, 8);
         _chkLocalProxy.Margin = new Padding(3, 6, 3, 3);
         _chkLocalProxy.Name = "_chkLocalProxy";
         _chkLocalProxy.Size = new Size(89, 21);
@@ -465,7 +464,7 @@ partial class MainForm
         _cmbProxyHost.Location = new Point(143, 5);
         _cmbProxyHost.Margin = new Padding(3, 5, 3, 5);
         _cmbProxyHost.Name = "_cmbProxyHost";
-        _cmbProxyHost.Size = new Size(310, 25);
+        _cmbProxyHost.Size = new Size(283, 25);
         _cmbProxyHost.TabIndex = 2;
         // 
         // _lblProxyPort
@@ -1201,7 +1200,7 @@ partial class MainForm
         _aboutContentPanel.RowStyles.Add(new RowStyle());
         _aboutContentPanel.RowStyles.Add(new RowStyle());
         _aboutContentPanel.RowStyles.Add(new RowStyle());
-        _aboutContentPanel.Size = new Size(732, 531);
+        _aboutContentPanel.Size = new Size(732, 667);
         _aboutContentPanel.TabIndex = 0;
         // 
         // titleLabel
@@ -1290,7 +1289,7 @@ partial class MainForm
         descContentLabel.Margin = new Padding(10, 0, 0, 15);
         descContentLabel.MaximumSize = new Size(450, 0);
         descContentLabel.Name = "descContentLabel";
-        descContentLabel.Size = new Size(440, 170);
+        descContentLabel.Size = new Size(450, 306);
         descContentLabel.TabIndex = 3;
         descContentLabel.Text = resources.GetString("descContentLabel.Text");
         // 
@@ -1298,7 +1297,7 @@ partial class MainForm
         // 
         contribLabel.AutoSize = true;
         contribLabel.Font = new Font("Segoe UI", 11F, FontStyle.Bold);
-        contribLabel.Location = new Point(10, 303);
+        contribLabel.Location = new Point(10, 439);
         contribLabel.Margin = new Padding(0, 0, 0, 5);
         contribLabel.Name = "contribLabel";
         contribLabel.Size = new Size(236, 20);
@@ -1308,7 +1307,7 @@ partial class MainForm
         // contribContentLabel
         // 
         contribContentLabel.AutoSize = true;
-        contribContentLabel.Location = new Point(20, 328);
+        contribContentLabel.Location = new Point(20, 464);
         contribContentLabel.Margin = new Padding(10, 0, 0, 15);
         contribContentLabel.MaximumSize = new Size(450, 0);
         contribContentLabel.Name = "contribContentLabel";
@@ -1320,7 +1319,7 @@ partial class MainForm
         // 
         techLabel.AutoSize = true;
         techLabel.Font = new Font("Segoe UI", 11F, FontStyle.Bold);
-        techLabel.Location = new Point(10, 411);
+        techLabel.Location = new Point(10, 547);
         techLabel.Margin = new Padding(0, 0, 0, 5);
         techLabel.Name = "techLabel";
         techLabel.Size = new Size(162, 20);
@@ -1330,7 +1329,7 @@ partial class MainForm
         // techContentLabel
         // 
         techContentLabel.AutoSize = true;
-        techContentLabel.Location = new Point(20, 436);
+        techContentLabel.Location = new Point(20, 572);
         techContentLabel.Margin = new Padding(10, 0, 0, 0);
         techContentLabel.MaximumSize = new Size(450, 0);
         techContentLabel.Name = "techContentLabel";

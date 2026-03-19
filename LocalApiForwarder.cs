@@ -3485,10 +3485,14 @@ internal sealed class LocalApiForwarder : IDisposable
 		if (cachedMatch is not null && !string.IsNullOrWhiteSpace(cachedMatch.UpstreamModel))
 			return cachedMatch.UpstreamModel;
 
-		var configuredMatch = BuildConfiguredModelCatalog().FirstOrDefault(model =>
-			model.LocalName.Equals(localModel, StringComparison.OrdinalIgnoreCase));
-		if (configuredMatch is not null && !string.IsNullOrWhiteSpace(configuredMatch.UpstreamModel))
-			return configuredMatch.UpstreamModel;
+		// Check model mappings directly instead of calling BuildConfiguredModelCatalog(),
+		// which would cause infinite recursion via AddConfiguredModelCatalogEntry →
+		// ResolveGeneratedUpstreamModelAliasOrSelf → TryResolveCatalogMappedUpstreamModel.
+		var mappingMatch = _settings.ModelMappings.FirstOrDefault(m =>
+			m.LocalModel.Equals(localModel, StringComparison.OrdinalIgnoreCase)
+			&& !string.IsNullOrWhiteSpace(m.UpstreamModel));
+		if (mappingMatch is not null)
+			return mappingMatch.UpstreamModel.Trim();
 
 		return null;
 	}

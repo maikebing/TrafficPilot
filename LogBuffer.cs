@@ -45,7 +45,16 @@ internal sealed class LogBuffer
 			batch.Add(msg);
 
 		if (batch.Count > 0)
-			_onFlush(batch);
+		{
+			try
+			{
+				_onFlush(batch);
+			}
+			catch
+			{
+				// Never let background flush failures terminate the process.
+			}
+		}
 	}
 
 	/// <summary>
