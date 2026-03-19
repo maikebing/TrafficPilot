@@ -31,6 +31,9 @@ internal class ProxyConfigModel
 	[JsonPropertyName("configSync")]
 	public ConfigSyncSettings? ConfigSync { get; set; }
 
+	[JsonPropertyName("localApiForwarder")]
+	public LocalApiForwarderSettings? LocalApiForwarder { get; set; }
+
 	public ProxyConfigModel() { }
 
 	public ProxyConfigModel(ProxyOptions opts)
@@ -53,6 +56,7 @@ internal class ProxyConfigModel
 			Enabled = opts.HostsRedirectEnabled,
 			HostsUrl = opts.HostsRedirectUrl
 		};
+		LocalApiForwarder = opts.LocalApiForwarder;
 	}
 }
 
@@ -106,6 +110,96 @@ internal class ConfigSyncSettings
 	[JsonPropertyName("gistId")]
 	[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
 	public string? GistId { get; set; } // Remote gist / snippet ID — not sensitive, stored in config
+}
+
+internal class LocalApiForwarderSettings
+{
+	[JsonPropertyName("enabled")]
+	public bool Enabled { get; set; } = false;
+
+	[JsonPropertyName("ollamaPort")]
+	public ushort OllamaPort { get; set; } = 11434;
+
+	[JsonPropertyName("foundryPort")]
+	public ushort FoundryPort { get; set; } = 5273;
+
+	[JsonPropertyName("provider")]
+	public LocalApiProviderSettings Provider { get; set; } = new();
+
+	[JsonPropertyName("modelMappings")]
+	public List<LocalApiModelMapping> ModelMappings { get; set; } = [];
+
+	[JsonPropertyName("requestResponseLogging")]
+	public LocalApiRequestResponseLoggingSettings RequestResponseLogging { get; set; } = new();
+
+	[JsonPropertyName("includeErrorDiagnostics")]
+	public bool IncludeErrorDiagnostics { get; set; } = true;
+}
+
+internal class LocalApiProviderSettings
+{
+	[JsonPropertyName("protocol")]
+	public string Protocol { get; set; } = "OpenAICompatible";
+
+	[JsonPropertyName("name")]
+	public string Name { get; set; } = "OpenAI Compatible";
+
+	[JsonPropertyName("baseUrl")]
+	public string BaseUrl { get; set; } = "https://api.openai.com/v1/";
+
+	[JsonPropertyName("defaultModel")]
+	public string DefaultModel { get; set; } = string.Empty;
+
+	[JsonPropertyName("defaultEmbeddingModel")]
+	public string DefaultEmbeddingModel { get; set; } = string.Empty;
+
+	[JsonPropertyName("authType")]
+	public string AuthType { get; set; } = "Bearer";
+
+	[JsonPropertyName("authHeaderName")]
+	public string AuthHeaderName { get; set; } = "Authorization";
+
+	[JsonPropertyName("chatEndpoint")]
+	public string ChatEndpoint { get; set; } = "chat/completions";
+
+	[JsonPropertyName("embeddingsEndpoint")]
+	public string EmbeddingsEndpoint { get; set; } = "embeddings";
+
+	[JsonPropertyName("responsesEndpoint")]
+	public string ResponsesEndpoint { get; set; } = "responses";
+
+	[JsonPropertyName("additionalHeaders")]
+	public List<LocalApiHeaderSetting> AdditionalHeaders { get; set; } = [];
+}
+
+internal class LocalApiModelMapping
+{
+	[JsonPropertyName("localModel")]
+	public string LocalModel { get; set; } = string.Empty;
+
+	[JsonPropertyName("upstreamModel")]
+	public string UpstreamModel { get; set; } = string.Empty;
+}
+
+internal class LocalApiHeaderSetting
+{
+	[JsonPropertyName("name")]
+	public string Name { get; set; } = string.Empty;
+
+	[JsonPropertyName("value")]
+	public string Value { get; set; } = string.Empty;
+}
+
+internal class LocalApiRequestResponseLoggingSettings
+{
+	[JsonPropertyName("enabled")]
+	public bool Enabled { get; set; } = false;
+
+	[JsonPropertyName("includeBodies")]
+	public bool IncludeBodies { get; set; } = false;
+
+	[JsonPropertyName("maxBodyCharacters")]
+	public int MaxBodyCharacters { get; set; } = 4000;
 }
 
 internal sealed class ProxyConfigManager
