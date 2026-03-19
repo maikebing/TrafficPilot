@@ -123,7 +123,9 @@
 主要功能：
 • 进程流量重定向：按进程名（支持通配符）将网络请求转发至代理服务器
 • 域名路由规则：按域名（精确或通配符）决定是否走代理，不匹配则直连
-• DNS Hosts 重定向：拦截 DNS 响应，将域名解析替换为指定 IP（如 GitHub520）
+• DNS Hosts 重定向（两种模式）：
+  - DNS Interception：数据包级 DNS 拦截，无需管理员权限
+  - System Hosts File：写入 Windows hosts 文件并同步至所有 WSL 发行版 /etc/hosts，自动备份与清理
 • DoH 自动筛选：通过多个 DoH 服务解析并测速，自动选出最优 IP
 • 自动定时刷新（Auto Fetch）：按间隔自动更新 hosts 与 IP 解析结果
 • 本机代理模式（Local Proxy）：自动使用本机 IP 作为代理地址，网络切换后实时更新

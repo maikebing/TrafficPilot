@@ -11,7 +11,7 @@
 
 - **进程流量重定向**：支持按进程名（含通配符匹配）进行筛选，将相关网络请求通过指定代理服务器转发到目标网络。
 - **域名路由规则**：支持按域名（精确匹配或通配符）决定流量是否走代理，内置 GitHub 相关域名默认规则，不匹配的连接可直接透传。
-- **DNS 地址重定向**：自动下载指定的 hosts 列表（例如 [GitHub520](https://github.com/521xueweihan/GitHub520)），通过 DNS 拦截将域名解析结果替换为对应 IP，使相关网站可直接访问（无需代理）。
+- **DNS 地址重定向**：自动下载指定的 hosts 列表（例如 [GitHub520](https://github.com/521xueweihan/GitHub520)），通过 DNS 拦截将域名解析结果替换为对应 IP，使相关网站可直接访问（无需代理）。支持两种模式：`DNS Interception`（数据包级 DNS 拦截，无需管理员权限）和 `System Hosts File`（写入 Windows hosts 文件并同步到所有 WSL 发行版的 `/etc/hosts`，需管理员权限）。
 - **DoH 自动筛选**：通过多个 DNS-over-HTTPS 服务自动解析域名 IP，并测量直连与代理延迟，自动选出最优 IP 写入 hosts。
 - **自动定时刷新**（Auto Fetch）：可按分钟间隔自动循环执行 IP 解析与 hosts 更新。
 - **本机代理模式**：勾选 `Local Proxy` 后，自动将代理地址更新为本机当前 IP，并在网络切换（WiFi 重连/换网卡）时实时刷新，无需手动修改代理地址。
@@ -43,8 +43,11 @@
 
 1. 切换到 `Hosts Redirect`（Hosts 重定向）选项卡
 2. 勾选 `Enable DNS Hosts Redirect`
-3. 点击 `Refresh Hosts Now` 下载最新的 hosts 列表（约数千条 GitHub 相关域名）
-4. 保存配置后启动代理，程序将自动拦截 DNS 响应并将 GitHub 域名解析到对应 IP
+3. 选择重定向模式：
+   - **DNS Interception**（默认）：在数据包层拦截 DNS 响应，无需修改任何文件，无需管理员权限。
+   - **System Hosts File**：将 hosts 条目写入 `C:\Windows\System32\drivers\etc\hosts`，同时自动同步到所有已安装 WSL 发行版的 `/etc/hosts`。需要以管理员身份运行程序。停止代理时会自动清理写入的条目并还原备份。
+4. 点击 `Refresh Hosts Now` 下载最新的 hosts 列表（约数千条 GitHub 相关域名）
+5. 保存配置后启动代理
 
 **使用本机代理模式（可选）：**
 
@@ -110,7 +113,7 @@
 | `targeting.processNames` | string[] | 要代理的进程名，支持通配符（*） |
 | `targeting.domainRules` | string[] | 域名路由规则，支持精确域名和通配符（*/?）；不匹配的连接直接透传 |
 | `hostsRedirect.enabled` | bool | 是否启用 DNS Hosts 重定向 |
-| `hostsRedirect.mode` | string | 重定向模式：`DnsInterception`（拦截 DNS 响应）或 `HostsFile`（修改系统 hosts 文件） |
+| `hostsRedirect.mode` | string | 重定向模式：`DnsInterception`（数据包级 DNS 拦截，无需管理员权限）或 `HostsFile`（写入 Windows hosts 文件并同步到所有 WSL 发行版 `/etc/hosts`，需管理员权限） |
 | `hostsRedirect.hostsUrl` | string | Hosts 列表下载地址（默认为 GitHub520 官方地址） |
 | `hostsRedirect.refreshDomains` | string[] | 需要自动刷新解析的域名列表（用于 DoH 筛选与定时更新） |
 | `startOnBoot` | bool | 是否注册为当前用户的 Windows 开机启动 |
@@ -144,6 +147,7 @@
 | `LogBuffer.cs` | 日志缓冲处理，支持批量写入提高性能 |
 | `AutoUpdater.cs` | 在线更新模块，负责检查新版本、下载压缩包并完成替换更新 |
 | `ConfigSyncService.cs` | 配置云同步服务，通过 GitHub Gist 在多设备间同步配置 |
+| `SystemHostsFileManager.cs` | Windows hosts 文件及 WSL 发行版 hosts 文件管理器，支持写入、清理和自动备份 |
 
 ### 工作原理
 
@@ -162,6 +166,19 @@
 - `WinDivert64.sys` - 64 位驱动程序
 
 这些文件已嵌入到项目资源中，程序启动时会自动释放到 `%AppData%\TrafficPilot` 目录。
+
+## WSL Hosts 文件同步
+
+在 `Hosts Redirect` 选项卡中选择 **System Hosts File** 模式后，TrafficPilot 会在启动代理时自动将 hosts 条目同步写入所有已安装的 WSL 发行版（通过 `wsl.exe --list` 自动枚举，排除 `docker-desktop`）：
+
+- **写入路径**：每个 WSL 发行版的 `/etc/hosts`
+- **执行方式**：`wsl.exe --distribution <发行版名称> --user root --exec tee /etc/hosts`
+- **权限要求**：程序本身需以 **管理员身份**运行（用于写入 Windows hosts 文件），WSL 内部以 `root` 用户操作
+- **自动备份**：写入前会在 `%AppData%\TrafficPilot\HostsBackups\` 目录下保存备份（每个目标最多保留 10 份）
+- **自动还原**：停止代理时，程序会自动从 Windows hosts 文件及各 WSL 发行版的 `/etc/hosts` 中清理由 TrafficPilot 写入的条目（以 `# ========== TrafficPilot Managed Section ==========` 标记的区块）
+- **实时更新**：通过 Auto Fetch 或手动刷新触发 IP 更新时，Windows hosts 文件与 WSL hosts 文件会同步更新
+
+> **提示**：如果不需要 WSL 同步，建议使用默认的 **DNS Interception** 模式，无需管理员权限，也不会修改任何文件。
 
 ## 系统托盘与更新
 
@@ -188,6 +205,7 @@ dotnet publish -c Release
 - **代理无效**：请检查进程名/通配符配置是否正确，以及代理服务器地址是否可达
 - **域名规则不生效**：请确认域名规则列表已填写，且格式正确（支持精确域名与 `*`/`?` 通配符）
 - **配置异常**：删除 `%AppData%\TrafficPilot\config.json` 后重启程序即可恢复默认配置
+- **WSL hosts 未更新**：请确认已选择 `System Hosts File` 模式并以管理员权限运行；可在命令行执行 `wsl.exe --list --quiet` 确认 WSL 发行版已安装且可正常列出；若 WSL 内仍无效果，可手动查看对应发行版的 `/etc/hosts` 并核查 TrafficPilot 管理区块是否存在
 - **开机启动失败**：请确认当前用户具备写入 `HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Run` 的权限
 - **在线更新失败**：请检查是否能够访问 GitHub 或 Gitee 发布接口，以及发布包下载链接是否可达
 
