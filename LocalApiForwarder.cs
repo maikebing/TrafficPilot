@@ -271,14 +271,6 @@ internal sealed class LocalApiForwarder : IDisposable
 
 			if (HttpMethodsEqual(context.Request.HttpMethod, "GET") && TryExtractModelName(path, "/openai/load/", out var modelToLoad))
 			{
-				if (!await ModelExistsAsync(modelToLoad, ct))
-				{
-					await WriteErrorAsync(context.Response, path, HttpStatusCode.NotFound,
-						$"Model '{modelToLoad}' is not registered in TrafficPilot.",
-						"openai", null, null, modelToLoad);
-					return;
-				}
-
 				MarkModelLoaded(modelToLoad);
 				await WriteEmptyAsync(context.Response, HttpStatusCode.OK);
 				return;
@@ -333,7 +325,8 @@ internal sealed class LocalApiForwarder : IDisposable
 
 			if (HttpMethodsEqual(context.Request.HttpMethod, "POST")
 				&& (path.Equals("/v1/chat/completions", StringComparison.OrdinalIgnoreCase)
-					|| path.Equals("/chat/completions", StringComparison.OrdinalIgnoreCase)))
+					|| path.Equals("/chat/completions", StringComparison.OrdinalIgnoreCase)
+					|| path.Equals("/openai/chat/completions", StringComparison.OrdinalIgnoreCase)))
 			{
 				await HandleOpenAiChatAsync(context, ct);
 				return;
@@ -341,7 +334,8 @@ internal sealed class LocalApiForwarder : IDisposable
 
 			if (HttpMethodsEqual(context.Request.HttpMethod, "POST")
 				&& (path.Equals("/v1/embeddings", StringComparison.OrdinalIgnoreCase)
-					|| path.Equals("/embeddings", StringComparison.OrdinalIgnoreCase)))
+					|| path.Equals("/embeddings", StringComparison.OrdinalIgnoreCase)
+					|| path.Equals("/openai/embeddings", StringComparison.OrdinalIgnoreCase)))
 			{
 				await HandleOpenAiEmbeddingsAsync(context, ct);
 				return;
@@ -2754,16 +2748,21 @@ internal sealed class LocalApiForwarder : IDisposable
 
 	private async Task<JsonArray> BuildFoundryLocalModelsResponseAsync(CancellationToken ct)
 	{
-		var modelNames = (await GetAdvertisedModelCatalogAsync(ct))
+		var catalogModelNames = (await GetAdvertisedModelCatalogAsync(ct))
 			.Select(static model => model.LocalName);
-		return BuildFoundryLocalModelsResponse(modelNames);
+		var allModelNames = catalogModelNames
+			.Concat(GetLoadedModelNames())
+			.Distinct(StringComparer.OrdinalIgnoreCase);
+		return BuildFoundryLocalModelsResponse(allModelNames);
 	}
 
 	private async Task<JsonObject> BuildFoundryLocalCatalogResponseAsync(CancellationToken ct)
 	{
 		var models = new JsonArray();
+		var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 		foreach (var model in await GetAdvertisedModelCatalogAsync(ct))
 		{
+			seen.Add(model.LocalName);
 			var modelUri = BuildFoundryModelUri(model.LocalName);
 			models.Add(new JsonObject
 			{
@@ -2812,6 +2811,59 @@ internal sealed class LocalApiForwarder : IDisposable
 			});
 		}
 
+		foreach (var loadedModel in GetLoadedModelNames())
+		{
+			if (seen.Contains(loadedModel))
+				continue;
+
+			var dynamicUri = BuildFoundryModelUri(loadedModel);
+			models.Add(new JsonObject
+			{
+				["name"] = loadedModel,
+				["displayName"] = loadedModel,
+				["providerType"] = "AzureFoundryLocal",
+				["uri"] = dynamicUri,
+				["publisher"] = _settings.Provider.Name,
+				["task"] = "chat completion",
+				["version"] = "1",
+				["modelType"] = "OpenAI",
+				["promptTemplate"] = new JsonObject
+				{
+					["system"] = "{{system}}",
+					["user"] = "{{input}}",
+					["assistant"] = "{{output}}",
+					["prompt"] = "{{input}}"
+				},
+				["runtime"] = new JsonObject
+				{
+					["deviceType"] = "CPU",
+					["executionProvider"] = "cpu"
+				},
+				["fileSizeMb"] = 0,
+				["modelSettings"] = new JsonObject
+				{
+					["parameters"] = new JsonArray()
+				},
+				["alias"] = loadedModel,
+				["description"] = $"BYOM forwarded to {_settings.Provider.Name} via TrafficPilot.",
+				["supportsToolCalling"] = true,
+				["license"] = "Remote",
+				["licenseDescription"] = $"BYOM forwarded to {_settings.Provider.Name} via TrafficPilot.",
+				["parentModelUri"] = dynamicUri,
+				["maxOutputTokens"] = 8192,
+				["minFLVersion"] = "0.0.0",
+				["endpoints"] = new JsonArray
+				{
+					new JsonObject
+					{
+						["protocol"] = "OpenAI",
+						["url"] = $"http://127.0.0.1:{_settings.FoundryPort}/v1",
+						["model"] = loadedModel
+					}
+				}
+			});
+		}
+
 		return new JsonObject
 		{
 			["models"] = models
@@ -2826,8 +2878,10 @@ internal sealed class LocalApiForwarder : IDisposable
 	private async Task<JsonObject> BuildOpenAiModelsResponseAsync(CancellationToken ct)
 	{
 		var data = new JsonArray();
+		var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 		foreach (var model in await GetAdvertisedModelCatalogAsync(ct))
 		{
+			seen.Add(model.LocalName);
 			var modelObj = new JsonObject
 			{
 				["id"] = model.LocalName,
@@ -2847,6 +2901,21 @@ internal sealed class LocalApiForwarder : IDisposable
 			modelObj["capabilities"] = capabilities;
 
 			data.Add(modelObj);
+		}
+
+		foreach (var loadedModel in GetLoadedModelNames())
+		{
+			if (seen.Contains(loadedModel))
+				continue;
+
+			data.Add(new JsonObject
+			{
+				["id"] = loadedModel,
+				["object"] = "model",
+				["created"] = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
+				["owned_by"] = _settings.Provider.Name,
+				["capabilities"] = new JsonObject()
+			});
 		}
 
 		return new JsonObject
