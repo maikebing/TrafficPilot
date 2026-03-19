@@ -179,6 +179,14 @@ internal sealed class ProxyEngine : IDisposable
 		return await _localApiForwarder.RefreshModelCatalogAsync(ct);
 	}
 
+	public async Task<IReadOnlyList<LocalApiAdvertisedModel>> RefreshLocalApiModelCatalogEntriesAsync(CancellationToken ct = default)
+	{
+		if (_options.LocalApiForwarder?.Enabled != true || _localApiForwarder is null)
+			throw new InvalidOperationException("Local API forwarder is not running.");
+
+		return await _localApiForwarder.RefreshModelCatalogEntriesAsync(ct);
+	}
+
 	/// <summary>Pushes freshly resolved IPs into the live DNS interceptor without restarting it.</summary>
 	public void UpdateHostsEntries(IReadOnlyDictionary<string, byte[]> updates)
 	{

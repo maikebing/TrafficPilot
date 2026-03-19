@@ -7,6 +7,8 @@ using System.Globalization;
 
 namespace TrafficPilot;
 
+internal sealed record LocalApiAdvertisedModel(string LocalName, string UpstreamModel);
+
 internal sealed class LocalApiForwarder : IDisposable
 {
 	private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
@@ -29,6 +31,7 @@ internal sealed class LocalApiForwarder : IDisposable
 	private bool _hasCachedModelCatalog;
 	private DateTimeOffset _modelCatalogExpiresAt = DateTimeOffset.MinValue;
 	private long _requestCounter;
+	private string? _providerModelAlias;
 
 	public event Action<string>? OnLog;
 
@@ -94,6 +97,12 @@ internal sealed class LocalApiForwarder : IDisposable
 
 	public async Task<IReadOnlyList<string>> RefreshModelCatalogAsync(CancellationToken ct = default)
 	{
+		var models = await RefreshModelCatalogEntriesAsync(ct);
+		return models.Select(static model => model.LocalName).ToList();
+	}
+
+	public async Task<IReadOnlyList<LocalApiAdvertisedModel>> RefreshModelCatalogEntriesAsync(CancellationToken ct = default)
+	{
 		if (!_settings.Enabled)
 			throw new InvalidOperationException("Local API forwarding is disabled.");
 
@@ -101,7 +110,7 @@ internal sealed class LocalApiForwarder : IDisposable
 		var catalog = await GetAdvertisedModelCatalogAsync(ct, forceRefresh: true);
 		LogInfo($"manual model catalog refresh completed: {catalog.Count} models");
 		return catalog
-			.Select(static model => model.LocalName)
+			.Select(static model => new LocalApiAdvertisedModel(model.LocalName, model.UpstreamModel))
 			.ToList();
 	}
 
@@ -740,6 +749,11 @@ internal sealed class LocalApiForwarder : IDisposable
 	private HttpRequestMessage CreateUpstreamGetRequest(string relativePath)
 	{
 		var requestUri = BuildUpstreamUri(relativePath);
+		return CreateUpstreamGetRequest(requestUri);
+	}
+
+	private HttpRequestMessage CreateUpstreamGetRequest(Uri requestUri)
+	{
 		var request = new HttpRequestMessage(HttpMethod.Get, requestUri);
 		request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
 		LogInfo($"upstream GET {requestUri} | accept=application/json");
@@ -760,6 +774,20 @@ internal sealed class LocalApiForwarder : IDisposable
 		var baseUri = NormalizeBaseUri(_settings.Provider.BaseUrl);
 		var relative = (relativePath ?? string.Empty).TrimStart('/');
 		var uri = new Uri(baseUri, relative);
+		return AppendQueryAuthIfNeeded(uri);
+	}
+
+	private Uri BuildUpstreamRootUri(string relativePath)
+	{
+		var baseUri = NormalizeBaseUri(_settings.Provider.BaseUrl);
+		var rootUri = new Uri(baseUri.GetLeftPart(UriPartial.Authority) + "/", UriKind.Absolute);
+		var relative = (relativePath ?? string.Empty).TrimStart('/');
+		var uri = new Uri(rootUri, relative);
+		return AppendQueryAuthIfNeeded(uri);
+	}
+
+	private Uri AppendQueryAuthIfNeeded(Uri uri)
+	{
 
 		if ((_settings.Provider.AuthType ?? "Bearer").Equals("Query", StringComparison.OrdinalIgnoreCase)
 			&& !string.IsNullOrWhiteSpace(_apiKey))
@@ -806,6 +834,9 @@ internal sealed class LocalApiForwarder : IDisposable
 	private bool IsAnthropicProvider =>
 		(_settings.Provider.Protocol ?? "OpenAICompatible").Equals("Anthropic", StringComparison.OrdinalIgnoreCase);
 
+	private string ProviderModelAlias =>
+		_providerModelAlias ??= BuildProviderModelAlias(_settings.Provider.Name, _settings.Provider.BaseUrl);
+
 	private string ResolveUpstreamChatModel(string? localModel)
 	{
 		if (!string.IsNullOrWhiteSpace(localModel))
@@ -816,11 +847,11 @@ internal sealed class LocalApiForwarder : IDisposable
 			if (mapping is not null)
 				return mapping.UpstreamModel.Trim();
 
-			return localModel.Trim();
+			return ResolveGeneratedUpstreamModelAliasOrSelf(localModel);
 		}
 
 		if (!string.IsNullOrWhiteSpace(_settings.Provider.DefaultModel))
-			return _settings.Provider.DefaultModel.Trim();
+			return ResolveGeneratedUpstreamModelAliasOrSelf(_settings.Provider.DefaultModel);
 
 		return string.Empty;
 	}
@@ -835,13 +866,55 @@ internal sealed class LocalApiForwarder : IDisposable
 			if (mapping is not null)
 				return mapping.UpstreamModel.Trim();
 
-			return localModel.Trim();
+			return ResolveGeneratedUpstreamModelAliasOrSelf(localModel);
 		}
 
 		if (!string.IsNullOrWhiteSpace(_settings.Provider.DefaultEmbeddingModel))
-			return _settings.Provider.DefaultEmbeddingModel.Trim();
+			return ResolveGeneratedUpstreamModelAliasOrSelf(_settings.Provider.DefaultEmbeddingModel);
 
 		return ResolveUpstreamChatModel(string.Empty);
+	}
+
+	private string ResolveGeneratedUpstreamModelAliasOrSelf(string? modelName)
+	{
+		if (string.IsNullOrWhiteSpace(modelName))
+			return string.Empty;
+
+		var normalizedModel = modelName.Trim();
+		var catalogMatch = TryResolveCatalogMappedUpstreamModel(normalizedModel);
+		if (!string.IsNullOrWhiteSpace(catalogMatch))
+			return catalogMatch;
+
+		foreach (var alias in GetProviderModelAliasCandidates(_settings.Provider.Name, _settings.Provider.BaseUrl))
+		{
+			var aliasSuffix = $"@{alias}";
+			if (!normalizedModel.EndsWith(aliasSuffix, StringComparison.OrdinalIgnoreCase))
+				continue;
+
+			var upstreamModel = normalizedModel[..^aliasSuffix.Length].Trim();
+			if (!string.IsNullOrWhiteSpace(upstreamModel))
+				return upstreamModel;
+		}
+
+		return normalizedModel;
+	}
+
+	private string BuildAdvertisedUpstreamLocalName(string upstreamModel)
+	{
+		return BuildAdvertisedUpstreamLocalName(upstreamModel, null);
+	}
+
+	private string BuildAdvertisedUpstreamLocalName(string upstreamModel, string? displayName)
+	{
+		var normalizedModel = ResolveGeneratedUpstreamModelAliasOrSelf(upstreamModel);
+		if (string.IsNullOrWhiteSpace(normalizedModel))
+			return string.Empty;
+
+		var preferredName = string.IsNullOrWhiteSpace(displayName)
+			? normalizedModel
+			: displayName.Trim();
+
+		return $"{preferredName}@{ProviderModelAlias}";
 	}
 
 	private JsonObject BuildUpstreamChatRequestFromGenerate(JsonObject source)
@@ -2827,14 +2900,58 @@ internal sealed class LocalApiForwarder : IDisposable
 
 	private async Task<IReadOnlyList<ModelCatalogEntry>> FetchUpstreamModelCatalogAsync(CancellationToken ct)
 	{
-		using var request = CreateUpstreamGetRequest("models");
-		using var response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
-		var responseBody = await response.Content.ReadAsStringAsync(ct);
-		LogResponseIfEnabled("openai.models", response.StatusCode, responseBody);
-		if (!response.IsSuccessStatusCode)
-			throw new InvalidOperationException(await ExtractUpstreamErrorAsync(response.StatusCode, responseBody));
+		var attempts = new List<string>();
+		foreach (var candidate in EnumerateUpstreamModelCatalogRequests())
+		{
+			using var request = CreateUpstreamGetRequest(candidate.RequestUri);
+			using var response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
+			var responseBody = await response.Content.ReadAsStringAsync(ct);
+			LogResponseIfEnabled(candidate.LogOperation, response.StatusCode, responseBody);
 
-		return ParseUpstreamModelCatalog(responseBody);
+			if (!response.IsSuccessStatusCode)
+			{
+				attempts.Add($"{candidate.RequestUri} -> {(int)response.StatusCode} {response.ReasonPhrase}");
+				continue;
+			}
+
+			var catalog = ParseUpstreamModelCatalog(responseBody);
+			if (catalog.Count > 0)
+				return catalog;
+
+			attempts.Add($"{candidate.RequestUri} -> empty catalog");
+		}
+
+		throw new InvalidOperationException(
+			$"Unable to load an upstream model catalog from {_settings.Provider.BaseUrl}. Tried: {string.Join("; ", attempts)}");
+	}
+
+	private IEnumerable<(Uri RequestUri, string LogOperation)> EnumerateUpstreamModelCatalogRequests()
+	{
+		var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+		bool TryAdd(Uri uri)
+		{
+			return seen.Add(uri.AbsoluteUri);
+		}
+
+		var baseUri = NormalizeBaseUri(_settings.Provider.BaseUrl);
+		var basePath = baseUri.AbsolutePath.Trim('/');
+
+		var primaryModelsUri = BuildUpstreamUri("models");
+		if (TryAdd(primaryModelsUri))
+			yield return (primaryModelsUri, "openai.models");
+
+		if (!basePath.EndsWith("/v1", StringComparison.OrdinalIgnoreCase)
+			&& !basePath.Equals("v1", StringComparison.OrdinalIgnoreCase))
+		{
+			var rootModelsUri = BuildUpstreamRootUri("v1/models");
+			if (TryAdd(rootModelsUri))
+				yield return (rootModelsUri, "openai.models");
+		}
+
+		var ollamaTagsUri = BuildUpstreamRootUri("api/tags");
+		if (TryAdd(ollamaTagsUri))
+			yield return (ollamaTagsUri, "ollama.tags");
 	}
 
 	private IReadOnlyList<ModelCatalogEntry> ParseUpstreamModelCatalog(string responseBody)
@@ -2884,13 +3001,14 @@ internal sealed class LocalApiForwarder : IDisposable
 			if (string.IsNullOrWhiteSpace(modelId))
 				continue;
 
-			var normalizedId = modelId.Trim();
-			catalog[normalizedId] = CreateModelCatalogEntry(
-				normalizedId,
+			var normalizedId = ResolveGeneratedUpstreamModelAliasOrSelf(modelId);
+			var localName = BuildAdvertisedUpstreamLocalName(normalizedId, TryReadModelDisplayName(item, normalizedId));
+			catalog[localName] = CreateModelCatalogEntry(
+				localName,
 				normalizedId,
 				TryReadModelOwner(item) ?? _settings.Provider.Name,
 				TryReadModelCreatedUnixTime(item) ?? DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
-				isAlias: false,
+				isAlias: !localName.Equals(normalizedId, StringComparison.OrdinalIgnoreCase),
 				item);
 		}
 	}
@@ -2935,12 +3053,14 @@ internal sealed class LocalApiForwarder : IDisposable
 			return;
 
 		var normalizedModel = modelName.Trim();
-		catalog[normalizedModel] = CreateModelCatalogEntry(
-			normalizedModel,
-			normalizedModel,
+		var upstreamModel = ResolveGeneratedUpstreamModelAliasOrSelf(normalizedModel);
+		var localName = BuildAdvertisedUpstreamLocalName(upstreamModel);
+		catalog[localName] = CreateModelCatalogEntry(
+			localName,
+			upstreamModel,
 			_settings.Provider.Name,
 			createdUnixTime,
-			isAlias: false,
+			isAlias: !localName.Equals(upstreamModel, StringComparison.OrdinalIgnoreCase),
 			metadataSource: null);
 	}
 
@@ -3322,6 +3442,121 @@ internal sealed class LocalApiForwarder : IDisposable
 		return normalized.Length == 0 ? "forwarded" : normalized;
 	}
 
+	private static string BuildProviderModelAlias(string? providerName, string? baseUrl)
+	{
+		if (Uri.TryCreate(baseUrl, UriKind.Absolute, out var uri))
+		{
+			var host = uri.IdnHost.Trim().TrimEnd('.').ToLowerInvariant();
+			if (!string.IsNullOrWhiteSpace(host))
+				return host.Replace(".", string.Empty, StringComparison.Ordinal);
+		}
+
+		var alias = BuildCompactAlias(providerName);
+		if (!string.IsNullOrWhiteSpace(alias))
+			return alias;
+
+		return "up";
+	}
+
+	private static IEnumerable<string> GetProviderModelAliasCandidates(string? providerName, string? baseUrl)
+	{
+		var primary = BuildProviderModelAlias(providerName, baseUrl);
+		if (!string.IsNullOrWhiteSpace(primary))
+			yield return primary;
+
+		if (Uri.TryCreate(baseUrl, UriKind.Absolute, out var uri))
+		{
+			var host = uri.IdnHost.Trim().TrimEnd('.').ToLowerInvariant();
+			if (!string.IsNullOrWhiteSpace(host)
+				&& !host.Equals(primary, StringComparison.OrdinalIgnoreCase))
+			{
+				yield return host;
+			}
+		}
+	}
+
+	private string? TryResolveCatalogMappedUpstreamModel(string localModel)
+	{
+		if (string.IsNullOrWhiteSpace(localModel))
+			return null;
+
+		var cachedMatch = _cachedModelCatalog.FirstOrDefault(model =>
+			model.LocalName.Equals(localModel, StringComparison.OrdinalIgnoreCase));
+		if (cachedMatch is not null && !string.IsNullOrWhiteSpace(cachedMatch.UpstreamModel))
+			return cachedMatch.UpstreamModel;
+
+		var configuredMatch = BuildConfiguredModelCatalog().FirstOrDefault(model =>
+			model.LocalName.Equals(localModel, StringComparison.OrdinalIgnoreCase));
+		if (configuredMatch is not null && !string.IsNullOrWhiteSpace(configuredMatch.UpstreamModel))
+			return configuredMatch.UpstreamModel;
+
+		return null;
+	}
+
+	private static string BuildCompactAlias(string? source)
+	{
+		if (string.IsNullOrWhiteSpace(source))
+			return string.Empty;
+
+		var tokens = new List<string>();
+		var current = new StringBuilder();
+		Rune? previousRune = null;
+
+		foreach (var rune in source.EnumerateRunes())
+		{
+			if (!Rune.IsLetterOrDigit(rune))
+			{
+				FlushAliasToken(tokens, current);
+				previousRune = null;
+				continue;
+			}
+
+			if (previousRune is not null
+				&& Rune.IsUpper(rune)
+				&& !Rune.IsUpper(previousRune.Value)
+				&& current.Length > 0)
+			{
+				FlushAliasToken(tokens, current);
+			}
+
+			current.Append(rune.ToString().ToLowerInvariant());
+			previousRune = rune;
+		}
+
+		FlushAliasToken(tokens, current);
+
+		if (tokens.Count == 0)
+			return string.Empty;
+
+		if (tokens.Count == 1)
+		{
+			var token = tokens[0];
+			return token.Length <= 4 ? token : token[..4];
+		}
+
+		var alias = new StringBuilder(4);
+		foreach (var token in tokens)
+		{
+			if (token.Length == 0)
+				continue;
+
+			alias.Append(token[0]);
+			if (alias.Length >= 4)
+				break;
+		}
+
+		return alias.ToString();
+	}
+
+	private static void FlushAliasToken(List<string> tokens, StringBuilder current)
+	{
+		if (current.Length == 0)
+			return;
+
+		tokens.Add(current.ToString());
+		current.Clear();
+	}
+
 	private static JsonNode? FindPropertyValue(JsonNode? node, params string[] propertyNames)
 	{
 		if (node is null || propertyNames.Length == 0)
@@ -3447,6 +3682,28 @@ internal sealed class LocalApiForwarder : IDisposable
 		return TryReadString(obj["owned_by"])
 			?? TryReadString(obj["organization"])
 			?? TryReadString(obj["publisher"]);
+	}
+
+	private static string? TryReadModelDisplayName(JsonNode? node, string? modelId)
+	{
+		if (node is not JsonObject obj)
+			return null;
+
+		var displayName = TryReadString(obj["display_name"])
+			?? TryReadString(obj["displayName"])
+			?? TryReadString(obj["title"])
+			?? TryReadString(obj["label"]);
+		if (!string.IsNullOrWhiteSpace(displayName))
+			return displayName;
+
+		var alternateName = TryReadString(obj["name"]);
+		if (!string.IsNullOrWhiteSpace(alternateName)
+			&& !string.Equals(alternateName.Trim(), modelId?.Trim(), StringComparison.OrdinalIgnoreCase))
+		{
+			return alternateName;
+		}
+
+		return null;
 	}
 
 	private static long? TryReadModelCreatedUnixTime(JsonNode? node)

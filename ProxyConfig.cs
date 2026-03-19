@@ -115,7 +115,7 @@ internal class ConfigSyncSettings
 internal class LocalApiForwarderSettings
 {
 	[JsonPropertyName("enabled")]
-	public bool Enabled { get; set; } = false;
+	public bool Enabled { get; set; } = true;
 
 	[JsonPropertyName("ollamaPort")]
 	public ushort OllamaPort { get; set; } = 11434;
@@ -225,7 +225,11 @@ internal sealed class ProxyConfigManager
 		{
 			var json = File.ReadAllText(path);
 			var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
-			return JsonSerializer.Deserialize<ProxyConfigModel>(json, options) ?? new ProxyConfigModel();
+			var config = JsonSerializer.Deserialize<ProxyConfigModel>(json, options) ?? new ProxyConfigModel();
+			var migrated = TryNormalizeLoadedConfig(config, json);
+			if (migrated)
+				Save(config, path);
+			return config;
 		}
 		catch (IOException ex)
 		{
@@ -354,8 +358,89 @@ internal sealed class ProxyConfigManager
             HostsRedirect = new HostsRedirectSettings
             {
                 RefreshDomains = [.. ProxyOptions.DefaultRefreshDomains]
-			}
+			},
+			LocalApiForwarder = new LocalApiForwarderSettings()
 		};
+	}
+
+	private static bool TryNormalizeLoadedConfig(ProxyConfigModel config, string json)
+	{
+		ArgumentNullException.ThrowIfNull(config);
+
+		var changed = false;
+		using var document = JsonDocument.Parse(json);
+		var root = document.RootElement;
+
+		if (!root.TryGetProperty("localApiForwarder", out var localApiElement))
+		{
+			config.LocalApiForwarder ??= new LocalApiForwarderSettings();
+			return true;
+		}
+
+		config.LocalApiForwarder ??= new LocalApiForwarderSettings();
+		var settings = config.LocalApiForwarder;
+		if (settings is null)
+			return changed;
+
+		settings.Provider ??= new LocalApiProviderSettings();
+		settings.RequestResponseLogging ??= new LocalApiRequestResponseLoggingSettings();
+		settings.ModelMappings ??= [];
+
+		if (!localApiElement.TryGetProperty("enabled", out _))
+		{
+			if (!settings.Enabled)
+			{
+				settings.Enabled = true;
+				changed = true;
+			}
+		}
+		else if (!settings.Enabled && LooksLikeLegacyLocalApiConfig(settings))
+		{
+			settings.Enabled = true;
+			changed = true;
+		}
+
+		return changed;
+	}
+
+	private static bool LooksLikeLegacyLocalApiConfig(LocalApiForwarderSettings settings)
+	{
+		var providerDomain = TryGetProviderDomain(settings.Provider?.BaseUrl);
+		if (string.IsNullOrWhiteSpace(providerDomain))
+			return !string.IsNullOrWhiteSpace(settings.Provider?.BaseUrl);
+
+		return NeedsDisplaySuffixMigration(settings.Provider?.DefaultModel, GetProviderSuffixCandidates(providerDomain))
+			|| NeedsDisplaySuffixMigration(settings.Provider?.DefaultEmbeddingModel, GetProviderSuffixCandidates(providerDomain))
+			|| settings.ModelMappings.Any(static mapping => !string.IsNullOrWhiteSpace(mapping.UpstreamModel));
+	}
+
+	private static bool NeedsDisplaySuffixMigration(string? modelName, IEnumerable<string> providerSuffixes)
+	{
+		if (string.IsNullOrWhiteSpace(modelName))
+			return false;
+
+		var trimmedModel = modelName.Trim();
+		return !providerSuffixes.Any(suffix => trimmedModel.EndsWith($"@{suffix}", StringComparison.OrdinalIgnoreCase));
+	}
+
+	private static string TryGetProviderDomain(string? baseUrl)
+	{
+		if (!Uri.TryCreate(baseUrl, UriKind.Absolute, out var uri))
+			return string.Empty;
+
+		return uri.IdnHost.Trim().TrimEnd('.').ToLowerInvariant();
+	}
+
+	private static IEnumerable<string> GetProviderSuffixCandidates(string providerDomain)
+	{
+		if (string.IsNullOrWhiteSpace(providerDomain))
+			yield break;
+
+		yield return providerDomain;
+
+		var compact = providerDomain.Replace(".", string.Empty, StringComparison.Ordinal);
+		if (!compact.Equals(providerDomain, StringComparison.OrdinalIgnoreCase))
+			yield return compact;
 	}
 }
 

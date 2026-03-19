@@ -53,6 +53,7 @@ internal partial class MainForm : Form
 	private CheckBox? _chkLocalApiIncludeBodies;
 	private CheckBox? _chkLocalApiIncludeErrorDiagnostics;
 	private NumericUpDown? _numLocalApiMaxBodyChars;
+	private Dictionary<string, string> _localApiModelNameMap = new(StringComparer.OrdinalIgnoreCase);
 
 	public MainForm(bool startMinimized = false)
 	{
@@ -1226,12 +1227,12 @@ internal partial class MainForm : Form
 
 			var localApiSettings = persistedConfig.LocalApiForwarder;
 
-			IReadOnlyList<string> models;
+			IReadOnlyList<LocalApiAdvertisedModel> models;
 			if (_engine?.IsRunning == true && _engine.IsLocalApiForwarderRunning)
 			{
 				AppendLog(
 					$"[{DateTime.Now:HH:mm:ss.fff}] [Config] Refreshing upstream model catalog for the running Local API forwarder. Restart the proxy to apply any provider changes currently shown in the UI.");
-				models = await _engine.RefreshLocalApiModelCatalogAsync();
+				models = await _engine.RefreshLocalApiModelCatalogEntriesAsync();
 			}
 			else
 			{
@@ -1242,16 +1243,19 @@ internal partial class MainForm : Form
 					$"[{DateTime.Now:HH:mm:ss.fff}] [Config] Refreshing upstream model catalog using the current UI settings (proxy not running).");
 				using var forwarder = CreateDetachedLocalApiForwarder(localApiSettings);
 				forwarder.OnLog += AppendLog;
-				models = await forwarder.RefreshModelCatalogAsync();
+				models = await forwarder.RefreshModelCatalogEntriesAsync();
 			}
 
+			ReplaceLocalApiModelNameMap(models);
+			var selectedDefaultModel = NormalizeLocalApiModelDisplayName(_cmbLocalApiDefaultModel?.Text ?? string.Empty);
+			var selectedEmbeddingModel = NormalizeLocalApiModelDisplayName(_cmbLocalApiDefaultEmbeddingModel?.Text ?? string.Empty);
 			var preview = models.Count == 0
 				? "<none>"
-				: string.Join(", ", models.Take(5)) + (models.Count > 5 ? ", ..." : string.Empty);
+				: string.Join(", ", models.Select(static model => model.LocalName).Take(5)) + (models.Count > 5 ? ", ..." : string.Empty);
 			UpdateLocalApiModelSelectors(
-				models,
-				_cmbLocalApiDefaultModel?.Text ?? string.Empty,
-				_cmbLocalApiDefaultEmbeddingModel?.Text ?? string.Empty);
+				models.Select(static model => model.LocalName),
+				selectedDefaultModel,
+				selectedEmbeddingModel);
 			AppendLog(
 				$"[{DateTime.Now:HH:mm:ss.fff}] [Config] Upstream model refresh completed: {models.Count} models ({preview})");
 		}
@@ -1286,39 +1290,50 @@ internal partial class MainForm : Form
 		if (_cmbLocalApiDefaultModel is null || _cmbLocalApiDefaultEmbeddingModel is null)
 			return;
 
-		var items = (models ?? Enumerable.Empty<string>())
-			.Select(static model => model?.Trim() ?? string.Empty)
-			.Where(static model => !string.IsNullOrWhiteSpace(model))
-			.Distinct(StringComparer.OrdinalIgnoreCase)
-			.OrderBy(static model => model, StringComparer.OrdinalIgnoreCase)
-			.ToList();
-
-		if (!string.IsNullOrWhiteSpace(selectedDefaultModel))
-			items.Add(selectedDefaultModel.Trim());
-		if (!string.IsNullOrWhiteSpace(selectedEmbeddingModel))
-			items.Add(selectedEmbeddingModel.Trim());
-
-		var normalizedItems = items
-			.Distinct(StringComparer.OrdinalIgnoreCase)
-			.OrderBy(static model => model, StringComparer.OrdinalIgnoreCase)
-			.ToArray();
+		var normalizedItems = BuildLocalApiSelectorDisplayOrder(
+			models,
+			selectedDefaultModel,
+			selectedEmbeddingModel);
 
 		RebindEditableComboBox(_cmbLocalApiDefaultModel, normalizedItems, selectedDefaultModel);
 		RebindEditableComboBox(_cmbLocalApiDefaultEmbeddingModel, normalizedItems, selectedEmbeddingModel);
 	}
 
-	private static IEnumerable<string> BuildLocalApiSelectorItems(LocalApiForwarderSettings settings)
+	private static string[] BuildLocalApiSelectorDisplayOrder(
+		IEnumerable<string>? models,
+		string selectedDefaultModel,
+		string selectedEmbeddingModel)
+	{
+		var orderedItems = new List<string>();
+
+		if (!string.IsNullOrWhiteSpace(selectedDefaultModel))
+			orderedItems.Add(selectedDefaultModel.Trim());
+		if (!string.IsNullOrWhiteSpace(selectedEmbeddingModel))
+			orderedItems.Add(selectedEmbeddingModel.Trim());
+
+		orderedItems.AddRange((models ?? Enumerable.Empty<string>())
+			.Select(static model => model?.Trim() ?? string.Empty)
+			.Where(static model => !string.IsNullOrWhiteSpace(model))
+			.Reverse());
+
+		return orderedItems
+			.Distinct(StringComparer.OrdinalIgnoreCase)
+			.ToArray();
+	}
+
+	private IEnumerable<string> BuildLocalApiSelectorItems(LocalApiForwarderSettings settings)
 	{
 		var items = new List<string>();
+		ReplaceLocalApiModelNameMap(BuildConfiguredLocalApiSelectorModels(settings));
 
 		if (!string.IsNullOrWhiteSpace(settings.Provider?.DefaultModel))
-			items.Add(settings.Provider.DefaultModel.Trim());
+			items.Add(NormalizeLocalApiModelDisplayName(settings.Provider.DefaultModel));
 		if (!string.IsNullOrWhiteSpace(settings.Provider?.DefaultEmbeddingModel))
-			items.Add(settings.Provider.DefaultEmbeddingModel.Trim());
+			items.Add(NormalizeLocalApiModelDisplayName(settings.Provider.DefaultEmbeddingModel));
 
 		items.AddRange(settings.ModelMappings
 			.Where(static mapping => !string.IsNullOrWhiteSpace(mapping.UpstreamModel))
-			.Select(static mapping => mapping.UpstreamModel.Trim()));
+			.Select(mapping => NormalizeLocalApiModelDisplayName(mapping.UpstreamModel)));
 
 		return items;
 	}
@@ -1765,6 +1780,7 @@ internal partial class MainForm : Form
 		{
 			Dock = DockStyle.Fill,
 			DropDownStyle = ComboBoxStyle.DropDown,
+			MaxDropDownItems = 20,
 			AutoCompleteMode = AutoCompleteMode.SuggestAppend,
 			AutoCompleteSource = AutoCompleteSource.ListItems
 		};
@@ -1811,8 +1827,8 @@ internal partial class MainForm : Form
 				Protocol = _cmbLocalApiProviderProtocol.SelectedItem?.ToString() ?? "OpenAICompatible",
 				Name = providerName,
 				BaseUrl = _txtLocalApiProviderUrl.Text.Trim(),
-				DefaultModel = _cmbLocalApiDefaultModel.Text.Trim(),
-				DefaultEmbeddingModel = _cmbLocalApiDefaultEmbeddingModel.Text.Trim(),
+				DefaultModel = ResolveLocalApiStoredModelName(_cmbLocalApiDefaultModel.Text),
+				DefaultEmbeddingModel = ResolveLocalApiStoredModelName(_cmbLocalApiDefaultEmbeddingModel.Text),
 				AuthType = _cmbLocalApiAuthType.SelectedItem?.ToString() ?? "Bearer",
 				AuthHeaderName = _txtLocalApiAuthHeaderName.Text.Trim(),
 				AdditionalHeaders = ParseLocalApiHeaders(_txtLocalApiAdditionalHeaders.Lines)
@@ -1853,6 +1869,7 @@ internal partial class MainForm : Form
 
 		settings ??= new LocalApiForwarderSettings();
 		_chkLocalApiForwarderEnabled.Checked = settings.Enabled;
+		ReplaceLocalApiModelNameMap(BuildConfiguredLocalApiSelectorModels(settings));
 		_numOllamaPort.Value = settings.OllamaPort == 0 ? 11434 : settings.OllamaPort;
 		_numFoundryPort.Value = settings.FoundryPort == 0 ? 5273 : settings.FoundryPort;
 		_cmbLocalApiProviderProtocol.SelectedItem = _cmbLocalApiProviderProtocol.Items.Contains(settings.Provider?.Protocol ?? "OpenAICompatible")
@@ -1862,8 +1879,8 @@ internal partial class MainForm : Form
 		_txtLocalApiProviderUrl.Text = settings.Provider?.BaseUrl ?? string.Empty;
 		UpdateLocalApiModelSelectors(
 			BuildLocalApiSelectorItems(settings),
-			settings.Provider?.DefaultModel ?? string.Empty,
-			settings.Provider?.DefaultEmbeddingModel ?? string.Empty);
+			NormalizeLocalApiModelDisplayName(settings.Provider?.DefaultModel ?? string.Empty),
+			NormalizeLocalApiModelDisplayName(settings.Provider?.DefaultEmbeddingModel ?? string.Empty));
 		_cmbLocalApiAuthType.SelectedItem = _cmbLocalApiAuthType.Items.Contains(settings.Provider?.AuthType ?? "Bearer")
 			? settings.Provider?.AuthType ?? "Bearer"
 			: "Bearer";
@@ -1888,6 +1905,129 @@ internal partial class MainForm : Form
 					&& !string.IsNullOrWhiteSpace(mapping.UpstreamModel))
 				.Select(static mapping => $"{mapping.LocalModel.Trim()}={mapping.UpstreamModel.Trim()}")
 				.ToArray();
+	}
+
+	private IEnumerable<LocalApiAdvertisedModel> BuildConfiguredLocalApiSelectorModels(LocalApiForwarderSettings settings)
+	{
+		var providerBaseUrl = settings.Provider?.BaseUrl;
+
+		if (!string.IsNullOrWhiteSpace(settings.Provider?.DefaultModel))
+		{
+			var upstreamModel = settings.Provider.DefaultModel.Trim();
+			yield return new LocalApiAdvertisedModel(FormatLocalApiDisplayName(upstreamModel, providerBaseUrl), upstreamModel);
+		}
+
+		if (!string.IsNullOrWhiteSpace(settings.Provider?.DefaultEmbeddingModel))
+		{
+			var upstreamModel = settings.Provider.DefaultEmbeddingModel.Trim();
+			yield return new LocalApiAdvertisedModel(FormatLocalApiDisplayName(upstreamModel, providerBaseUrl), upstreamModel);
+		}
+
+		foreach (var mapping in settings.ModelMappings.Where(static mapping => !string.IsNullOrWhiteSpace(mapping.UpstreamModel)))
+		{
+			var upstreamModel = mapping.UpstreamModel.Trim();
+			yield return new LocalApiAdvertisedModel(FormatLocalApiDisplayName(upstreamModel, providerBaseUrl), upstreamModel);
+		}
+	}
+
+	private void ReplaceLocalApiModelNameMap(IEnumerable<LocalApiAdvertisedModel> models)
+	{
+		_localApiModelNameMap = models
+			.Where(static model => !string.IsNullOrWhiteSpace(model.LocalName) && !string.IsNullOrWhiteSpace(model.UpstreamModel))
+			.GroupBy(static model => model.LocalName.Trim(), StringComparer.OrdinalIgnoreCase)
+			.ToDictionary(
+				static group => group.Key,
+				static group => group.First().UpstreamModel.Trim(),
+				StringComparer.OrdinalIgnoreCase);
+	}
+
+	private string NormalizeLocalApiModelDisplayName(string? modelName)
+	{
+		if (string.IsNullOrWhiteSpace(modelName))
+			return string.Empty;
+
+		var trimmed = modelName.Trim();
+		if (_localApiModelNameMap.ContainsKey(trimmed))
+			return trimmed;
+
+		var upstreamMatch = _localApiModelNameMap.FirstOrDefault(entry =>
+			entry.Value.Equals(trimmed, StringComparison.OrdinalIgnoreCase)
+			|| entry.Value.Equals(RemoveLocalApiModelSuffix(trimmed), StringComparison.OrdinalIgnoreCase));
+		if (!string.IsNullOrWhiteSpace(upstreamMatch.Key))
+			return upstreamMatch.Key;
+
+		return FormatLocalApiDisplayName(trimmed, _txtLocalApiProviderUrl?.Text ?? _currentConfig.LocalApiForwarder?.Provider?.BaseUrl);
+	}
+
+	private string ResolveLocalApiStoredModelName(string? displayOrModelName)
+	{
+		if (string.IsNullOrWhiteSpace(displayOrModelName))
+			return string.Empty;
+
+		var trimmed = displayOrModelName.Trim();
+		if (_localApiModelNameMap.TryGetValue(trimmed, out var upstreamModel))
+			return upstreamModel;
+
+		foreach (var suffix in GetLocalApiProviderSuffixCandidates(_txtLocalApiProviderUrl?.Text ?? _currentConfig.LocalApiForwarder?.Provider?.BaseUrl))
+		{
+			if (!trimmed.EndsWith($"@{suffix}", StringComparison.OrdinalIgnoreCase))
+				continue;
+
+			return trimmed[..^(suffix.Length + 1)].Trim();
+		}
+
+		return trimmed;
+	}
+
+	private static string FormatLocalApiDisplayName(string? modelName, string? providerBaseUrl)
+	{
+		if (string.IsNullOrWhiteSpace(modelName))
+			return string.Empty;
+
+		var trimmed = modelName.Trim();
+		var providerSuffix = TryGetLocalApiProviderDisplaySuffix(providerBaseUrl);
+		if (string.IsNullOrWhiteSpace(providerSuffix))
+			return trimmed;
+
+		var baseModelName = RemoveLocalApiModelSuffix(trimmed);
+		return $"{baseModelName}@{providerSuffix}";
+	}
+
+	private static string RemoveLocalApiModelSuffix(string modelName)
+	{
+		var trimmed = modelName.Trim();
+		var atIndex = trimmed.LastIndexOf('@');
+		return atIndex > 0 ? trimmed[..atIndex].Trim() : trimmed;
+	}
+
+	private static string TryGetLocalApiProviderDomain(string? baseUrl)
+	{
+		if (!Uri.TryCreate(baseUrl, UriKind.Absolute, out var uri))
+			return string.Empty;
+
+		return uri.IdnHost.Trim().TrimEnd('.').ToLowerInvariant();
+	}
+
+	private static IEnumerable<string> GetLocalApiProviderSuffixCandidates(string? baseUrl)
+	{
+		var domain = TryGetLocalApiProviderDomain(baseUrl);
+		if (string.IsNullOrWhiteSpace(domain))
+			yield break;
+
+		yield return domain;
+
+		var compact = domain.Replace(".", string.Empty, StringComparison.Ordinal);
+		if (!compact.Equals(domain, StringComparison.OrdinalIgnoreCase))
+			yield return compact;
+	}
+
+	private static string TryGetLocalApiProviderDisplaySuffix(string? baseUrl)
+	{
+		var domain = TryGetLocalApiProviderDomain(baseUrl);
+		if (string.IsNullOrWhiteSpace(domain))
+			return string.Empty;
+
+		return domain.Replace(".", string.Empty, StringComparison.Ordinal);
 	}
 
 	private static List<LocalApiModelMapping> ParseLocalApiModelMappings(IEnumerable<string> lines)
