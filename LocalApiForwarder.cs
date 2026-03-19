@@ -3,6 +3,7 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Globalization;
 
 namespace TrafficPilot;
 
@@ -11,6 +12,9 @@ internal sealed class LocalApiForwarder : IDisposable
 	private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 	private static readonly TimeSpan ModelCatalogSuccessCacheDuration = TimeSpan.FromMinutes(2);
 	private static readonly TimeSpan ModelCatalogFailureCacheDuration = TimeSpan.FromSeconds(20);
+	private const string OllamaCompatibilityVersion = "0.6.4";
+	private const long DefaultContextLength = 100_000;
+	private const long DefaultMaxOutputTokens = 8_192;
 
 	private readonly LocalApiForwarderSettings _settings;
 	private readonly string _apiKey;
@@ -33,7 +37,25 @@ internal sealed class LocalApiForwarder : IDisposable
 		string UpstreamModel,
 		string OwnedBy,
 		long CreatedUnixTime,
-		bool IsAlias);
+		bool IsAlias,
+		string Architecture,
+		long ContextLength,
+		long MaxOutputTokens,
+		bool SupportsToolCalling,
+		bool SupportsVision,
+		bool SupportsEmbeddings,
+		bool SupportsThinking,
+		string ParameterSize,
+		string QuantizationLevel,
+		long? ParameterCount,
+		double? Multiplier);
+
+	private sealed class StreamingToolCallAccumulator
+	{
+		public string Id { get; set; } = string.Empty;
+		public string Name { get; set; } = string.Empty;
+		public StringBuilder Arguments { get; } = new();
+	}
 
 	public LocalApiForwarder(LocalApiForwarderSettings settings, string? apiKey)
 	{
@@ -189,7 +211,8 @@ internal sealed class LocalApiForwarder : IDisposable
 			{
 				await WriteJsonAsync(context.Response, HttpStatusCode.OK, new JsonObject
 				{
-					["version"] = "trafficpilot-local-forwarder"
+					// Some Ollama clients reject non-semver values here before attempting any requests.
+					["version"] = OllamaCompatibilityVersion
 				});
 				return;
 			}
@@ -233,10 +256,7 @@ internal sealed class LocalApiForwarder : IDisposable
 			if (HttpMethodsEqual(context.Request.HttpMethod, "GET") && path.Equals("/openai/unloadall", StringComparison.OrdinalIgnoreCase))
 			{
 				ClearLoadedModels();
-				await WriteJsonAsync(context.Response, HttpStatusCode.OK, new JsonObject
-				{
-					["success"] = true
-				});
+				await WriteEmptyAsync(context.Response, HttpStatusCode.OK);
 				return;
 			}
 
@@ -251,22 +271,26 @@ internal sealed class LocalApiForwarder : IDisposable
 				}
 
 				MarkModelLoaded(modelToLoad);
-				await WriteJsonAsync(context.Response, HttpStatusCode.OK, new JsonObject
-				{
-					["success"] = true,
-					["model"] = modelToLoad
-				});
+				await WriteEmptyAsync(context.Response, HttpStatusCode.OK);
 				return;
 			}
 
 			if (HttpMethodsEqual(context.Request.HttpMethod, "GET") && TryExtractModelName(path, "/openai/unload/", out var modelToUnload))
 			{
 				MarkModelUnloaded(modelToUnload);
-				await WriteJsonAsync(context.Response, HttpStatusCode.OK, new JsonObject
-				{
-					["success"] = true,
-					["model"] = modelToUnload
-				});
+				await WriteEmptyAsync(context.Response, HttpStatusCode.OK);
+				return;
+			}
+
+			if (HttpMethodsEqual(context.Request.HttpMethod, "GET") && path.Equals("/openai/getgpudevice", StringComparison.OrdinalIgnoreCase))
+			{
+				await WritePlainTextAsync(context.Response, HttpStatusCode.OK, "0", "application/json");
+				return;
+			}
+
+			if (HttpMethodsEqual(context.Request.HttpMethod, "GET") && TryExtractModelName(path, "/openai/setgpudevice/", out _))
+			{
+				await WriteEmptyAsync(context.Response, HttpStatusCode.OK);
 				return;
 			}
 
@@ -430,16 +454,17 @@ internal sealed class LocalApiForwarder : IDisposable
 		LogRequestIfEnabled("openai.responses", requestJson);
 		var requestedModel = requestJson["model"]?.GetValue<string>() ?? string.Empty;
 		var stream = requestJson["stream"]?.GetValue<bool>() ?? false;
-		if (stream)
-		{
-			await WriteErrorAsync(context.Response, "/v1/responses", HttpStatusCode.BadRequest,
-				"Streaming responses are not supported by the local adapter yet.",
-				"openai", null, null, null);
-			return;
-		}
 
 		if (IsAnthropicProvider)
 		{
+			if (stream)
+			{
+				await WriteErrorAsync(context.Response, "/v1/responses", HttpStatusCode.BadRequest,
+					"Streaming responses are not supported in the Anthropic adapter yet.",
+					"openai", null, null, null);
+				return;
+			}
+
 			var anthropicRequest = BuildAnthropicMessagesRequestFromResponses(requestJson);
 			using var upstreamRequest = CreateUpstreamRequest(_settings.Provider.ChatEndpoint, anthropicRequest);
 			using var upstreamResponse = await _httpClient.SendAsync(upstreamRequest, HttpCompletionOption.ResponseHeadersRead, ct);
@@ -460,9 +485,18 @@ internal sealed class LocalApiForwarder : IDisposable
 			return;
 		}
 
-		var chatRequest = BuildOpenAiChatRequestFromResponses(requestJson);
-		using var request = CreateUpstreamRequest(_settings.Provider.ChatEndpoint, chatRequest);
+		// For OpenAI-compatible providers, passthrough directly to the upstream Responses API.
+		requestJson["model"] = ResolveUpstreamChatModel(requestedModel);
+		using var request = CreateUpstreamRequest(_settings.Provider.ResponsesEndpoint, requestJson);
 		using var response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
+
+		if (stream)
+		{
+			LogInfo($"Forwarded Responses API streaming request '{requestedModel}' to {_settings.Provider.BaseUrl}");
+			await CopyUpstreamResponseAsync(context.Response, response, passthroughStreaming: true, ct);
+			return;
+		}
+
 		var responseBody = await response.Content.ReadAsStringAsync(ct);
 		LogResponseIfEnabled("openai.responses", response.StatusCode, responseBody);
 
@@ -474,9 +508,7 @@ internal sealed class LocalApiForwarder : IDisposable
 			return;
 		}
 
-		var upstreamJsonResponse = ParseJsonObject(responseBody, "OpenAI chat response");
-		var localResponse = ConvertOpenAiChatResponseToResponses(upstreamJsonResponse, requestedModel);
-		await WriteJsonAsync(context.Response, HttpStatusCode.OK, localResponse);
+		await WriteJsonAsync(context.Response, response.StatusCode, responseBody);
 	}
 
 	private async Task HandleOllamaGenerateAsync(HttpListenerContext context, CancellationToken ct)
@@ -677,7 +709,7 @@ internal sealed class LocalApiForwarder : IDisposable
 			return;
 		}
 
-		await WriteJsonAsync(context.Response, HttpStatusCode.OK, BuildOllamaShowResponse(modelName));
+		await WriteJsonAsync(context.Response, HttpStatusCode.OK, await BuildOllamaShowResponseAsync(modelName, ct));
 	}
 
 	private HttpRequestMessage CreateUpstreamRequest(string relativePath, JsonNode payload)
@@ -859,12 +891,215 @@ internal sealed class LocalApiForwarder : IDisposable
 		var upstream = new JsonObject
 		{
 			["model"] = ResolveUpstreamChatModel(localModel),
-			["messages"] = messages.DeepClone(),
+			["messages"] = ConvertOllamaMessagesToOpenAiMessages(messages),
 			["stream"] = source["stream"]?.GetValue<bool>() ?? false
 		};
 
 		CopyCommonGenerationOptions(source, upstream);
 		return upstream;
+	}
+
+	private JsonArray ConvertOllamaMessagesToOpenAiMessages(JsonArray sourceMessages)
+	{
+		var converted = new JsonArray();
+		var pendingToolCallIdsByName = new Dictionary<string, Queue<string>>(StringComparer.OrdinalIgnoreCase);
+
+		foreach (var message in sourceMessages.OfType<JsonObject>())
+		{
+			var role = message["role"]?.GetValue<string>() ?? "user";
+			if (role.Equals("tool", StringComparison.OrdinalIgnoreCase))
+			{
+				converted.Add(ConvertOllamaToolMessageToOpenAi(message, pendingToolCallIdsByName));
+				continue;
+			}
+
+			var openAiMessage = new JsonObject
+			{
+				["role"] = role
+			};
+
+			openAiMessage["content"] = ConvertOllamaMessageContentToOpenAi(message);
+			if (message["tool_calls"] is JsonArray toolCalls && toolCalls.Count > 0)
+				openAiMessage["tool_calls"] = ConvertOllamaToolCallsToOpenAi(toolCalls, pendingToolCallIdsByName);
+
+			converted.Add(openAiMessage);
+		}
+
+		return converted;
+	}
+
+	private JsonNode ConvertOllamaMessageContentToOpenAi(JsonObject message)
+	{
+		if (message["content"] is JsonArray contentArray && (message["images"] as JsonArray)?.Count is not > 0)
+			return contentArray.DeepClone();
+
+		if (message["images"] is not JsonArray images || images.Count == 0)
+			return message["content"]?.DeepClone() ?? string.Empty;
+
+		var content = new JsonArray();
+		var text = ExtractTextContent(message["content"]);
+		if (!string.IsNullOrWhiteSpace(text))
+		{
+			content.Add(new JsonObject
+			{
+				["type"] = "text",
+				["text"] = text
+			});
+		}
+
+		foreach (var imageNode in images)
+		{
+			var image = TryReadString(imageNode);
+			if (string.IsNullOrWhiteSpace(image))
+				continue;
+
+			content.Add(new JsonObject
+			{
+				["type"] = "image_url",
+				["image_url"] = new JsonObject
+				{
+					["url"] = NormalizeOllamaImageReference(image)
+				}
+			});
+		}
+
+		return content.Count == 0 ? string.Empty : content;
+	}
+
+	private static JsonArray ConvertOllamaToolCallsToOpenAi(
+		JsonArray toolCalls,
+		IDictionary<string, Queue<string>> pendingToolCallIdsByName)
+	{
+		var converted = new JsonArray();
+		var position = 0;
+		foreach (var toolCall in toolCalls.OfType<JsonObject>())
+		{
+			var function = toolCall["function"] as JsonObject;
+			if (function is null)
+				continue;
+
+			var toolName = function["name"]?.GetValue<string>() ?? "tool";
+			var index = TryReadInt64(function["index"]) ?? position;
+			var toolCallId = TryReadString(toolCall["id"]) ?? $"call_{index}_{BuildArchitectureKey(toolName)}";
+			var argumentsNode = function["arguments"]?.DeepClone() ?? new JsonObject();
+			var argumentsJson = argumentsNode is JsonValue value && value.TryGetValue<string>(out var rawArguments)
+				? rawArguments
+				: argumentsNode.ToJsonString(JsonOptions);
+
+			if (!pendingToolCallIdsByName.TryGetValue(toolName, out var queue))
+			{
+				queue = new Queue<string>();
+				pendingToolCallIdsByName[toolName] = queue;
+			}
+
+			queue.Enqueue(toolCallId);
+			converted.Add(new JsonObject
+			{
+				["id"] = toolCallId,
+				["type"] = "function",
+				["function"] = new JsonObject
+				{
+					["name"] = toolName,
+					["arguments"] = argumentsJson
+				}
+			});
+			position++;
+		}
+
+		return converted;
+	}
+
+	private static JsonObject ConvertOllamaToolMessageToOpenAi(
+		JsonObject message,
+		IDictionary<string, Queue<string>> pendingToolCallIdsByName)
+	{
+		var toolName = message["tool_name"]?.GetValue<string>()
+			?? message["name"]?.GetValue<string>()
+			?? "tool";
+		var toolCallId = TryReadString(message["tool_call_id"])
+			?? ResolvePendingToolCallId(toolName, pendingToolCallIdsByName)
+			?? $"call_{BuildArchitectureKey(toolName)}";
+
+		return new JsonObject
+		{
+			["role"] = "tool",
+			["tool_call_id"] = toolCallId,
+			["name"] = toolName,
+			["content"] = ConvertMessageContentToString(message["content"])
+		};
+	}
+
+	private static string? ResolvePendingToolCallId(
+		string toolName,
+		IDictionary<string, Queue<string>> pendingToolCallIdsByName)
+	{
+		if (pendingToolCallIdsByName.TryGetValue(toolName, out var queue) && queue.Count > 0)
+			return queue.Dequeue();
+
+		return null;
+	}
+
+	private static string ConvertMessageContentToString(JsonNode? content)
+	{
+		if (content is null)
+			return string.Empty;
+		if (content is JsonValue value && value.TryGetValue<string>(out var text))
+			return text;
+
+		return content.ToJsonString(JsonOptions);
+	}
+
+	private static string NormalizeOllamaImageReference(string image)
+	{
+		var trimmed = image.Trim();
+		if (trimmed.StartsWith("http://", StringComparison.OrdinalIgnoreCase)
+			|| trimmed.StartsWith("https://", StringComparison.OrdinalIgnoreCase)
+			|| trimmed.StartsWith("data:", StringComparison.OrdinalIgnoreCase))
+			return trimmed;
+
+		var mediaType = TryDetectImageMediaType(trimmed) ?? "image/png";
+		return $"data:{mediaType};base64,{trimmed}";
+	}
+
+	private static string? TryDetectImageMediaType(string base64Data)
+	{
+		try
+		{
+			var bytes = Convert.FromBase64String(base64Data);
+			if (bytes.Length >= 8
+				&& bytes[0] == 0x89 && bytes[1] == 0x50 && bytes[2] == 0x4E && bytes[3] == 0x47)
+				return "image/png";
+			if (bytes.Length >= 3
+				&& bytes[0] == 0xFF && bytes[1] == 0xD8 && bytes[2] == 0xFF)
+				return "image/jpeg";
+			if (bytes.Length >= 6
+				&& bytes[0] == 0x47 && bytes[1] == 0x49 && bytes[2] == 0x46)
+				return "image/gif";
+			if (bytes.Length >= 12
+				&& bytes[0] == 0x52 && bytes[1] == 0x49 && bytes[2] == 0x46 && bytes[3] == 0x46
+				&& bytes[8] == 0x57 && bytes[9] == 0x45 && bytes[10] == 0x42 && bytes[11] == 0x50)
+				return "image/webp";
+		}
+		catch
+		{
+		}
+
+		return null;
+	}
+
+	private static JsonNode? TryParseJsonNode(string? json)
+	{
+		if (string.IsNullOrWhiteSpace(json))
+			return null;
+
+		try
+		{
+			return JsonNode.Parse(json);
+		}
+		catch
+		{
+			return null;
+		}
 	}
 
 	private JsonObject BuildUpstreamEmbeddingsRequestFromOllama(JsonObject source)
@@ -881,20 +1116,42 @@ internal sealed class LocalApiForwarder : IDisposable
 		};
 	}
 
-	private JsonObject BuildOpenAiChatRequestFromResponses(JsonObject source)
+	private JsonObject BuildOpenAiChatRequestFromResponses(JsonObject source, bool stream = false)
 	{
 		var model = source["model"]?.GetValue<string>() ?? string.Empty;
+		var messages = BuildMessagesArrayFromResponsesInput(source["input"]);
+
+		var instructions = TryReadString(source["instructions"]);
+		if (!string.IsNullOrWhiteSpace(instructions))
+		{
+			var systemMessage = new JsonObject
+			{
+				["role"] = "system",
+				["content"] = instructions
+			};
+			messages.Insert(0, systemMessage);
+		}
+
 		var request = new JsonObject
 		{
 			["model"] = ResolveUpstreamChatModel(model),
-			["messages"] = BuildMessagesArrayFromResponsesInput(source["input"]),
-			["stream"] = false
+			["messages"] = messages,
+			["stream"] = stream
 		};
 
-		if (source["tools"] is not null)
-			request["tools"] = source["tools"]!.DeepClone();
+		if (stream)
+			request["stream_options"] = new JsonObject { ["include_usage"] = true };
+
+		if (source["tools"] is JsonArray tools && tools.Count > 0)
+			request["tools"] = ConvertResponsesToolsToChatCompletions(tools);
+		if (source["tool_choice"] is not null)
+			request["tool_choice"] = ConvertResponsesToolChoiceToChatCompletions(source["tool_choice"]);
+		if (source["parallel_tool_calls"] is not null)
+			request["parallel_tool_calls"] = source["parallel_tool_calls"]!.DeepClone();
 		if (source["temperature"] is not null)
 			request["temperature"] = source["temperature"]!.DeepClone();
+		if (source["top_p"] is not null)
+			request["top_p"] = source["top_p"]!.DeepClone();
 		if (source["max_output_tokens"] is not null)
 			request["max_tokens"] = source["max_output_tokens"]!.DeepClone();
 
@@ -921,29 +1178,97 @@ internal sealed class LocalApiForwarder : IDisposable
 		if (inputNode is JsonArray inputArray)
 		{
 			var result = new JsonArray();
+			var pendingToolCalls = new JsonArray();
+
 			foreach (var item in inputArray)
 			{
-				if (item is JsonObject messageObject)
+				if (item is not JsonObject messageObject)
+					continue;
+
+				var itemType = messageObject["type"]?.GetValue<string>() ?? string.Empty;
+
+				if (itemType.Equals("function_call", StringComparison.OrdinalIgnoreCase))
 				{
-					if (messageObject["role"] is not null && messageObject["content"] is not null)
+					var callId = TryReadString(messageObject["call_id"])
+						?? TryReadString(messageObject["id"])
+						?? $"call_{Guid.NewGuid():N}";
+					pendingToolCalls.Add(new JsonObject
+					{
+						["id"] = callId,
+						["type"] = "function",
+						["function"] = new JsonObject
+						{
+							["name"] = TryReadString(messageObject["name"]) ?? "tool",
+							["arguments"] = TryReadString(messageObject["arguments"]) ?? "{}"
+						}
+					});
+					continue;
+				}
+
+				if (itemType.Equals("function_call_output", StringComparison.OrdinalIgnoreCase))
+				{
+					if (pendingToolCalls.Count > 0)
 					{
 						result.Add(new JsonObject
 						{
-							["role"] = messageObject["role"]!.DeepClone(),
-							["content"] = ConvertResponsesContentToMessageContent(messageObject["content"])
+							["role"] = "assistant",
+							["content"] = (JsonNode?)null,
+							["tool_calls"] = pendingToolCalls
 						});
-						continue;
+						pendingToolCalls = new JsonArray();
 					}
 
-					if ((messageObject["type"]?.GetValue<string>() ?? string.Empty).Equals("message", StringComparison.OrdinalIgnoreCase))
+					var toolCallId = TryReadString(messageObject["call_id"])
+						?? $"call_{Guid.NewGuid():N}";
+					var output = TryReadString(messageObject["output"]) ?? string.Empty;
+					result.Add(new JsonObject
 					{
-						result.Add(new JsonObject
-						{
-							["role"] = messageObject["role"]?.GetValue<string>() ?? "user",
-							["content"] = ConvertResponsesContentToMessageContent(messageObject["content"])
-						});
-					}
+						["role"] = "tool",
+						["tool_call_id"] = toolCallId,
+						["content"] = output
+					});
+					continue;
 				}
+
+				if (pendingToolCalls.Count > 0)
+				{
+					result.Add(new JsonObject
+					{
+						["role"] = "assistant",
+						["content"] = (JsonNode?)null,
+						["tool_calls"] = pendingToolCalls
+					});
+					pendingToolCalls = new JsonArray();
+				}
+
+				if (messageObject["role"] is not null && messageObject["content"] is not null)
+				{
+					result.Add(new JsonObject
+					{
+						["role"] = messageObject["role"]!.DeepClone(),
+						["content"] = ConvertResponsesContentToMessageContent(messageObject["content"])
+					});
+					continue;
+				}
+
+				if (itemType.Equals("message", StringComparison.OrdinalIgnoreCase))
+				{
+					result.Add(new JsonObject
+					{
+						["role"] = messageObject["role"]?.GetValue<string>() ?? "user",
+						["content"] = ConvertResponsesContentToMessageContent(messageObject["content"])
+					});
+				}
+			}
+
+			if (pendingToolCalls.Count > 0)
+			{
+				result.Add(new JsonObject
+				{
+					["role"] = "assistant",
+					["content"] = (JsonNode?)null,
+					["tool_calls"] = pendingToolCalls
+				});
 			}
 
 			if (result.Count > 0)
@@ -971,6 +1296,412 @@ internal sealed class LocalApiForwarder : IDisposable
 		}
 
 		return contentNode.DeepClone();
+	}
+
+	private JsonArray ConvertResponsesToolsToChatCompletions(JsonArray tools)
+	{
+		var result = new JsonArray();
+		foreach (var toolNode in tools.OfType<JsonObject>())
+		{
+			if (toolNode["function"] is JsonObject)
+			{
+				result.Add(toolNode.DeepClone());
+				continue;
+			}
+
+			result.Add(new JsonObject
+			{
+				["type"] = "function",
+				["function"] = new JsonObject
+				{
+					["name"] = TryReadString(toolNode["name"]) ?? "tool",
+					["description"] = TryReadString(toolNode["description"]) ?? string.Empty,
+					["parameters"] = toolNode["parameters"]?.DeepClone() ?? new JsonObject(),
+					["strict"] = toolNode["strict"]?.DeepClone()
+				}
+			});
+		}
+
+		return result;
+	}
+
+	private static JsonNode ConvertResponsesToolChoiceToChatCompletions(JsonNode? toolChoice)
+	{
+		if (toolChoice is JsonValue v && v.TryGetValue<string>(out var s))
+			return s;
+
+		if (toolChoice is JsonObject obj && obj["name"] is not null)
+		{
+			return new JsonObject
+			{
+				["type"] = "function",
+				["function"] = new JsonObject
+				{
+					["name"] = obj["name"]!.DeepClone()
+				}
+			};
+		}
+
+		return toolChoice?.DeepClone() ?? "auto";
+	}
+
+	private async Task WriteResponsesStreamAsync(
+		HttpListenerResponse response,
+		HttpResponseMessage upstreamResponse,
+		string requestedModel,
+		CancellationToken ct)
+	{
+		if (!upstreamResponse.IsSuccessStatusCode)
+		{
+			var errorBody = await upstreamResponse.Content.ReadAsStringAsync(ct);
+			await WriteErrorAsync(response, "/v1/responses", upstreamResponse.StatusCode,
+				await ExtractUpstreamErrorAsync(upstreamResponse.StatusCode, errorBody),
+				"openai", upstreamResponse.StatusCode, errorBody, null);
+			return;
+		}
+
+		response.StatusCode = (int)HttpStatusCode.OK;
+		response.ContentType = "text/event-stream";
+		response.SendChunked = true;
+		response.Headers["Cache-Control"] = "no-cache";
+		response.Headers["X-Accel-Buffering"] = "no";
+
+		var output = response.OutputStream;
+		using var writer = new StreamWriter(output, new UTF8Encoding(false)) { AutoFlush = true, NewLine = "\n" };
+		await using var upstreamStream = await upstreamResponse.Content.ReadAsStreamAsync(ct);
+		using var reader = new StreamReader(upstreamStream);
+
+		var responseId = $"resp_{Guid.NewGuid():N}";
+		var messageItemId = $"msg_{Guid.NewGuid():N}";
+		var createdAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+		var textAccumulator = new StringBuilder();
+		var toolCallAccumulators = new Dictionary<int, StreamingToolCallAccumulator>();
+		var emittedToolCallItems = new HashSet<int>();
+		var messageItemEmitted = false;
+		var messageItemFinalized = false;
+		var contentPartEmitted = false;
+		var messageOutputIndex = 0;
+		JsonObject? usageStats = null;
+
+		await WriteSseEventAsync(writer, "response.created", new JsonObject
+		{
+			["type"] = "response.created",
+			["response"] = new JsonObject
+			{
+				["id"] = responseId,
+				["object"] = "response",
+				["created_at"] = createdAt,
+				["status"] = "in_progress",
+				["model"] = requestedModel,
+				["output"] = new JsonArray()
+			}
+		});
+
+		while (!ct.IsCancellationRequested)
+		{
+			var line = await reader.ReadLineAsync(ct);
+			if (line is null)
+				break;
+
+			if (string.IsNullOrWhiteSpace(line) || !line.StartsWith("data:", StringComparison.OrdinalIgnoreCase))
+				continue;
+
+			var payload = line[5..].Trim();
+			if (payload.Length == 0)
+				continue;
+
+			if (payload.Equals("[DONE]", StringComparison.Ordinal))
+				break;
+
+			var eventJson = JsonNode.Parse(payload)?.AsObject();
+			if (eventJson is null)
+				continue;
+
+			var delta = eventJson["choices"]?[0]?["delta"]?.AsObject();
+			var finishReason = TryReadString(eventJson["choices"]?[0]?["finish_reason"]);
+
+			if (delta is not null)
+			{
+				var content = TryReadString(delta["content"]);
+
+				if (!string.IsNullOrEmpty(content))
+				{
+					if (!messageItemEmitted)
+					{
+						await WriteSseEventAsync(writer, "response.output_item.added", new JsonObject
+						{
+							["type"] = "response.output_item.added",
+							["output_index"] = messageOutputIndex,
+							["item"] = new JsonObject
+							{
+								["type"] = "message",
+								["id"] = messageItemId,
+								["status"] = "in_progress",
+								["role"] = "assistant",
+								["content"] = new JsonArray()
+							}
+						});
+						messageItemEmitted = true;
+					}
+
+					if (!contentPartEmitted)
+					{
+						await WriteSseEventAsync(writer, "response.content_part.added", new JsonObject
+						{
+							["type"] = "response.content_part.added",
+							["item_id"] = messageItemId,
+							["output_index"] = messageOutputIndex,
+							["content_index"] = 0,
+							["part"] = new JsonObject
+							{
+								["type"] = "output_text",
+								["text"] = "",
+								["annotations"] = new JsonArray()
+							}
+						});
+						contentPartEmitted = true;
+					}
+
+					await WriteSseEventAsync(writer, "response.output_text.delta", new JsonObject
+					{
+						["type"] = "response.output_text.delta",
+						["item_id"] = messageItemId,
+						["output_index"] = messageOutputIndex,
+						["content_index"] = 0,
+						["delta"] = content
+					});
+					textAccumulator.Append(content);
+				}
+
+				if (delta["tool_calls"] is JsonArray deltaToolCalls)
+				{
+					if (messageItemEmitted && !messageItemFinalized)
+					{
+						await FinalizeResponsesMessageItemAsync(writer, messageItemId, messageOutputIndex, textAccumulator.ToString(), contentPartEmitted);
+						messageItemFinalized = true;
+						messageOutputIndex++;
+					}
+
+					foreach (var tc in deltaToolCalls.OfType<JsonObject>())
+					{
+						var tcIndex = (int)(TryReadInt64(tc["index"]) ?? 0);
+						if (!toolCallAccumulators.TryGetValue(tcIndex, out var acc))
+						{
+							acc = new StreamingToolCallAccumulator();
+							toolCallAccumulators[tcIndex] = acc;
+						}
+
+						acc.Id = TryReadString(tc["id"]) ?? acc.Id;
+						var function = tc["function"] as JsonObject;
+						if (function is null)
+							continue;
+
+						acc.Name = TryReadString(function["name"]) ?? acc.Name;
+						var args = TryReadString(function["arguments"]);
+
+						if (!emittedToolCallItems.Contains(tcIndex) && !string.IsNullOrWhiteSpace(acc.Name))
+						{
+							if (string.IsNullOrWhiteSpace(acc.Id))
+								acc.Id = $"fc_{Guid.NewGuid():N}";
+
+							await WriteSseEventAsync(writer, "response.output_item.added", new JsonObject
+							{
+								["type"] = "response.output_item.added",
+								["output_index"] = messageOutputIndex + tcIndex,
+								["item"] = new JsonObject
+								{
+									["type"] = "function_call",
+									["id"] = acc.Id,
+									["call_id"] = acc.Id,
+									["name"] = acc.Name,
+									["arguments"] = "",
+									["status"] = "in_progress"
+								}
+							});
+							emittedToolCallItems.Add(tcIndex);
+						}
+
+						if (!string.IsNullOrEmpty(args))
+						{
+							acc.Arguments.Append(args);
+							if (emittedToolCallItems.Contains(tcIndex))
+							{
+								await WriteSseEventAsync(writer, "response.function_call_arguments.delta", new JsonObject
+								{
+									["type"] = "response.function_call_arguments.delta",
+									["item_id"] = acc.Id,
+									["output_index"] = messageOutputIndex + tcIndex,
+									["delta"] = args
+								});
+							}
+						}
+					}
+				}
+			}
+
+			var usage = eventJson["usage"]?.AsObject();
+			if (usage is not null)
+				usageStats = usage.DeepClone().AsObject();
+
+			if (!string.IsNullOrWhiteSpace(finishReason))
+				break;
+		}
+
+		if (messageItemEmitted && !messageItemFinalized)
+		{
+			await FinalizeResponsesMessageItemAsync(writer, messageItemId, messageOutputIndex, textAccumulator.ToString(), contentPartEmitted);
+			messageOutputIndex++;
+		}
+
+		var fullOutput = new JsonArray();
+		if (messageItemEmitted)
+		{
+			fullOutput.Add(new JsonObject
+			{
+				["type"] = "message",
+				["id"] = messageItemId,
+				["status"] = "completed",
+				["role"] = "assistant",
+				["content"] = new JsonArray
+				{
+					new JsonObject
+					{
+						["type"] = "output_text",
+						["text"] = textAccumulator.ToString(),
+						["annotations"] = new JsonArray()
+					}
+				}
+			});
+		}
+
+		foreach (var pair in toolCallAccumulators.OrderBy(static p => p.Key))
+		{
+			var acc = pair.Value;
+			if (string.IsNullOrWhiteSpace(acc.Id))
+				acc.Id = $"fc_{Guid.NewGuid():N}";
+			var fullArgs = acc.Arguments.ToString();
+			var itemOutputIndex = messageOutputIndex + pair.Key;
+
+			await WriteSseEventAsync(writer, "response.function_call_arguments.done", new JsonObject
+			{
+				["type"] = "response.function_call_arguments.done",
+				["item_id"] = acc.Id,
+				["output_index"] = itemOutputIndex,
+				["arguments"] = fullArgs
+			});
+
+			var completedItem = new JsonObject
+			{
+				["type"] = "function_call",
+				["id"] = acc.Id,
+				["call_id"] = acc.Id,
+				["name"] = acc.Name,
+				["arguments"] = fullArgs,
+				["status"] = "completed"
+			};
+			await WriteSseEventAsync(writer, "response.output_item.done", new JsonObject
+			{
+				["type"] = "response.output_item.done",
+				["output_index"] = itemOutputIndex,
+				["item"] = completedItem
+			});
+
+			fullOutput.Add(completedItem.DeepClone());
+		}
+
+		var completedResponse = new JsonObject
+		{
+			["id"] = responseId,
+			["object"] = "response",
+			["created_at"] = createdAt,
+			["status"] = "completed",
+			["model"] = requestedModel,
+			["output"] = fullOutput
+		};
+
+		if (usageStats is not null)
+		{
+			completedResponse["usage"] = new JsonObject
+			{
+				["input_tokens"] = usageStats["prompt_tokens"]?.DeepClone() ?? 0,
+				["output_tokens"] = usageStats["completion_tokens"]?.DeepClone() ?? 0,
+				["total_tokens"] = usageStats["total_tokens"]?.DeepClone() ?? 0
+			};
+		}
+
+		await WriteSseEventAsync(writer, "response.completed", new JsonObject
+		{
+			["type"] = "response.completed",
+			["response"] = completedResponse
+		});
+
+		await output.FlushAsync(ct);
+		TryCloseResponse(response);
+	}
+
+	private async Task FinalizeResponsesMessageItemAsync(
+		StreamWriter writer,
+		string messageItemId,
+		int outputIndex,
+		string text,
+		bool contentPartEmitted)
+	{
+		if (contentPartEmitted)
+		{
+			await WriteSseEventAsync(writer, "response.output_text.done", new JsonObject
+			{
+				["type"] = "response.output_text.done",
+				["item_id"] = messageItemId,
+				["output_index"] = outputIndex,
+				["content_index"] = 0,
+				["text"] = text
+			});
+
+			await WriteSseEventAsync(writer, "response.content_part.done", new JsonObject
+			{
+				["type"] = "response.content_part.done",
+				["item_id"] = messageItemId,
+				["output_index"] = outputIndex,
+				["content_index"] = 0,
+				["part"] = new JsonObject
+				{
+					["type"] = "output_text",
+					["text"] = text,
+					["annotations"] = new JsonArray()
+				}
+			});
+		}
+
+		await WriteSseEventAsync(writer, "response.output_item.done", new JsonObject
+		{
+			["type"] = "response.output_item.done",
+			["output_index"] = outputIndex,
+			["item"] = new JsonObject
+			{
+				["type"] = "message",
+				["id"] = messageItemId,
+				["status"] = "completed",
+				["role"] = "assistant",
+				["content"] = new JsonArray
+				{
+					new JsonObject
+					{
+						["type"] = "output_text",
+						["text"] = text,
+						["annotations"] = new JsonArray()
+					}
+				}
+			}
+		});
+	}
+
+	private static async Task WriteSseEventAsync(StreamWriter writer, string eventName, JsonObject data)
+	{
+		await writer.WriteAsync("event: ");
+		await writer.WriteLineAsync(eventName);
+		await writer.WriteAsync("data: ");
+		await writer.WriteLineAsync(data.ToJsonString(JsonOptions));
+		await writer.WriteLineAsync();
 	}
 
 	private JsonObject BuildAnthropicMessagesRequestFromGenerate(JsonObject source)
@@ -1136,15 +1867,19 @@ internal sealed class LocalApiForwarder : IDisposable
 
 		if (isChat)
 		{
+			var assistantMessage = new JsonObject
+			{
+				["role"] = "assistant",
+				["content"] = content
+			};
+			if (TryConvertOpenAiToolCalls(parsed, out var toolCalls))
+				assistantMessage["tool_calls"] = toolCalls;
+
 			return new JsonObject
 			{
 				["model"] = modelName,
 				["created_at"] = DateTimeOffset.UtcNow.ToString("O"),
-				["message"] = new JsonObject
-				{
-					["role"] = "assistant",
-					["content"] = content
-				},
+				["message"] = assistantMessage,
 				["done"] = true,
 				["done_reason"] = finishReason ?? "stop",
 				["prompt_eval_count"] = usage?["prompt_tokens"]?.GetValue<int>() ?? 0,
@@ -1179,15 +1914,19 @@ internal sealed class LocalApiForwarder : IDisposable
 
 		if (isChat)
 		{
+			var assistantMessage = new JsonObject
+			{
+				["role"] = "assistant",
+				["content"] = content
+			};
+			if (TryConvertAnthropicToolCalls(parsed, out var anthropicToolCalls))
+				assistantMessage["tool_calls"] = ConvertOpenAiToolCallsToOllama(anthropicToolCalls);
+
 			return new JsonObject
 			{
 				["model"] = modelName,
 				["created_at"] = DateTimeOffset.UtcNow.ToString("O"),
-				["message"] = new JsonObject
-				{
-					["role"] = "assistant",
-					["content"] = content
-				},
+				["message"] = assistantMessage,
 				["done"] = true,
 				["done_reason"] = finishReason,
 				["prompt_eval_count"] = usage?["input_tokens"]?.GetValue<int>() ?? 0,
@@ -1371,10 +2110,14 @@ internal sealed class LocalApiForwarder : IDisposable
 		};
 	}
 
-	private static string ExtractAssistantContent(JsonObject parsed) =>
-		parsed["choices"]?[0]?["message"]?["content"]?.GetValue<string>()
-		?? parsed["choices"]?[0]?["delta"]?["content"]?.GetValue<string>()
-		?? string.Empty;
+	private static string ExtractAssistantContent(JsonObject parsed)
+	{
+		var messageContent = ExtractTextContent(parsed["choices"]?[0]?["message"]?["content"]);
+		if (!string.IsNullOrWhiteSpace(messageContent))
+			return messageContent;
+
+		return ExtractTextContent(parsed["choices"]?[0]?["delta"]?["content"]);
+	}
 
 	private static string ExtractAnthropicText(JsonObject parsed)
 	{
@@ -1513,6 +2256,7 @@ internal sealed class LocalApiForwarder : IDisposable
 		using var writer = new StreamWriter(output, new UTF8Encoding(false)) { AutoFlush = true };
 
 		var createdAt = DateTimeOffset.UtcNow.ToString("O");
+		var streamedToolCalls = new Dictionary<int, StreamingToolCallAccumulator>();
 		while (!ct.IsCancellationRequested)
 		{
 			var line = await reader.ReadLineAsync(ct);
@@ -1528,6 +2272,18 @@ internal sealed class LocalApiForwarder : IDisposable
 
 			if (payload.Equals("[DONE]", StringComparison.Ordinal))
 			{
+				if (isChat && streamedToolCalls.Count > 0)
+				{
+					await writer.WriteLineAsync(BuildOllamaStreamChunk(
+						localModel,
+						createdAt,
+						isChat,
+						string.Empty,
+						done: false,
+						doneReason: null,
+						toolCalls: BuildStreamedOllamaToolCalls(streamedToolCalls)).ToJsonString(JsonOptions));
+				}
+
 				await writer.WriteLineAsync(BuildOllamaStreamChunk(localModel, createdAt, isChat, string.Empty, true, "stop").ToJsonString(JsonOptions));
 				break;
 			}
@@ -1535,6 +2291,11 @@ internal sealed class LocalApiForwarder : IDisposable
 			var eventJson = JsonNode.Parse(payload)?.AsObject();
 			if (eventJson is null)
 				continue;
+
+			if (isChat)
+				AccumulateStreamingToolCalls(eventJson["choices"]?[0]?["delta"]?["tool_calls"] as JsonArray, streamedToolCalls);
+			if (isChat && eventJson["choices"]?[0]?["message"]?["tool_calls"] is JsonArray fullToolCalls)
+				ReplaceStreamingToolCalls(fullToolCalls, streamedToolCalls);
 
 			var chunkText = eventJson["choices"]?[0]?["delta"]?["content"]?.GetValue<string>()
 				?? eventJson["choices"]?[0]?["message"]?["content"]?.GetValue<string>()
@@ -1546,6 +2307,18 @@ internal sealed class LocalApiForwarder : IDisposable
 
 			if (!string.IsNullOrWhiteSpace(finishReason))
 			{
+				if (isChat && streamedToolCalls.Count > 0)
+				{
+					await writer.WriteLineAsync(BuildOllamaStreamChunk(
+						localModel,
+						createdAt,
+						isChat,
+						string.Empty,
+						done: false,
+						doneReason: null,
+						toolCalls: BuildStreamedOllamaToolCalls(streamedToolCalls)).ToJsonString(JsonOptions));
+				}
+
 				await writer.WriteLineAsync(BuildOllamaStreamChunk(localModel, createdAt, isChat, string.Empty, true, finishReason).ToJsonString(JsonOptions));
 				break;
 			}
@@ -1555,19 +2328,30 @@ internal sealed class LocalApiForwarder : IDisposable
 		TryCloseResponse(response);
 	}
 
-	private static JsonObject BuildOllamaStreamChunk(string model, string createdAt, bool isChat, string content, bool done, string? doneReason)
+	private static JsonObject BuildOllamaStreamChunk(
+		string model,
+		string createdAt,
+		bool isChat,
+		string content,
+		bool done,
+		string? doneReason,
+		JsonArray? toolCalls = null)
 	{
 		if (isChat)
 		{
+			var message = new JsonObject
+			{
+				["role"] = "assistant",
+				["content"] = content
+			};
+			if (toolCalls is not null && toolCalls.Count > 0)
+				message["tool_calls"] = toolCalls;
+
 			return new JsonObject
 			{
 				["model"] = model,
 				["created_at"] = createdAt,
-				["message"] = new JsonObject
-				{
-					["role"] = "assistant",
-					["content"] = content
-				},
+				["message"] = message,
 				["done"] = done,
 				["done_reason"] = doneReason
 			};
@@ -1581,6 +2365,82 @@ internal sealed class LocalApiForwarder : IDisposable
 			["done"] = done,
 			["done_reason"] = doneReason
 		};
+	}
+
+	private static void AccumulateStreamingToolCalls(
+		JsonArray? deltaToolCalls,
+		IDictionary<int, StreamingToolCallAccumulator> streamedToolCalls)
+	{
+		if (deltaToolCalls is null)
+			return;
+
+		foreach (var item in deltaToolCalls.OfType<JsonObject>())
+		{
+			var index = (int)(TryReadInt64(item["index"]) ?? 0);
+			if (!streamedToolCalls.TryGetValue(index, out var accumulator))
+			{
+				accumulator = new StreamingToolCallAccumulator();
+				streamedToolCalls[index] = accumulator;
+			}
+
+			accumulator.Id = TryReadString(item["id"]) ?? accumulator.Id;
+			var function = item["function"] as JsonObject;
+			if (function is null)
+				continue;
+
+			accumulator.Name = function["name"]?.GetValue<string>() ?? accumulator.Name;
+			var arguments = TryReadString(function["arguments"]);
+			if (!string.IsNullOrWhiteSpace(arguments))
+				accumulator.Arguments.Append(arguments);
+		}
+	}
+
+	private static void ReplaceStreamingToolCalls(
+		JsonArray toolCalls,
+		IDictionary<int, StreamingToolCallAccumulator> streamedToolCalls)
+	{
+		streamedToolCalls.Clear();
+		var position = 0;
+		foreach (var item in toolCalls.OfType<JsonObject>())
+		{
+			var function = item["function"] as JsonObject;
+			if (function is null)
+				continue;
+
+			var accumulator = new StreamingToolCallAccumulator
+			{
+				Id = item["id"]?.GetValue<string>() ?? $"call_{position}_{BuildArchitectureKey(function["name"]?.GetValue<string>() ?? "tool")}",
+				Name = function["name"]?.GetValue<string>() ?? "tool"
+			};
+			var arguments = TryReadString(function["arguments"]);
+			if (!string.IsNullOrWhiteSpace(arguments))
+				accumulator.Arguments.Append(arguments);
+			streamedToolCalls[position] = accumulator;
+			position++;
+		}
+	}
+
+	private JsonArray BuildStreamedOllamaToolCalls(IDictionary<int, StreamingToolCallAccumulator> streamedToolCalls)
+	{
+		var toolCalls = new JsonArray();
+		foreach (var pair in streamedToolCalls.OrderBy(static item => item.Key))
+		{
+			var accumulator = pair.Value;
+			var argumentsNode = TryParseJsonNode(accumulator.Arguments.ToString()) ?? JsonValue.Create(accumulator.Arguments.ToString());
+			toolCalls.Add(new JsonObject
+			{
+				["id"] = string.IsNullOrWhiteSpace(accumulator.Id) ? $"call_{pair.Key}_{BuildArchitectureKey(accumulator.Name)}" : accumulator.Id,
+				["type"] = "function",
+				["function"] = new JsonObject
+				{
+					["index"] = pair.Key,
+					["name"] = string.IsNullOrWhiteSpace(accumulator.Name) ? "tool" : accumulator.Name,
+					["arguments"] = argumentsNode ?? new JsonObject()
+				}
+			});
+		}
+
+		return toolCalls;
 	}
 
 	private async Task CopyUpstreamResponseAsync(
@@ -1664,13 +2524,20 @@ internal sealed class LocalApiForwarder : IDisposable
 				["modified_at"] = DateTimeOffset.UtcNow.ToString("O"),
 				["size"] = 0,
 				["digest"] = "trafficpilot",
+				["capabilities"] = BuildOllamaCapabilities(model),
+				["context_length"] = model.ContextLength,
+				["multiplier"] = FormatMultiplier(model.Multiplier),
 				["details"] = new JsonObject
 				{
 					["format"] = "trafficpilot",
-					["family"] = "forwarded",
-					["parameter_size"] = "unknown",
-					["quantization_level"] = "unknown"
-				}
+					["family"] = model.Architecture,
+					["families"] = new JsonArray(model.Architecture),
+					["parameter_size"] = model.ParameterSize,
+					["quantization_level"] = model.QuantizationLevel
+				},
+				["model_info"] = BuildOllamaModelInfo(model),
+				["supports_tool_calling"] = model.SupportsToolCalling,
+				["supports_vision"] = model.SupportsVision
 			});
 		}
 
@@ -1709,59 +2576,98 @@ internal sealed class LocalApiForwarder : IDisposable
 		};
 	}
 
-	private JsonObject BuildOllamaShowResponse(string modelName)
+	private bool TryConvertOpenAiToolCalls(JsonObject parsed, out JsonArray toolCalls)
 	{
+		toolCalls = [];
+		if (parsed["choices"]?[0]?["message"]?["tool_calls"] is not JsonArray sourceToolCalls)
+			return false;
+
+		toolCalls = ConvertOpenAiToolCallsToOllama(sourceToolCalls);
+		return toolCalls.Count > 0;
+	}
+
+	private JsonArray ConvertOpenAiToolCallsToOllama(JsonArray sourceToolCalls)
+	{
+		var toolCalls = new JsonArray();
+
+		var position = 0;
+		foreach (var toolCall in sourceToolCalls.OfType<JsonObject>())
+		{
+			var function = toolCall["function"] as JsonObject;
+			if (function is null)
+				continue;
+
+			var argumentsNode = function["arguments"] is JsonValue value
+				&& value.TryGetValue<string>(out var argumentsText)
+				&& TryParseJsonNode(argumentsText) is JsonNode parsedArguments
+				? parsedArguments
+				: function["arguments"]?.DeepClone() ?? new JsonObject();
+
+			toolCalls.Add(new JsonObject
+			{
+				["id"] = toolCall["id"]?.DeepClone() ?? $"call_{position}_{BuildArchitectureKey(function["name"]?.GetValue<string>() ?? "tool")}",
+				["type"] = "function",
+				["function"] = new JsonObject
+				{
+					["index"] = position,
+					["name"] = function["name"]?.GetValue<string>() ?? "tool",
+					["arguments"] = argumentsNode
+				}
+			});
+			position++;
+		}
+
+		return toolCalls;
+	}
+
+	private async Task<JsonObject> BuildOllamaShowResponseAsync(string modelName, CancellationToken ct)
+	{
+		var model = await GetAdvertisedModelCatalogEntryAsync(modelName, ct)
+			?? CreateModelCatalogEntry(
+				modelName,
+				ResolveUpstreamChatModel(modelName),
+				_settings.Provider.Name,
+				DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
+				isAlias: false,
+				metadataSource: null);
+
 		return new JsonObject
 		{
-			["modelfile"] = $"FROM {ResolveUpstreamChatModel(modelName)}",
-			["parameters"] = "num_ctx 100000\nnum_predict 8192",
+			["modelfile"] = $"FROM {model.UpstreamModel}",
+			["parameters"] = $"num_ctx {model.ContextLength}\nnum_predict {model.MaxOutputTokens}",
 			["template"] = "{{ .Prompt }}",
 			["license"] = $"Forwarded to {_settings.Provider.Name} via TrafficPilot.",
-			["capabilities"] = new JsonArray("completion"),
+			["capabilities"] = BuildOllamaCapabilities(model),
 			["modified_at"] = DateTimeOffset.UtcNow.ToString("O"),
+			["multiplier"] = FormatMultiplier(model.Multiplier),
+			["supports_tool_calling"] = model.SupportsToolCalling,
+			["supports_vision"] = model.SupportsVision,
 			["details"] = new JsonObject
 			{
-				["parent_model"] = ResolveUpstreamChatModel(modelName),
+				["parent_model"] = model.UpstreamModel,
 				["format"] = "trafficpilot",
-				["family"] = "forwarded",
-				["families"] = new JsonArray("forwarded"),
-				["parameter_size"] = "unknown",
-				["quantization_level"] = "unknown"
+				["family"] = model.Architecture,
+				["families"] = new JsonArray(model.Architecture),
+				["parameter_size"] = model.ParameterSize,
+				["quantization_level"] = model.QuantizationLevel
 			},
-			["model_info"] = new JsonObject
-			{
-				["trafficpilot.context_length"] = 100000,
-				["trafficpilot.max_output_tokens"] = 8192,
-				["trafficpilot.provider_name"] = _settings.Provider.Name,
-				["trafficpilot.provider_base_url"] = _settings.Provider.BaseUrl,
-				["trafficpilot.upstream_model"] = ResolveUpstreamChatModel(modelName)
-			}
+			["model_info"] = BuildOllamaModelInfo(model)
 		};
 	}
 
 	private JsonObject BuildFoundryLocalStatusResponse()
 	{
-		var foundryBaseUrl = $"http://127.0.0.1:{_settings.FoundryPort}";
-		var ollamaBaseUrl = $"http://127.0.0.1:{_settings.OllamaPort}";
+		var loopbackEndpoint = $"http://127.0.0.1:{_settings.FoundryPort}";
+		var localhostEndpoint = $"http://localhost:{_settings.FoundryPort}";
 
 		return new JsonObject
 		{
-			["Endpoint"] = foundryBaseUrl,
-			["EndpointApiVersion"] = "v1",
-			["Version"] = "trafficpilot-foundry-compat",
+			["Endpoints"] = new JsonArray(loopbackEndpoint, localhostEndpoint),
 			["ModelDirPath"] = Path.Combine(
 				Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
 				"TrafficPilot",
 				"RemoteModels"),
-			["CurrentDevice"] = "CPU",
-			["Label"] = "TrafficPilot Foundry Local Compatibility",
-			["Extensions"] = new JsonObject
-			{
-				["provider_base_url"] = _settings.Provider.BaseUrl,
-				["provider_name"] = _settings.Provider.Name,
-				["openai_endpoint"] = $"{foundryBaseUrl}/v1",
-				["ollama_endpoint"] = ollamaBaseUrl
-			}
+			["PipeName"] = "trafficpilot-foundry-local"
 		};
 	}
 
@@ -1785,19 +2691,42 @@ internal sealed class LocalApiForwarder : IDisposable
 		var models = new JsonArray();
 		foreach (var model in await GetAdvertisedModelCatalogAsync(ct))
 		{
+			var modelUri = BuildFoundryModelUri(model.LocalName);
 			models.Add(new JsonObject
 			{
 				["name"] = model.LocalName,
 				["displayName"] = model.LocalName,
 				["providerType"] = "AzureFoundryLocal",
+				["uri"] = modelUri,
 				["publisher"] = _settings.Provider.Name,
-				["task"] = "chat-completion",
-				["version"] = "trafficpilot-remote",
+				["task"] = "chat completion",
+				["version"] = "1",
+				["modelType"] = "OpenAI",
+				["promptTemplate"] = new JsonObject
+				{
+					["system"] = "{{system}}",
+					["user"] = "{{input}}",
+					["assistant"] = "{{output}}",
+					["prompt"] = "{{input}}"
+				},
+				["runtime"] = new JsonObject
+				{
+					["deviceType"] = "CPU",
+					["executionProvider"] = "cpu"
+				},
+				["fileSizeMb"] = 0,
+				["modelSettings"] = new JsonObject
+				{
+					["parameters"] = new JsonArray()
+				},
+				["alias"] = model.LocalName,
 				["description"] = $"Forwarded to {_settings.Provider.Name} via TrafficPilot.",
 				["supportsToolCalling"] = true,
-				["supportsImageInput"] = false,
+				["license"] = "Remote",
+				["licenseDescription"] = $"Remote model forwarded to {_settings.Provider.Name} via TrafficPilot.",
+				["parentModelUri"] = modelUri,
 				["maxOutputTokens"] = 8192,
-				["contextWindowTokens"] = 100000,
+				["minFLVersion"] = "0.0.0",
 				["endpoints"] = new JsonArray
 				{
 					new JsonObject
@@ -1816,18 +2745,35 @@ internal sealed class LocalApiForwarder : IDisposable
 		};
 	}
 
+	private static string BuildFoundryModelUri(string modelName)
+	{
+		return $"azureml://registries/trafficpilot/models/{Uri.EscapeDataString(modelName)}/versions/1";
+	}
+
 	private async Task<JsonObject> BuildOpenAiModelsResponseAsync(CancellationToken ct)
 	{
 		var data = new JsonArray();
 		foreach (var model in await GetAdvertisedModelCatalogAsync(ct))
 		{
-			data.Add(new JsonObject
+			var modelObj = new JsonObject
 			{
 				["id"] = model.LocalName,
 				["object"] = "model",
 				["created"] = model.CreatedUnixTime,
 				["owned_by"] = string.IsNullOrWhiteSpace(model.OwnedBy) ? _settings.Provider.Name : model.OwnedBy
-			});
+			};
+
+			var capabilities = new JsonObject();
+			if (model.SupportsToolCalling)
+			{
+				capabilities["tool_use"] = true;
+				capabilities["function_calling"] = true;
+			}
+			if (model.SupportsVision)
+				capabilities["vision"] = true;
+			modelObj["capabilities"] = capabilities;
+
+			data.Add(modelObj);
 		}
 
 		return new JsonObject
@@ -1939,12 +2885,13 @@ internal sealed class LocalApiForwarder : IDisposable
 				continue;
 
 			var normalizedId = modelId.Trim();
-			catalog[normalizedId] = new ModelCatalogEntry(
+			catalog[normalizedId] = CreateModelCatalogEntry(
 				normalizedId,
 				normalizedId,
 				TryReadModelOwner(item) ?? _settings.Provider.Name,
 				TryReadModelCreatedUnixTime(item) ?? DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
-				false);
+				isAlias: false,
+				item);
 		}
 	}
 
@@ -1962,12 +2909,13 @@ internal sealed class LocalApiForwarder : IDisposable
 			var upstreamModel = string.IsNullOrWhiteSpace(mapping.UpstreamModel)
 				? localModel
 				: mapping.UpstreamModel.Trim();
-			models[localModel] = new ModelCatalogEntry(
+			models[localModel] = CreateModelCatalogEntry(
 				localModel,
 				upstreamModel,
 				_settings.Provider.Name,
 				createdUnixTime,
-				!localModel.Equals(upstreamModel, StringComparison.OrdinalIgnoreCase));
+				isAlias: !localModel.Equals(upstreamModel, StringComparison.OrdinalIgnoreCase),
+				metadataSource: null);
 		}
 
 		AddConfiguredModelCatalogEntry(models, _settings.Provider.DefaultModel, createdUnixTime);
@@ -1987,12 +2935,13 @@ internal sealed class LocalApiForwarder : IDisposable
 			return;
 
 		var normalizedModel = modelName.Trim();
-		catalog[normalizedModel] = new ModelCatalogEntry(
+		catalog[normalizedModel] = CreateModelCatalogEntry(
 			normalizedModel,
 			normalizedModel,
 			_settings.Provider.Name,
 			createdUnixTime,
-			false);
+			isAlias: false,
+			metadataSource: null);
 	}
 
 	private IReadOnlyList<string> GetConfiguredLocalModelNames() =>
@@ -2008,12 +2957,452 @@ internal sealed class LocalApiForwarder : IDisposable
 		foreach (var model in upstreamCatalog)
 			merged[model.LocalName] = model;
 		foreach (var model in configuredCatalog)
-			merged.TryAdd(model.LocalName, model);
+		{
+			if (merged.ContainsKey(model.LocalName))
+				continue;
+
+			var upstreamMatch = upstreamCatalog.FirstOrDefault(upstream =>
+				upstream.LocalName.Equals(model.UpstreamModel, StringComparison.OrdinalIgnoreCase));
+			if (upstreamMatch is not null)
+			{
+				merged[model.LocalName] = upstreamMatch with
+				{
+					LocalName = model.LocalName,
+					UpstreamModel = model.UpstreamModel,
+					OwnedBy = model.OwnedBy,
+					CreatedUnixTime = model.CreatedUnixTime,
+					IsAlias = model.IsAlias
+				};
+				continue;
+			}
+
+			merged[model.LocalName] = model;
+		}
 
 		return merged.Values
 			.OrderBy(static model => model.LocalName, StringComparer.OrdinalIgnoreCase)
 			.ToList();
 	}
+
+	private async Task<ModelCatalogEntry?> GetAdvertisedModelCatalogEntryAsync(string modelName, CancellationToken ct)
+	{
+		if (string.IsNullOrWhiteSpace(modelName))
+			return null;
+
+		var catalog = await GetAdvertisedModelCatalogAsync(ct);
+		return catalog.FirstOrDefault(model =>
+			model.LocalName.Equals(modelName, StringComparison.OrdinalIgnoreCase));
+	}
+
+	private ModelCatalogEntry CreateModelCatalogEntry(
+		string localName,
+		string upstreamModel,
+		string ownedBy,
+		long createdUnixTime,
+		bool isAlias,
+		JsonNode? metadataSource)
+	{
+		var inferenceModelName = string.IsNullOrWhiteSpace(upstreamModel) ? localName : upstreamModel;
+		var supportsEmbeddings = InferEmbeddingSupport(inferenceModelName, metadataSource);
+		var supportsToolCalling = !supportsEmbeddings
+			&& !IsAnthropicProvider
+			&& InferToolSupport(inferenceModelName, metadataSource);
+		var supportsVision = !supportsEmbeddings
+			&& !IsAnthropicProvider
+			&& InferVisionSupport(inferenceModelName, metadataSource);
+		var multiplier = TryReadDoubleFromAny(metadataSource,
+			"multiplier",
+			"rateMultiplier",
+			"rate_multiplier",
+			"costMultiplier",
+			"cost_multiplier",
+			"usageMultiplier",
+			"usage_multiplier");
+
+		return new ModelCatalogEntry(
+			localName,
+			upstreamModel,
+			ownedBy,
+			createdUnixTime,
+			isAlias,
+			InferArchitecture(inferenceModelName, metadataSource),
+			TryReadLongFromAny(metadataSource,
+				"contextWindowTokens",
+				"context_window_tokens",
+				"contextWindow",
+				"context_window",
+				"contextLength",
+				"context_length",
+				"maxInputTokens",
+				"max_input_tokens",
+				"inputTokenLimit",
+				"input_token_limit")
+				?? InferContextLengthFromModelName(inferenceModelName),
+			TryReadLongFromAny(metadataSource,
+				"maxOutputTokens",
+				"max_output_tokens",
+				"outputTokenLimit",
+				"output_token_limit",
+				"maxCompletionTokens",
+				"max_completion_tokens")
+				?? DefaultMaxOutputTokens,
+			supportsToolCalling,
+			supportsVision,
+			supportsEmbeddings,
+			InferThinkingSupport(inferenceModelName, metadataSource),
+			TryReadStringFromAny(metadataSource, "parameter_size", "parameterSize") ?? (supportsEmbeddings ? "embedding" : "unknown"),
+			TryReadStringFromAny(metadataSource, "quantization_level", "quantizationLevel") ?? "remote",
+			TryReadLongFromAny(metadataSource, "general.parameter_count", "parameter_count", "parameterCount"),
+			multiplier);
+	}
+
+	private static JsonArray BuildOllamaCapabilities(ModelCatalogEntry model)
+	{
+		var capabilities = new List<string>();
+		if (!model.SupportsEmbeddings)
+		{
+			capabilities.Add("completion");
+			capabilities.Add("chat");
+		}
+
+		if (model.SupportsToolCalling)
+			capabilities.Add("tools");
+		if (model.SupportsVision)
+			capabilities.Add("vision");
+		if (model.SupportsEmbeddings)
+			capabilities.Add("embedding");
+		if (model.SupportsThinking)
+			capabilities.Add("thinking");
+
+		return new JsonArray(capabilities
+			.Distinct(StringComparer.OrdinalIgnoreCase)
+			.Select(static capability => JsonValue.Create(capability))
+			.ToArray());
+	}
+
+	private JsonObject BuildOllamaModelInfo(ModelCatalogEntry model)
+	{
+		var modelInfo = new JsonObject
+		{
+			["general.architecture"] = model.Architecture,
+			[$"{model.Architecture}.context_length"] = model.ContextLength,
+			["trafficpilot.context_length"] = model.ContextLength,
+			["trafficpilot.max_output_tokens"] = model.MaxOutputTokens,
+			["trafficpilot.provider_name"] = _settings.Provider.Name,
+			["trafficpilot.provider_base_url"] = _settings.Provider.BaseUrl,
+			["trafficpilot.upstream_model"] = model.UpstreamModel,
+			["trafficpilot.supports_tool_calling"] = model.SupportsToolCalling,
+			["trafficpilot.supports_vision"] = model.SupportsVision
+		};
+
+		if (model.ParameterCount is not null)
+			modelInfo["general.parameter_count"] = model.ParameterCount.Value;
+		if (model.SupportsVision)
+			modelInfo[$"{model.Architecture}.vision.enabled"] = true;
+		if (model.SupportsThinking)
+			modelInfo[$"{model.Architecture}.thinking.enabled"] = true;
+		if (model.Multiplier is not null)
+			modelInfo["trafficpilot.multiplier"] = model.Multiplier.Value;
+
+		return modelInfo;
+	}
+
+	private static string? FormatMultiplier(double? multiplier)
+	{
+		if (multiplier is null)
+			return null;
+
+		return $"{multiplier.Value.ToString("0.##", CultureInfo.InvariantCulture)}x";
+	}
+
+	private static string InferArchitecture(string modelName, JsonNode? metadataSource)
+	{
+		return TryReadStringFromAny(metadataSource,
+				"general.architecture",
+				"architecture",
+				"family")
+			?? BuildArchitectureKey(modelName);
+	}
+
+	private static bool InferToolSupport(string modelName, JsonNode? metadataSource)
+	{
+		var explicitValue = TryReadBoolFromAny(metadataSource,
+			"supportsToolCalling",
+			"supports_tool_calling",
+			"supportsTools",
+			"supports_tools",
+			"supportsFunctionCalling",
+			"supports_function_calling");
+		if (explicitValue is not null)
+			return explicitValue.Value;
+
+		if (ContainsAnyValue(FindPropertyValue(metadataSource,
+				"capabilities",
+				"supportedCapabilities",
+				"supported_capabilities",
+				"features",
+				"supportedFeatures",
+				"supported_features"),
+			"tools",
+			"tool",
+			"tool_calling",
+			"function_calling"))
+			return true;
+
+		return IsLikelyToolCapableModel(modelName);
+	}
+
+	private static bool InferVisionSupport(string modelName, JsonNode? metadataSource)
+	{
+		var explicitValue = TryReadBoolFromAny(metadataSource,
+			"supportsVision",
+			"supports_vision",
+			"supportsImageInput",
+			"supports_image_input",
+			"vision");
+		if (explicitValue is not null)
+			return explicitValue.Value;
+
+		if (ContainsAnyValue(FindPropertyValue(metadataSource,
+				"capabilities",
+				"supportedCapabilities",
+				"supported_capabilities",
+				"inputModalities",
+				"input_modalities",
+				"modalities"),
+			"vision",
+			"image",
+			"images",
+			"multimodal"))
+			return true;
+
+		return IsLikelyVisionModel(modelName);
+	}
+
+	private static bool InferEmbeddingSupport(string modelName, JsonNode? metadataSource)
+	{
+		var explicitValue = TryReadBoolFromAny(metadataSource,
+			"supportsEmbeddings",
+			"supports_embeddings",
+			"embedding");
+		if (explicitValue is not null)
+			return explicitValue.Value;
+
+		if (ContainsAnyValue(FindPropertyValue(metadataSource,
+				"capabilities",
+				"supportedCapabilities",
+				"supported_capabilities",
+				"modelType",
+				"model_type",
+				"task"),
+			"embedding",
+			"embeddings"))
+			return true;
+
+		return IsLikelyEmbeddingModel(modelName);
+	}
+
+	private static bool InferThinkingSupport(string modelName, JsonNode? metadataSource)
+	{
+		var explicitValue = TryReadBoolFromAny(metadataSource,
+			"supportsThinking",
+			"supports_thinking",
+			"thinking");
+		if (explicitValue is not null)
+			return explicitValue.Value;
+
+		if (ContainsAnyValue(FindPropertyValue(metadataSource,
+				"capabilities",
+				"supportedCapabilities",
+				"supported_capabilities",
+				"features"),
+			"thinking",
+			"reasoning"))
+			return true;
+
+		var normalized = modelName.Trim().ToLowerInvariant();
+		return normalized.StartsWith("o1", StringComparison.Ordinal)
+			|| normalized.StartsWith("o3", StringComparison.Ordinal)
+			|| normalized.StartsWith("o4", StringComparison.Ordinal)
+			|| normalized.StartsWith("gpt-5", StringComparison.Ordinal)
+			|| normalized.Contains("reason", StringComparison.Ordinal);
+	}
+
+	private static bool IsLikelyEmbeddingModel(string modelName)
+	{
+		var normalized = modelName.Trim().ToLowerInvariant();
+		return normalized.Contains("embedding", StringComparison.Ordinal)
+			|| normalized.Contains("embed", StringComparison.Ordinal)
+			|| normalized.Contains("text-embedding", StringComparison.Ordinal);
+	}
+
+	private static bool IsLikelyVisionModel(string modelName)
+	{
+		var normalized = modelName.Trim().ToLowerInvariant();
+		return normalized.StartsWith("gpt-4o", StringComparison.Ordinal)
+			|| normalized.StartsWith("gpt-4.1", StringComparison.Ordinal)
+			|| normalized.StartsWith("gpt-5", StringComparison.Ordinal)
+			|| normalized.StartsWith("claude-3", StringComparison.Ordinal)
+			|| normalized.StartsWith("claude-4", StringComparison.Ordinal)
+			|| normalized.StartsWith("gemini", StringComparison.Ordinal)
+			|| normalized.Contains("vision", StringComparison.Ordinal)
+			|| normalized.Contains("-vl", StringComparison.Ordinal)
+			|| normalized.Contains("multimodal", StringComparison.Ordinal)
+			|| normalized.Contains("llava", StringComparison.Ordinal)
+			|| normalized.Contains("pixtral", StringComparison.Ordinal)
+			|| normalized.Contains("minicpm-v", StringComparison.Ordinal)
+			|| normalized.Contains("moondream", StringComparison.Ordinal)
+			|| normalized.Contains("internvl", StringComparison.Ordinal);
+	}
+
+	private static bool IsLikelyToolCapableModel(string modelName)
+	{
+		if (IsLikelyEmbeddingModel(modelName))
+			return false;
+
+		var normalized = modelName.Trim().ToLowerInvariant();
+		return normalized.StartsWith("gpt-", StringComparison.Ordinal)
+			|| normalized.StartsWith("o1", StringComparison.Ordinal)
+			|| normalized.StartsWith("o3", StringComparison.Ordinal)
+			|| normalized.StartsWith("o4", StringComparison.Ordinal)
+			|| normalized.StartsWith("claude", StringComparison.Ordinal)
+			|| normalized.StartsWith("gemini", StringComparison.Ordinal)
+			|| normalized.StartsWith("grok", StringComparison.Ordinal)
+			|| normalized.StartsWith("llama", StringComparison.Ordinal)
+			|| normalized.StartsWith("qwen", StringComparison.Ordinal)
+			|| normalized.StartsWith("deepseek", StringComparison.Ordinal)
+			|| normalized.StartsWith("mistral", StringComparison.Ordinal)
+			|| normalized.StartsWith("codestral", StringComparison.Ordinal)
+			|| normalized.StartsWith("kimi", StringComparison.Ordinal)
+			|| normalized.Contains("codex", StringComparison.Ordinal)
+			|| normalized.Contains("tool", StringComparison.Ordinal);
+	}
+
+	private static long InferContextLengthFromModelName(string modelName)
+	{
+		var normalized = modelName.Trim().ToLowerInvariant();
+		if (normalized.StartsWith("gpt-5", StringComparison.Ordinal))
+			return 400_000;
+		if (normalized.StartsWith("gpt-4.1", StringComparison.Ordinal))
+			return 1_000_000;
+		if (normalized.StartsWith("gpt-4o", StringComparison.Ordinal))
+			return 128_000;
+		if (normalized.StartsWith("claude", StringComparison.Ordinal))
+			return 200_000;
+		if (normalized.StartsWith("gemini", StringComparison.Ordinal))
+			return 1_000_000;
+
+		return DefaultContextLength;
+	}
+
+	private static string BuildArchitectureKey(string modelName)
+	{
+		if (string.IsNullOrWhiteSpace(modelName))
+			return "forwarded";
+
+		var builder = new StringBuilder(modelName.Length);
+		var previousWasSeparator = false;
+		foreach (var ch in modelName.Trim().ToLowerInvariant())
+		{
+			if (char.IsLetterOrDigit(ch))
+			{
+				builder.Append(ch);
+				previousWasSeparator = false;
+				continue;
+			}
+
+			if (previousWasSeparator)
+				continue;
+
+			builder.Append('_');
+			previousWasSeparator = true;
+		}
+
+		var normalized = builder.ToString().Trim('_');
+		return normalized.Length == 0 ? "forwarded" : normalized;
+	}
+
+	private static JsonNode? FindPropertyValue(JsonNode? node, params string[] propertyNames)
+	{
+		if (node is null || propertyNames.Length == 0)
+			return null;
+
+		var queue = new Queue<JsonNode>();
+		queue.Enqueue(node);
+		while (queue.Count > 0)
+		{
+			var current = queue.Dequeue();
+			if (current is not JsonObject obj)
+				continue;
+
+			foreach (var property in obj)
+			{
+				if (property.Value is null)
+					continue;
+
+				if (propertyNames.Any(name => property.Key.Equals(name, StringComparison.OrdinalIgnoreCase)))
+					return property.Value;
+
+				if (property.Value is JsonObject nestedObject)
+					queue.Enqueue(nestedObject);
+			}
+		}
+
+		return null;
+	}
+
+	private static bool ContainsAnyValue(JsonNode? node, params string[] candidates)
+	{
+		if (node is null || candidates.Length == 0)
+			return false;
+
+		var set = new HashSet<string>(candidates, StringComparer.OrdinalIgnoreCase);
+		return EnumerateStringValues(node).Any(value => set.Contains(value));
+	}
+
+	private static IEnumerable<string> EnumerateStringValues(JsonNode? node)
+	{
+		if (node is null)
+			yield break;
+
+		if (node is JsonValue value)
+		{
+			if (value.TryGetValue<string>(out var stringValue) && !string.IsNullOrWhiteSpace(stringValue))
+				yield return stringValue.Trim();
+			yield break;
+		}
+
+		if (node is JsonArray array)
+		{
+			foreach (var item in array)
+			{
+				foreach (var stringValue in EnumerateStringValues(item))
+					yield return stringValue;
+			}
+			yield break;
+		}
+
+		if (node is JsonObject obj)
+		{
+			foreach (var property in obj)
+			{
+				foreach (var stringValue in EnumerateStringValues(property.Value))
+					yield return stringValue;
+			}
+		}
+	}
+
+	private static string? TryReadStringFromAny(JsonNode? node, params string[] propertyNames) =>
+		TryReadString(FindPropertyValue(node, propertyNames));
+
+	private static bool? TryReadBoolFromAny(JsonNode? node, params string[] propertyNames) =>
+		TryReadBool(FindPropertyValue(node, propertyNames));
+
+	private static double? TryReadDoubleFromAny(JsonNode? node, params string[] propertyNames) =>
+		TryReadDouble(FindPropertyValue(node, propertyNames));
+
+	private static long? TryReadLongFromAny(JsonNode? node, params string[] propertyNames) =>
+		TryReadInt64(FindPropertyValue(node, propertyNames));
 
 	private void CacheModelCatalog(IReadOnlyList<ModelCatalogEntry> catalog, DateTimeOffset expiresAt)
 	{
@@ -2106,7 +3495,90 @@ internal sealed class LocalApiForwarder : IDisposable
 		}
 
 		var stringValue = TryReadString(node);
-		return long.TryParse(stringValue, out var parsed) ? parsed : null;
+		if (long.TryParse(stringValue, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed))
+			return parsed;
+
+		return TryParseScaledLong(stringValue);
+	}
+
+	private static bool? TryReadBool(JsonNode? node)
+	{
+		if (node is null)
+			return null;
+
+		try
+		{
+			return node.GetValue<bool>();
+		}
+		catch
+		{
+		}
+
+		var stringValue = TryReadString(node);
+		return bool.TryParse(stringValue, out var parsed) ? parsed : null;
+	}
+
+	private static double? TryReadDouble(JsonNode? node)
+	{
+		if (node is null)
+			return null;
+
+		try
+		{
+			return node.GetValue<double>();
+		}
+		catch
+		{
+		}
+
+		try
+		{
+			return node.GetValue<float>();
+		}
+		catch
+		{
+		}
+
+		var stringValue = TryReadString(node);
+		if (string.IsNullOrWhiteSpace(stringValue))
+			return null;
+
+		var normalized = stringValue.Trim();
+		if (normalized.EndsWith("x", StringComparison.OrdinalIgnoreCase))
+			normalized = normalized[..^1];
+
+		return double.TryParse(normalized, NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed)
+			? parsed
+			: null;
+	}
+
+	private static long? TryParseScaledLong(string? value)
+	{
+		if (string.IsNullOrWhiteSpace(value))
+			return null;
+
+		var normalized = value.Trim().Replace(",", string.Empty, StringComparison.Ordinal);
+		var multiplier = 1d;
+		if (normalized.EndsWith("k", StringComparison.OrdinalIgnoreCase))
+		{
+			multiplier = 1_000d;
+			normalized = normalized[..^1];
+		}
+		else if (normalized.EndsWith("m", StringComparison.OrdinalIgnoreCase))
+		{
+			multiplier = 1_000_000d;
+			normalized = normalized[..^1];
+		}
+		else if (normalized.EndsWith("b", StringComparison.OrdinalIgnoreCase))
+		{
+			multiplier = 1_000_000_000d;
+			normalized = normalized[..^1];
+		}
+
+		if (!double.TryParse(normalized, NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed))
+			return null;
+
+		return (long)Math.Round(parsed * multiplier, MidpointRounding.AwayFromZero);
 	}
 
 	private IReadOnlyList<string> GetLoadedModelNames()
@@ -2244,6 +3716,25 @@ internal sealed class LocalApiForwarder : IDisposable
 		await response.OutputStream.WriteAsync(bytes);
 		await response.OutputStream.FlushAsync();
 		TryCloseResponse(response);
+	}
+
+	private static async Task WritePlainTextAsync(HttpListenerResponse response, HttpStatusCode statusCode, string text, string contentType = "text/plain")
+	{
+		response.StatusCode = (int)statusCode;
+		response.ContentType = contentType;
+		var bytes = Encoding.UTF8.GetBytes(text);
+		response.ContentLength64 = bytes.Length;
+		await response.OutputStream.WriteAsync(bytes);
+		await response.OutputStream.FlushAsync();
+		TryCloseResponse(response);
+	}
+
+	private static Task WriteEmptyAsync(HttpListenerResponse response, HttpStatusCode statusCode)
+	{
+		response.StatusCode = (int)statusCode;
+		response.ContentLength64 = 0;
+		TryCloseResponse(response);
+		return Task.CompletedTask;
 	}
 
 	private static void TryCloseResponse(HttpListenerResponse response)

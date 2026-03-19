@@ -41,8 +41,8 @@ internal partial class MainForm : Form
 	private ComboBox? _cmbLocalApiProviderProtocol;
 	private TextBox? _txtLocalApiProviderName;
 	private TextBox? _txtLocalApiProviderUrl;
-	private TextBox? _txtLocalApiDefaultModel;
-	private TextBox? _txtLocalApiDefaultEmbeddingModel;
+	private ComboBox? _cmbLocalApiDefaultModel;
+	private ComboBox? _cmbLocalApiDefaultEmbeddingModel;
 	private ComboBox? _cmbLocalApiAuthType;
 	private TextBox? _txtLocalApiAuthHeaderName;
 	private TextBox? _txtLocalApiApiKey;
@@ -1248,6 +1248,10 @@ internal partial class MainForm : Form
 			var preview = models.Count == 0
 				? "<none>"
 				: string.Join(", ", models.Take(5)) + (models.Count > 5 ? ", ..." : string.Empty);
+			UpdateLocalApiModelSelectors(
+				models,
+				_cmbLocalApiDefaultModel?.Text ?? string.Empty,
+				_cmbLocalApiDefaultEmbeddingModel?.Text ?? string.Empty);
 			AppendLog(
 				$"[{DateTime.Now:HH:mm:ss.fff}] [Config] Upstream model refresh completed: {models.Count} models ({preview})");
 		}
@@ -1272,6 +1276,66 @@ internal partial class MainForm : Form
 		var providerName = settings.Provider?.Name ?? "Default";
 		var apiKey = CredentialManager.LoadToken(CredentialManager.GetLocalApiTargetName(providerName));
 		return new LocalApiForwarder(settings, apiKey);
+	}
+
+	private void UpdateLocalApiModelSelectors(
+		IEnumerable<string>? models,
+		string selectedDefaultModel,
+		string selectedEmbeddingModel)
+	{
+		if (_cmbLocalApiDefaultModel is null || _cmbLocalApiDefaultEmbeddingModel is null)
+			return;
+
+		var items = (models ?? Enumerable.Empty<string>())
+			.Select(static model => model?.Trim() ?? string.Empty)
+			.Where(static model => !string.IsNullOrWhiteSpace(model))
+			.Distinct(StringComparer.OrdinalIgnoreCase)
+			.OrderBy(static model => model, StringComparer.OrdinalIgnoreCase)
+			.ToList();
+
+		if (!string.IsNullOrWhiteSpace(selectedDefaultModel))
+			items.Add(selectedDefaultModel.Trim());
+		if (!string.IsNullOrWhiteSpace(selectedEmbeddingModel))
+			items.Add(selectedEmbeddingModel.Trim());
+
+		var normalizedItems = items
+			.Distinct(StringComparer.OrdinalIgnoreCase)
+			.OrderBy(static model => model, StringComparer.OrdinalIgnoreCase)
+			.ToArray();
+
+		RebindEditableComboBox(_cmbLocalApiDefaultModel, normalizedItems, selectedDefaultModel);
+		RebindEditableComboBox(_cmbLocalApiDefaultEmbeddingModel, normalizedItems, selectedEmbeddingModel);
+	}
+
+	private static IEnumerable<string> BuildLocalApiSelectorItems(LocalApiForwarderSettings settings)
+	{
+		var items = new List<string>();
+
+		if (!string.IsNullOrWhiteSpace(settings.Provider?.DefaultModel))
+			items.Add(settings.Provider.DefaultModel.Trim());
+		if (!string.IsNullOrWhiteSpace(settings.Provider?.DefaultEmbeddingModel))
+			items.Add(settings.Provider.DefaultEmbeddingModel.Trim());
+
+		items.AddRange(settings.ModelMappings
+			.Where(static mapping => !string.IsNullOrWhiteSpace(mapping.UpstreamModel))
+			.Select(static mapping => mapping.UpstreamModel.Trim()));
+
+		return items;
+	}
+
+	private static void RebindEditableComboBox(ComboBox comboBox, IEnumerable<string> items, string selectedText)
+	{
+		comboBox.BeginUpdate();
+		try
+		{
+			comboBox.Items.Clear();
+			comboBox.Items.AddRange(items.Cast<object>().ToArray());
+			comboBox.Text = selectedText ?? string.Empty;
+		}
+		finally
+		{
+			comboBox.EndUpdate();
+		}
 	}
 
 	private void ChkAutoFetch_CheckedChanged(object? sender, EventArgs e)
@@ -1550,11 +1614,13 @@ internal partial class MainForm : Form
 		providerUrlPanel.Controls.Add(_btnRefreshLocalApiModels, 1, 0);
 		AddLocalApiRow(3, "Provider Base URL:", providerUrlPanel);
 
-		_txtLocalApiDefaultModel = CreateFillTextBox("Remote default model, e.g. gpt-4.1-mini");
-		AddLocalApiRow(4, "Default Model:", _txtLocalApiDefaultModel);
+		_cmbLocalApiDefaultModel = CreateEditableComboBox();
+		_cmbLocalApiDefaultModel.Text = string.Empty;
+		AddLocalApiRow(4, "Default Model:", _cmbLocalApiDefaultModel);
 
-		_txtLocalApiDefaultEmbeddingModel = CreateFillTextBox("Optional embeddings model override");
-		AddLocalApiRow(5, "Embedding Model:", _txtLocalApiDefaultEmbeddingModel);
+		_cmbLocalApiDefaultEmbeddingModel = CreateEditableComboBox();
+		_cmbLocalApiDefaultEmbeddingModel.Text = string.Empty;
+		AddLocalApiRow(5, "Embedding Model:", _cmbLocalApiDefaultEmbeddingModel);
 
 		var authPanel = new TableLayoutPanel
 		{
@@ -1693,6 +1759,17 @@ internal partial class MainForm : Form
 		};
 	}
 
+	private static ComboBox CreateEditableComboBox()
+	{
+		return new ComboBox
+		{
+			Dock = DockStyle.Fill,
+			DropDownStyle = ComboBoxStyle.DropDown,
+			AutoCompleteMode = AutoCompleteMode.SuggestAppend,
+			AutoCompleteSource = AutoCompleteSource.ListItems
+		};
+	}
+
 	private LocalApiForwarderSettings? BuildLocalApiForwarderSettings()
 	{
 		if (_chkLocalApiForwarderEnabled is null
@@ -1701,8 +1778,8 @@ internal partial class MainForm : Form
 			|| _cmbLocalApiProviderProtocol is null
 			|| _txtLocalApiProviderName is null
 			|| _txtLocalApiProviderUrl is null
-			|| _txtLocalApiDefaultModel is null
-			|| _txtLocalApiDefaultEmbeddingModel is null
+			|| _cmbLocalApiDefaultModel is null
+			|| _cmbLocalApiDefaultEmbeddingModel is null
 			|| _cmbLocalApiAuthType is null
 			|| _txtLocalApiAuthHeaderName is null
 			|| _txtLocalApiApiKey is null
@@ -1734,8 +1811,8 @@ internal partial class MainForm : Form
 				Protocol = _cmbLocalApiProviderProtocol.SelectedItem?.ToString() ?? "OpenAICompatible",
 				Name = providerName,
 				BaseUrl = _txtLocalApiProviderUrl.Text.Trim(),
-				DefaultModel = _txtLocalApiDefaultModel.Text.Trim(),
-				DefaultEmbeddingModel = _txtLocalApiDefaultEmbeddingModel.Text.Trim(),
+				DefaultModel = _cmbLocalApiDefaultModel.Text.Trim(),
+				DefaultEmbeddingModel = _cmbLocalApiDefaultEmbeddingModel.Text.Trim(),
 				AuthType = _cmbLocalApiAuthType.SelectedItem?.ToString() ?? "Bearer",
 				AuthHeaderName = _txtLocalApiAuthHeaderName.Text.Trim(),
 				AdditionalHeaders = ParseLocalApiHeaders(_txtLocalApiAdditionalHeaders.Lines)
@@ -1759,8 +1836,8 @@ internal partial class MainForm : Form
 			|| _cmbLocalApiProviderProtocol is null
 			|| _txtLocalApiProviderName is null
 			|| _txtLocalApiProviderUrl is null
-			|| _txtLocalApiDefaultModel is null
-			|| _txtLocalApiDefaultEmbeddingModel is null
+			|| _cmbLocalApiDefaultModel is null
+			|| _cmbLocalApiDefaultEmbeddingModel is null
 			|| _cmbLocalApiAuthType is null
 			|| _txtLocalApiAuthHeaderName is null
 			|| _txtLocalApiApiKey is null
@@ -1783,8 +1860,10 @@ internal partial class MainForm : Form
 			: "OpenAICompatible";
 		_txtLocalApiProviderName.Text = settings.Provider?.Name ?? string.Empty;
 		_txtLocalApiProviderUrl.Text = settings.Provider?.BaseUrl ?? string.Empty;
-		_txtLocalApiDefaultModel.Text = settings.Provider?.DefaultModel ?? string.Empty;
-		_txtLocalApiDefaultEmbeddingModel.Text = settings.Provider?.DefaultEmbeddingModel ?? string.Empty;
+		UpdateLocalApiModelSelectors(
+			BuildLocalApiSelectorItems(settings),
+			settings.Provider?.DefaultModel ?? string.Empty,
+			settings.Provider?.DefaultEmbeddingModel ?? string.Empty);
 		_cmbLocalApiAuthType.SelectedItem = _cmbLocalApiAuthType.Items.Contains(settings.Provider?.AuthType ?? "Bearer")
 			? settings.Provider?.AuthType ?? "Bearer"
 			: "Bearer";

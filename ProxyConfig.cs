@@ -165,6 +165,9 @@ internal class LocalApiProviderSettings
 	[JsonPropertyName("embeddingsEndpoint")]
 	public string EmbeddingsEndpoint { get; set; } = "embeddings";
 
+	[JsonPropertyName("responsesEndpoint")]
+	public string ResponsesEndpoint { get; set; } = "responses";
+
 	[JsonPropertyName("additionalHeaders")]
 	public List<LocalApiHeaderSetting> AdditionalHeaders { get; set; } = [];
 }
