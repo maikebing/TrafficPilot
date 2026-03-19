@@ -18,6 +18,7 @@
 - **图形化配置**：直观的配置界面，支持配置名称、自定义 JSON 配置文件保存 / 另存为 / 加载。
 - **快捷配置切换**：自动显示最近使用的配置快捷按钮，并在托盘菜单中同步提供快速切换入口。
 - **配置云同步**：支持通过 GitHub Gist 在多台设备间同步配置文件。
+- **本地 LLM 接口转发**：可在本机暴露 Ollama 与 Foundry Local / OpenAI 兼容接口，并将请求转换后转发到可配置的第三方模型 API。
 - **启动项控制**：支持开机启动，以及程序启动后自动启动代理。
 - **在线更新**：在 `About` 页面自动查询 GitHub / Gitee 最新版本，并支持一键下载更新。
 - **流量处理实时统计**：显示接收数据包、转发成功 / 失败等统计信息。
@@ -38,6 +39,16 @@
 4. 按需勾选 `Start on Windows startup` 和 `Start Proxy after launch`
 5. 点击 `Save Config` 保存当前配置，或使用 `Save As` 保存为新的配置文件
 6. 点击 `Start Proxy` 启动代理服务
+
+**使用本地 LLM 接口转发（可选）：**
+
+1. 切换到 `Local API` 选项卡
+2. 勾选 `Enable local Ollama / Foundry forwarding`
+3. 配置本地监听端口（默认 Ollama `11434`、Foundry `5273`）
+4. 填写第三方供应商的 `Provider Name`、`Provider Base URL` 与默认远程模型
+5. 在 `Model Mappings` 中按 `本地模型名=远程模型名` 逐行填写映射关系
+6. 输入供应商 API Key（会保存到 Windows Credential Manager，不会写入 JSON 配置）
+7. 保存配置后启动 TrafficPilot，本机其他应用即可继续访问 `http://127.0.0.1:<端口>/...`
 
 **使用 GitHub520 Hosts 重定向（可选）：**
 
@@ -96,6 +107,22 @@
   "configSync": {
     "provider": "GitHub",
     "gistId": ""
+  },
+  "localApiForwarder": {
+    "enabled": true,
+    "ollamaPort": 11434,
+    "foundryPort": 5273,
+    "provider": {
+      "name": "OpenAI Compatible",
+      "baseUrl": "https://api.openai.com/v1/",
+      "defaultModel": "gpt-4.1-mini"
+    },
+    "modelMappings": [
+      {
+        "localModel": "qwen2.5:7b",
+        "upstreamModel": "gpt-4.1-mini"
+      }
+    ]
   }
 }
 ```
@@ -120,6 +147,13 @@
 | `autoStartProxy` | bool | 程序启动并加载配置后是否自动启动代理 |
 | `configSync.provider` | string | 配置同步服务提供商（`GitHub` 或 `Gitee`） |
 | `configSync.gistId` | string | 远程 Gist / Snippet ID，用于多设备配置同步 |
+| `localApiForwarder.enabled` | bool | 是否启用本地 Ollama / Foundry Local 接口转发 |
+| `localApiForwarder.ollamaPort` | uint | Ollama 兼容接口监听端口 |
+| `localApiForwarder.foundryPort` | uint | Foundry Local / OpenAI 兼容接口监听端口 |
+| `localApiForwarder.provider.name` | string | 第三方 API 供应商显示名称 |
+| `localApiForwarder.provider.baseUrl` | string | 第三方 OpenAI-compatible API 基础地址（建议包含 `/v1/`） |
+| `localApiForwarder.provider.defaultModel` | string | 未命中映射时使用的默认远程模型 |
+| `localApiForwarder.modelMappings` | object[] | 本地模型别名与远程模型名的映射列表 |
 
 ### 配置管理说明
 
@@ -129,6 +163,7 @@
 - `Save Config`：覆盖保存当前活动配置文件
 - 配置区左侧会显示最近使用的配置快捷按钮，便于快速切换
 - 系统托盘菜单中也提供相同的配置切换与保存入口
+- 本地 API 转发的供应商 API Key 存储在 **Windows Credential Manager**，不会写入配置文件
 
 ## 技术架构
 

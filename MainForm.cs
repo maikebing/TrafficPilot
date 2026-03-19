@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.Net;
 using System.Net.NetworkInformation;
 using System.Reflection;
+using System.Text;
 using TrafficPilot.Properties;
 
 namespace TrafficPilot;
@@ -32,6 +33,17 @@ internal partial class MainForm : Form
 	private bool _localProxySubscribed;
 	private CancellationTokenSource? _networkChangeCts;
 
+	private TabPage? _localApiTab;
+	private TableLayoutPanel? _localApiPanel;
+	private CheckBox? _chkLocalApiForwarderEnabled;
+	private NumericUpDown? _numOllamaPort;
+	private NumericUpDown? _numFoundryPort;
+	private TextBox? _txtLocalApiProviderName;
+	private TextBox? _txtLocalApiProviderUrl;
+	private TextBox? _txtLocalApiDefaultModel;
+	private TextBox? _txtLocalApiApiKey;
+	private TextBox? _txtLocalApiModelMappings;
+
 	public MainForm(bool startMinimized = false)
 	{
 		_startMinimized = startMinimized;
@@ -41,6 +53,7 @@ internal partial class MainForm : Form
 		_logBuffer = new LogBuffer(BatchAppendLogs);
 		_autoUpdater = new AutoUpdater();
 		InitializeComponent();
+		InitializeLocalApiForwarderTab();
 		InitIpResultsColumns();
 		InitProxyHostComboBox();
 		InitializeHostsRedirectModeUI(); // 添加hosts模式UI
@@ -101,10 +114,10 @@ internal partial class MainForm : Form
 		{
 			if (_engine == null || !_engine.IsRunning)
 			{
-				if (!_chkProxyEnabled!.Checked && !_chkDNSRedirectEnabled!.Checked)
+				if (!_chkProxyEnabled!.Checked && !_chkDNSRedirectEnabled!.Checked && !(_chkLocalApiForwarderEnabled?.Checked ?? false))
 				{
 					MessageBox.Show(
-						"Neither Proxy nor Hosts Redirect is enabled. Please enable at least one before starting.",
+						"Proxy, Hosts Redirect, and Local API Forwarding are all disabled. Please enable at least one before starting.",
 						"Nothing to Start",
 						MessageBoxButtons.OK,
 						MessageBoxIcon.Warning);
@@ -392,7 +405,8 @@ internal partial class MainForm : Form
 			},
 			StartOnBoot = _chkStartOnBoot!.Checked,
 			AutoStartProxy = _chkAutoStartProxy!.Checked,
-			ConfigSync = BuildConfigSyncSettings()
+			ConfigSync = BuildConfigSyncSettings(),
+			LocalApiForwarder = BuildLocalApiForwarderSettings()
 		};
 	}
 
@@ -430,7 +444,8 @@ internal partial class MainForm : Form
 			_chkProxyEnabled!.Checked,
 			hostsEnabled,
 			_txtHostsUrl!.Text.Trim(),
-			hostsMode
+			hostsMode,
+			BuildLocalApiForwarderSettings()
 		);
 	}
 
@@ -452,6 +467,7 @@ internal partial class MainForm : Form
 		_chkStartOnBoot!.Checked = StartupManager.IsEnabled();
 		_chkAutoStartProxy!.Checked = _currentConfig.AutoStartProxy;
 		_txtConfigName!.Text = _currentConfig.ConfigName;
+		LoadLocalApiForwarderToUi(_currentConfig.LocalApiForwarder);
 
 		// Load sync settings
 		string syncProvider = _currentConfig.ConfigSync?.Provider ?? "GitHub";
@@ -842,7 +858,7 @@ internal partial class MainForm : Form
 
 		_initialAutoStartHandled = true;
 
-		if (!_chkProxyEnabled!.Checked && !_chkDNSRedirectEnabled!.Checked)
+		if (!_chkProxyEnabled!.Checked && !_chkDNSRedirectEnabled!.Checked && !(_chkLocalApiForwarderEnabled?.Checked ?? false))
 			return;
 
 		try
@@ -1300,5 +1316,242 @@ internal partial class MainForm : Form
 			return false;
 
 		return long.TryParse(text[..^3].Trim(), out latencyMs);
+	}
+
+	private void InitializeLocalApiForwarderTab()
+	{
+		if (_tabControl is null)
+			return;
+
+		_localApiTab = new TabPage("Local API");
+		_localApiPanel = new TableLayoutPanel
+		{
+			ColumnCount = 2,
+			RowCount = 7,
+			Dock = DockStyle.Fill,
+			Padding = new Padding(10)
+		};
+		_localApiPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 140F));
+		_localApiPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+		for (var i = 0; i < 6; i++)
+			_localApiPanel.RowStyles.Add(new RowStyle());
+		_localApiPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
+
+		var header = new FlowLayoutPanel
+		{
+			AutoSize = true,
+			Dock = DockStyle.Top,
+			WrapContents = false
+		};
+		_chkLocalApiForwarderEnabled = new CheckBox
+		{
+			AutoSize = true,
+			Text = "Enable local Ollama / Foundry forwarding",
+			Margin = new Padding(3, 3, 12, 3)
+		};
+		var headerLabel = new Label
+		{
+			AutoSize = true,
+			Text = "TrafficPilot keeps these listeners on loopback only for safety.",
+			Margin = new Padding(3, 5, 3, 3)
+		};
+		header.Controls.Add(_chkLocalApiForwarderEnabled);
+		header.Controls.Add(headerLabel);
+		_localApiPanel.Controls.Add(header, 0, 0);
+		_localApiPanel.SetColumnSpan(header, 2);
+
+		var portPanel = new TableLayoutPanel
+		{
+			ColumnCount = 4,
+			Dock = DockStyle.Fill
+		};
+		portPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 110F));
+		portPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 100F));
+		portPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 125F));
+		portPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 100F));
+		portPanel.Controls.Add(new Label
+		{
+			Text = "Ollama Port:",
+			TextAlign = ContentAlignment.MiddleRight,
+			Dock = DockStyle.Fill
+		}, 0, 0);
+		_numOllamaPort = CreatePortEditor(11434);
+		portPanel.Controls.Add(_numOllamaPort, 1, 0);
+		portPanel.Controls.Add(new Label
+		{
+			Text = "Foundry Port:",
+			TextAlign = ContentAlignment.MiddleRight,
+			Dock = DockStyle.Fill
+		}, 2, 0);
+		_numFoundryPort = CreatePortEditor(5273);
+		portPanel.Controls.Add(_numFoundryPort, 3, 0);
+		_localApiPanel.Controls.Add(new Label
+		{
+			Text = "Listen Ports:",
+			TextAlign = ContentAlignment.MiddleRight,
+			Dock = DockStyle.Fill
+		}, 0, 1);
+		_localApiPanel.Controls.Add(portPanel, 1, 1);
+
+		_txtLocalApiProviderName = CreateFillTextBox("Third-party provider display name");
+		AddLocalApiRow(2, "Provider Name:", _txtLocalApiProviderName);
+
+		_txtLocalApiProviderUrl = CreateFillTextBox("https://api.openai.com/v1/");
+		AddLocalApiRow(3, "Provider Base URL:", _txtLocalApiProviderUrl);
+
+		_txtLocalApiDefaultModel = CreateFillTextBox("Remote default model, e.g. gpt-4.1-mini");
+		AddLocalApiRow(4, "Default Model:", _txtLocalApiDefaultModel);
+
+		_txtLocalApiApiKey = CreateFillTextBox("Stored in Windows Credential Manager, not in config JSON");
+		_txtLocalApiApiKey.PasswordChar = '●';
+		AddLocalApiRow(5, "Provider API Key:", _txtLocalApiApiKey);
+
+		_txtLocalApiModelMappings = new TextBox
+		{
+			Dock = DockStyle.Fill,
+			Multiline = true,
+			ScrollBars = ScrollBars.Vertical,
+			WordWrap = false,
+			PlaceholderText = "One mapping per line:\r\nqwen2.5:7b=gpt-4.1-mini\r\nllama3.2=claude-3-7-sonnet"
+		};
+		AddLocalApiRow(6, "Model Mappings:", _txtLocalApiModelMappings);
+
+		_localApiTab.Controls.Add(_localApiPanel);
+		_tabControl.TabPages.Insert(1, _localApiTab);
+	}
+
+	private void AddLocalApiRow(int rowIndex, string labelText, Control control)
+	{
+		if (_localApiPanel is null)
+			return;
+
+		_localApiPanel.Controls.Add(new Label
+		{
+			Text = labelText,
+			TextAlign = ContentAlignment.MiddleRight,
+			Dock = DockStyle.Fill
+		}, 0, rowIndex);
+		_localApiPanel.Controls.Add(control, 1, rowIndex);
+	}
+
+	private static NumericUpDown CreatePortEditor(decimal defaultValue)
+	{
+		return new NumericUpDown
+		{
+			Dock = DockStyle.Fill,
+			Minimum = 1,
+			Maximum = 65535,
+			Value = defaultValue
+		};
+	}
+
+	private static TextBox CreateFillTextBox(string placeholderText)
+	{
+		return new TextBox
+		{
+			Dock = DockStyle.Fill,
+			PlaceholderText = placeholderText
+		};
+	}
+
+	private LocalApiForwarderSettings? BuildLocalApiForwarderSettings()
+	{
+		if (_chkLocalApiForwarderEnabled is null
+			|| _numOllamaPort is null
+			|| _numFoundryPort is null
+			|| _txtLocalApiProviderName is null
+			|| _txtLocalApiProviderUrl is null
+			|| _txtLocalApiDefaultModel is null
+			|| _txtLocalApiApiKey is null
+			|| _txtLocalApiModelMappings is null)
+		{
+			return null;
+		}
+
+		var providerName = _txtLocalApiProviderName.Text.Trim();
+		var targetName = CredentialManager.GetLocalApiTargetName(providerName);
+		var apiKey = _txtLocalApiApiKey.Text.Trim();
+		if (string.IsNullOrWhiteSpace(apiKey))
+			CredentialManager.DeleteToken(targetName);
+		else
+			CredentialManager.SaveToken(targetName, apiKey);
+
+		return new LocalApiForwarderSettings
+		{
+			Enabled = _chkLocalApiForwarderEnabled.Checked,
+			OllamaPort = (ushort)_numOllamaPort.Value,
+			FoundryPort = (ushort)_numFoundryPort.Value,
+			Provider = new LocalApiProviderSettings
+			{
+				Name = providerName,
+				BaseUrl = _txtLocalApiProviderUrl.Text.Trim(),
+				DefaultModel = _txtLocalApiDefaultModel.Text.Trim()
+			},
+			ModelMappings = ParseLocalApiModelMappings(_txtLocalApiModelMappings.Lines)
+		};
+	}
+
+	private void LoadLocalApiForwarderToUi(LocalApiForwarderSettings? settings)
+	{
+		if (_chkLocalApiForwarderEnabled is null
+			|| _numOllamaPort is null
+			|| _numFoundryPort is null
+			|| _txtLocalApiProviderName is null
+			|| _txtLocalApiProviderUrl is null
+			|| _txtLocalApiDefaultModel is null
+			|| _txtLocalApiApiKey is null
+			|| _txtLocalApiModelMappings is null)
+		{
+			return;
+		}
+
+		settings ??= new LocalApiForwarderSettings();
+		_chkLocalApiForwarderEnabled.Checked = settings.Enabled;
+		_numOllamaPort.Value = settings.OllamaPort == 0 ? 11434 : settings.OllamaPort;
+		_numFoundryPort.Value = settings.FoundryPort == 0 ? 5273 : settings.FoundryPort;
+		_txtLocalApiProviderName.Text = settings.Provider?.Name ?? string.Empty;
+		_txtLocalApiProviderUrl.Text = settings.Provider?.BaseUrl ?? string.Empty;
+		_txtLocalApiDefaultModel.Text = settings.Provider?.DefaultModel ?? string.Empty;
+		_txtLocalApiApiKey.Text = CredentialManager.LoadToken(
+			CredentialManager.GetLocalApiTargetName(settings.Provider?.Name ?? string.Empty)) ?? string.Empty;
+		_txtLocalApiModelMappings.Lines = settings.ModelMappings.Count == 0
+			? []
+			: settings.ModelMappings
+				.Where(static mapping => !string.IsNullOrWhiteSpace(mapping.LocalModel)
+					&& !string.IsNullOrWhiteSpace(mapping.UpstreamModel))
+				.Select(static mapping => $"{mapping.LocalModel.Trim()}={mapping.UpstreamModel.Trim()}")
+				.ToArray();
+	}
+
+	private static List<LocalApiModelMapping> ParseLocalApiModelMappings(IEnumerable<string> lines)
+	{
+		var mappings = new List<LocalApiModelMapping>();
+
+		foreach (var rawLine in lines)
+		{
+			var line = rawLine.Trim();
+			if (line.Length == 0 || line.StartsWith('#'))
+				continue;
+
+			var separatorIndex = line.IndexOf('=');
+			if (separatorIndex <= 0 || separatorIndex == line.Length - 1)
+				continue;
+
+			var localModel = line[..separatorIndex].Trim();
+			var upstreamModel = line[(separatorIndex + 1)..].Trim();
+			if (localModel.Length == 0 || upstreamModel.Length == 0)
+				continue;
+
+			mappings.Add(new LocalApiModelMapping
+			{
+				LocalModel = localModel,
+				UpstreamModel = upstreamModel
+			});
+		}
+
+		return mappings
+			.GroupBy(static mapping => mapping.LocalModel, StringComparer.OrdinalIgnoreCase)
+			.Select(static group => group.Last())
+			.ToList();
 	}
 }
