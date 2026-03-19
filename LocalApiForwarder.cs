@@ -303,6 +303,21 @@ internal sealed class LocalApiForwarder : IDisposable
 				return;
 			}
 
+			if (HttpMethodsEqual(context.Request.HttpMethod, "GET")
+				&& (TryExtractModelName(path, "/v1/models/", out var singleModelId)
+					|| TryExtractModelName(path, "/models/", out singleModelId)
+					|| TryExtractModelName(path, "/openai/models/", out singleModelId)))
+			{
+				await HandleGetSingleModelAsync(context, singleModelId, ct);
+				return;
+			}
+
+			if (HttpMethodsEqual(context.Request.HttpMethod, "HEAD"))
+			{
+				await WriteEmptyAsync(context.Response, HttpStatusCode.OK);
+				return;
+			}
+
 			if (HttpMethodsEqual(context.Request.HttpMethod, "POST") && path.Equals("/api/generate", StringComparison.OrdinalIgnoreCase))
 			{
 				await HandleOllamaGenerateAsync(context, ct);
@@ -357,6 +372,44 @@ internal sealed class LocalApiForwarder : IDisposable
 			var style = path.StartsWith("/api/", StringComparison.OrdinalIgnoreCase) ? "ollama" : "openai";
 			await WriteErrorAsync(context.Response, path, HttpStatusCode.BadGateway, ex.Message, style, null, null, null);
 		}
+	}
+
+	private async Task HandleGetSingleModelAsync(HttpListenerContext context, string modelId, CancellationToken ct)
+	{
+		LogInfo($"single model lookup: '{modelId}'");
+		MarkModelLoaded(modelId);
+
+		var catalogEntry = await GetAdvertisedModelCatalogEntryAsync(modelId, ct);
+		var ownedBy = catalogEntry?.OwnedBy ?? _settings.Provider.Name;
+		var created = catalogEntry?.CreatedUnixTime ?? DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+
+		var modelObject = new JsonObject
+		{
+			["id"] = modelId,
+			["object"] = "model",
+			["created"] = created,
+			["owned_by"] = ownedBy
+		};
+
+		var capabilities = new JsonObject();
+		if (catalogEntry is not null)
+		{
+			if (catalogEntry.SupportsToolCalling)
+			{
+				capabilities["tool_use"] = true;
+				capabilities["function_calling"] = true;
+			}
+			if (catalogEntry.SupportsVision)
+				capabilities["vision"] = true;
+		}
+		else
+		{
+			capabilities["tool_use"] = true;
+			capabilities["function_calling"] = true;
+		}
+		modelObject["capabilities"] = capabilities;
+
+		await WriteJsonAsync(context.Response, HttpStatusCode.OK, modelObject);
 	}
 
 	private async Task HandleOpenAiChatAsync(HttpListenerContext context, CancellationToken ct)
