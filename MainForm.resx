@@ -118,15 +118,22 @@
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
   <data name="descContentLabel.Text" xml:space="preserve">
-    <value>TrafficPilot is a Windows proxy manager that allows you to route network traffic from specific processes through a proxy server.
+    <value>TrafficPilot 是一款 Windows 平台的网络流量代理转发工具。
 
-Features:
-• Intercept and redirect traffic from specified processes
-• Support for wildcard process matching
-• Support for SOCKS4, SOCKS5, and HTTP proxies
-• Real-time logging and statistics
-• Configuration save/load functionality
-• Process filtering and PID-based targeting</value>
+主要功能：
+• 进程流量重定向：按进程名（支持通配符）将网络请求转发至代理服务器
+• 域名路由规则：按域名（精确或通配符）决定是否走代理，不匹配则直连
+• DNS Hosts 重定向（两种模式）：
+  - DNS Interception：数据包级 DNS 拦截，无需管理员权限
+  - System Hosts File：写入 Windows hosts 文件并同步至所有 WSL 发行版 /etc/hosts，自动备份与清理
+• DoH 自动筛选：通过多个 DoH 服务解析并测速，自动选出最优 IP
+• 自动定时刷新（Auto Fetch）：按间隔自动更新 hosts 与 IP 解析结果
+• 本机代理模式（Local Proxy）：自动使用本机 IP 作为代理地址，网络切换后实时更新
+• 快捷配置切换：最近配置以快捷按钮展示，托盘菜单同步提供切换入口
+• 配置云同步：通过 GitHub Gist 在多设备间同步配置
+• 开机启动 &amp; 自动启动代理
+• 流量统计：实时显示接收/转发成功/失败数据包数量
+• 在线更新：一键检查并下载最新版本</value>
   </data>
   <metadata name="_contextMenu.TrayLocation" type="System.Drawing.Point, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a">
     <value>17, 17</value>
