@@ -11,11 +11,11 @@ partial class MainForm
 	// Main panels
 	private TableLayoutPanel? _mainPanel;
 	private FlowLayoutPanel? _statusPanel;
-	private FlowLayoutPanel? _controlPanel;
 
 	// Tab and tab pages
 	private TabControl? _tabControl;
 	private TabPage? _configTab;
+  private TabPage? _localApiTab;
 	private TabPage? _logsTab;
 	private TabPage? _dnsRedirectTab;
 	private TabPage? _aboutTab;
@@ -136,6 +136,51 @@ partial class MainForm
 	private Panel? _aboutScrollPanel;
 	private TableLayoutPanel? _aboutContentPanel;
 
+    // Local API tab
+    private TableLayoutPanel? _localApiPanel;
+    private FlowLayoutPanel? _localApiHeaderPanel;
+    private CheckBox? _chkLocalApiForwarderEnabled;
+    private Label? _lblLocalApiHeaderHelp;
+    private Label? _lblLocalApiListenPorts;
+    private TableLayoutPanel? _localApiPortPanel;
+    private Label? _lblOllamaPort;
+    private NumericUpDown? _numOllamaPort;
+    private Label? _lblFoundryPort;
+    private NumericUpDown? _numFoundryPort;
+    private Label? _lblLocalApiProvider;
+    private TableLayoutPanel? _localApiProviderPanel;
+    private Label? _lblLocalApiProtocol;
+    private ComboBox? _cmbLocalApiProviderProtocol;
+    private Label? _lblLocalApiProviderName;
+    private TextBox? _txtLocalApiProviderName;
+    private Label? _lblLocalApiProviderUrl;
+    private TableLayoutPanel? _localApiProviderUrlPanel;
+    private TextBox? _txtLocalApiProviderUrl;
+    private Button? _btnRefreshLocalApiModels;
+    private Label? _lblLocalApiDefaultModel;
+    private ComboBox? _cmbLocalApiDefaultModel;
+    private Label? _lblLocalApiDefaultEmbeddingModel;
+    private ComboBox? _cmbLocalApiDefaultEmbeddingModel;
+    private Label? _lblLocalApiAuthentication;
+    private TableLayoutPanel? _localApiAuthPanel;
+    private Label? _lblLocalApiAuthType;
+    private ComboBox? _cmbLocalApiAuthType;
+    private Label? _lblLocalApiAuthHeaderName;
+    private TextBox? _txtLocalApiAuthHeaderName;
+    private Label? _lblLocalApiApiKey;
+    private TextBox? _txtLocalApiApiKey;
+    private Label? _lblLocalApiExtraHeaders;
+    private TextBox? _txtLocalApiAdditionalHeaders;
+    private Label? _lblLocalApiModelMappings;
+    private TextBox? _txtLocalApiModelMappings;
+    private Label? _lblLocalApiDiagnostics;
+    private FlowLayoutPanel? _localApiLoggingPanel;
+    private CheckBox? _chkLocalApiRequestResponseLogging;
+    private CheckBox? _chkLocalApiIncludeBodies;
+    private CheckBox? _chkLocalApiIncludeErrorDiagnostics;
+    private Label? _lblLocalApiMaxBodyChars;
+    private NumericUpDown? _numLocalApiMaxBodyChars;
+
 	// Status and control
 	private Button? _btnStartStop;
 	private Label? _lblStatus;
@@ -188,6 +233,50 @@ partial class MainForm
         _btnLoadConfig = new Button();
         _btnSaveConfigAs = new Button();
         _btnSaveConfig = new Button();
+        _localApiTab = new TabPage();
+        _localApiPanel = new TableLayoutPanel();
+        _localApiHeaderPanel = new FlowLayoutPanel();
+        _chkLocalApiForwarderEnabled = new CheckBox();
+        _lblLocalApiHeaderHelp = new Label();
+        _lblLocalApiListenPorts = new Label();
+        _localApiPortPanel = new TableLayoutPanel();
+        _lblOllamaPort = new Label();
+        _numOllamaPort = new NumericUpDown();
+        _lblFoundryPort = new Label();
+        _numFoundryPort = new NumericUpDown();
+        _lblLocalApiProvider = new Label();
+        _localApiProviderPanel = new TableLayoutPanel();
+        _lblLocalApiProtocol = new Label();
+        _cmbLocalApiProviderProtocol = new ComboBox();
+        _lblLocalApiProviderName = new Label();
+        _txtLocalApiProviderName = new TextBox();
+        _lblLocalApiProviderUrl = new Label();
+        _localApiProviderUrlPanel = new TableLayoutPanel();
+        _txtLocalApiProviderUrl = new TextBox();
+        _btnRefreshLocalApiModels = new Button();
+        _lblLocalApiDefaultModel = new Label();
+        _cmbLocalApiDefaultModel = new ComboBox();
+        _lblLocalApiDefaultEmbeddingModel = new Label();
+        _cmbLocalApiDefaultEmbeddingModel = new ComboBox();
+        _lblLocalApiAuthentication = new Label();
+        _localApiAuthPanel = new TableLayoutPanel();
+        _lblLocalApiAuthType = new Label();
+        _cmbLocalApiAuthType = new ComboBox();
+        _lblLocalApiAuthHeaderName = new Label();
+        _txtLocalApiAuthHeaderName = new TextBox();
+        _lblLocalApiApiKey = new Label();
+        _txtLocalApiApiKey = new TextBox();
+        _lblLocalApiExtraHeaders = new Label();
+        _txtLocalApiAdditionalHeaders = new TextBox();
+        _lblLocalApiModelMappings = new Label();
+        _txtLocalApiModelMappings = new TextBox();
+        _lblLocalApiDiagnostics = new Label();
+        _localApiLoggingPanel = new FlowLayoutPanel();
+        _chkLocalApiRequestResponseLogging = new CheckBox();
+        _chkLocalApiIncludeBodies = new CheckBox();
+        _chkLocalApiIncludeErrorDiagnostics = new CheckBox();
+        _lblLocalApiMaxBodyChars = new Label();
+        _numLocalApiMaxBodyChars = new NumericUpDown();
         _dnsRedirectTab = new TabPage();
         _dnsRedirectPanel = new TableLayoutPanel();
         _grpRedirectMode = new GroupBox();
@@ -235,7 +324,6 @@ partial class MainForm
         lblBytes = new Label();
         label1 = new Label();
         _btnStartStop = new Button();
-        _controlPanel = new FlowLayoutPanel();
         _chkDNSRedirectEnabled = new CheckBox();
         _lblConfigFileValue = new Label();
         _lblSyncActions = new Label();
@@ -272,6 +360,17 @@ partial class MainForm
         _gistIdActionPanel.SuspendLayout();
         _configActionPanel.SuspendLayout();
         _configBtnPanel.SuspendLayout();
+        _localApiTab.SuspendLayout();
+        _localApiPanel.SuspendLayout();
+        _localApiHeaderPanel.SuspendLayout();
+        _localApiPortPanel.SuspendLayout();
+        ((ISupportInitialize)_numOllamaPort).BeginInit();
+        ((ISupportInitialize)_numFoundryPort).BeginInit();
+        _localApiProviderPanel.SuspendLayout();
+        _localApiProviderUrlPanel.SuspendLayout();
+        _localApiAuthPanel.SuspendLayout();
+        _localApiLoggingPanel.SuspendLayout();
+        ((ISupportInitialize)_numLocalApiMaxBodyChars).BeginInit();
         _dnsRedirectTab.SuspendLayout();
         _dnsRedirectPanel.SuspendLayout();
         _grpRedirectMode.SuspendLayout();
@@ -296,22 +395,21 @@ partial class MainForm
         _mainPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
         _mainPanel.Controls.Add(_tabControl, 0, 0);
         _mainPanel.Controls.Add(_statusPanel, 0, 1);
-        _mainPanel.Controls.Add(_controlPanel, 0, 2);
         _mainPanel.Dock = DockStyle.Fill;
         _mainPanel.Location = new Point(0, 0);
         _mainPanel.Margin = new Padding(0);
         _mainPanel.Name = "_mainPanel";
         _mainPanel.Padding = new Padding(5);
-        _mainPanel.RowCount = 3;
+        _mainPanel.RowCount = 2;
         _mainPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
         _mainPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 50F));
-        _mainPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 50F));
-        _mainPanel.Size = new Size(787, 675);
+        _mainPanel.Size = new Size(787, 691);
         _mainPanel.TabIndex = 0;
         // 
         // _tabControl
         // 
         _tabControl.Controls.Add(_configTab);
+        _tabControl.Controls.Add(_localApiTab);
         _tabControl.Controls.Add(_dnsRedirectTab);
         _tabControl.Controls.Add(_logsTab);
         _tabControl.Controls.Add(_aboutTab);
@@ -320,7 +418,7 @@ partial class MainForm
         _tabControl.Margin = new Padding(0, 0, 0, 5);
         _tabControl.Name = "_tabControl";
         _tabControl.SelectedIndex = 0;
-        _tabControl.Size = new Size(777, 560);
+        _tabControl.Size = new Size(777, 626);
         _tabControl.TabIndex = 0;
         // 
         // _configTab
@@ -328,7 +426,7 @@ partial class MainForm
         _configTab.Controls.Add(_configPanel);
         _configTab.Location = new Point(4, 26);
         _configTab.Name = "_configTab";
-        _configTab.Size = new Size(769, 530);
+        _configTab.Size = new Size(769, 596);
         _configTab.TabIndex = 0;
         _configTab.Text = "Configuration";
         // 
@@ -363,7 +461,7 @@ partial class MainForm
         _configPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 44F));
         _configPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 44F));
         _configPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 42F));
-        _configPanel.Size = new Size(769, 530);
+        _configPanel.Size = new Size(769, 596);
         _configPanel.TabIndex = 0;
         // 
         // _proxyHeaderPanel
@@ -440,8 +538,7 @@ partial class MainForm
         // _chkLocalProxy
         // 
         _chkLocalProxy.Anchor = AnchorStyles.Left | AnchorStyles.Right;
-        _chkLocalProxy.AutoSize = false;
-        _chkLocalProxy.Location = new Point(3, 6);
+        _chkLocalProxy.Location = new Point(3, 8);
         _chkLocalProxy.Margin = new Padding(3, 6, 3, 3);
         _chkLocalProxy.Name = "_chkLocalProxy";
         _chkLocalProxy.Size = new Size(89, 21);
@@ -465,7 +562,7 @@ partial class MainForm
         _cmbProxyHost.Location = new Point(143, 5);
         _cmbProxyHost.Margin = new Padding(3, 5, 3, 5);
         _cmbProxyHost.Name = "_cmbProxyHost";
-        _cmbProxyHost.Size = new Size(310, 25);
+        _cmbProxyHost.Size = new Size(283, 25);
         _cmbProxyHost.TabIndex = 2;
         // 
         // _lblProxyPort
@@ -746,7 +843,7 @@ partial class MainForm
         // _lblConfigFile
         // 
         _lblConfigFile.Anchor = AnchorStyles.Left | AnchorStyles.Right;
-        _lblConfigFile.Location = new Point(13, 487);
+        _lblConfigFile.Location = new Point(13, 520);
         _lblConfigFile.Name = "_lblConfigFile";
         _lblConfigFile.Size = new Size(102, 23);
         _lblConfigFile.TabIndex = 14;
@@ -767,7 +864,7 @@ partial class MainForm
         _configActionPanel.Name = "_configActionPanel";
         _configActionPanel.RowCount = 1;
         _configActionPanel.RowStyles.Add(new RowStyle());
-        _configActionPanel.Size = new Size(635, 39);
+        _configActionPanel.Size = new Size(635, 105);
         _configActionPanel.TabIndex = 18;
         // 
         // _quickConfigPanel
@@ -777,7 +874,7 @@ partial class MainForm
         _quickConfigPanel.Location = new Point(0, 0);
         _quickConfigPanel.Margin = new Padding(0);
         _quickConfigPanel.Name = "_quickConfigPanel";
-        _quickConfigPanel.Size = new Size(347, 46);
+        _quickConfigPanel.Size = new Size(347, 105);
         _quickConfigPanel.TabIndex = 0;
         _quickConfigPanel.WrapContents = false;
         // 
@@ -837,12 +934,548 @@ partial class MainForm
         _btnSaveConfig.Text = "Save";
         _btnSaveConfig.Click += BtnSaveConfig_Click;
         // 
+        // _localApiTab
+        // 
+        _localApiTab.Controls.Add(_localApiPanel);
+        _localApiTab.Location = new Point(4, 26);
+        _localApiTab.Name = "_localApiTab";
+        _localApiTab.Size = new Size(769, 596);
+        _localApiTab.TabIndex = 2;
+        _localApiTab.Text = "Local API";
+        // 
+        // _localApiPanel
+        // 
+        _localApiPanel.ColumnCount = 2;
+        _localApiPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 140F));
+        _localApiPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+        _localApiPanel.Controls.Add(_localApiHeaderPanel, 0, 0);
+        _localApiPanel.Controls.Add(_lblLocalApiListenPorts, 0, 1);
+        _localApiPanel.Controls.Add(_localApiPortPanel, 1, 1);
+        _localApiPanel.Controls.Add(_lblLocalApiProvider, 0, 2);
+        _localApiPanel.Controls.Add(_localApiProviderPanel, 1, 2);
+        _localApiPanel.Controls.Add(_lblLocalApiProviderUrl, 0, 3);
+        _localApiPanel.Controls.Add(_localApiProviderUrlPanel, 1, 3);
+        _localApiPanel.Controls.Add(_lblLocalApiDefaultModel, 0, 4);
+        _localApiPanel.Controls.Add(_cmbLocalApiDefaultModel, 1, 4);
+        _localApiPanel.Controls.Add(_lblLocalApiDefaultEmbeddingModel, 0, 5);
+        _localApiPanel.Controls.Add(_cmbLocalApiDefaultEmbeddingModel, 1, 5);
+        _localApiPanel.Controls.Add(_lblLocalApiAuthentication, 0, 6);
+        _localApiPanel.Controls.Add(_localApiAuthPanel, 1, 6);
+        _localApiPanel.Controls.Add(_lblLocalApiApiKey, 0, 7);
+        _localApiPanel.Controls.Add(_txtLocalApiApiKey, 1, 7);
+        _localApiPanel.Controls.Add(_lblLocalApiExtraHeaders, 0, 8);
+        _localApiPanel.Controls.Add(_txtLocalApiAdditionalHeaders, 1, 8);
+        _localApiPanel.Controls.Add(_lblLocalApiModelMappings, 0, 9);
+        _localApiPanel.Controls.Add(_txtLocalApiModelMappings, 1, 9);
+        _localApiPanel.Controls.Add(_lblLocalApiDiagnostics, 0, 10);
+        _localApiPanel.Controls.Add(_localApiLoggingPanel, 1, 10);
+        _localApiPanel.Dock = DockStyle.Fill;
+        _localApiPanel.Location = new Point(0, 0);
+        _localApiPanel.Name = "_localApiPanel";
+        _localApiPanel.Padding = new Padding(10);
+        _localApiPanel.RowCount = 11;
+        _localApiPanel.RowStyles.Add(new RowStyle());
+        _localApiPanel.RowStyles.Add(new RowStyle());
+        _localApiPanel.RowStyles.Add(new RowStyle());
+        _localApiPanel.RowStyles.Add(new RowStyle());
+        _localApiPanel.RowStyles.Add(new RowStyle());
+        _localApiPanel.RowStyles.Add(new RowStyle());
+        _localApiPanel.RowStyles.Add(new RowStyle());
+        _localApiPanel.RowStyles.Add(new RowStyle());
+        _localApiPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 50F));
+        _localApiPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 50F));
+        _localApiPanel.RowStyles.Add(new RowStyle());
+        _localApiPanel.Size = new Size(769, 596);
+        _localApiPanel.TabIndex = 0;
+        // 
+        // _localApiHeaderPanel
+        // 
+        _localApiHeaderPanel.AutoSize = true;
+        _localApiPanel.SetColumnSpan(_localApiHeaderPanel, 2);
+        _localApiHeaderPanel.Controls.Add(_chkLocalApiForwarderEnabled);
+        _localApiHeaderPanel.Controls.Add(_lblLocalApiHeaderHelp);
+        _localApiHeaderPanel.Dock = DockStyle.Top;
+        _localApiHeaderPanel.Location = new Point(13, 13);
+        _localApiHeaderPanel.Name = "_localApiHeaderPanel";
+        _localApiHeaderPanel.Size = new Size(743, 29);
+        _localApiHeaderPanel.TabIndex = 0;
+        _localApiHeaderPanel.WrapContents = false;
+        // 
+        // _chkLocalApiForwarderEnabled
+        // 
+        _chkLocalApiForwarderEnabled.AutoSize = true;
+        _chkLocalApiForwarderEnabled.Location = new Point(3, 5);
+        _chkLocalApiForwarderEnabled.Margin = new Padding(3, 5, 12, 3);
+        _chkLocalApiForwarderEnabled.Name = "_chkLocalApiForwarderEnabled";
+        _chkLocalApiForwarderEnabled.Size = new Size(270, 21);
+        _chkLocalApiForwarderEnabled.TabIndex = 0;
+        _chkLocalApiForwarderEnabled.Text = "Enable local Ollama / Foundry forwarding";
+        // 
+        // _lblLocalApiHeaderHelp
+        // 
+        _lblLocalApiHeaderHelp.Anchor = AnchorStyles.Left;
+        _lblLocalApiHeaderHelp.AutoSize = true;
+        _lblLocalApiHeaderHelp.Location = new Point(288, 6);
+        _lblLocalApiHeaderHelp.Name = "_lblLocalApiHeaderHelp";
+        _lblLocalApiHeaderHelp.Size = new Size(363, 17);
+        _lblLocalApiHeaderHelp.TabIndex = 1;
+        _lblLocalApiHeaderHelp.Text = "TrafficPilot keeps these listeners on loopback only for safety.";
+        // 
+        // _lblLocalApiListenPorts
+        // 
+        _lblLocalApiListenPorts.Anchor = AnchorStyles.Left | AnchorStyles.Right;
+        _lblLocalApiListenPorts.Location = new Point(13, 54);
+        _lblLocalApiListenPorts.Name = "_lblLocalApiListenPorts";
+        _lblLocalApiListenPorts.Size = new Size(134, 23);
+        _lblLocalApiListenPorts.TabIndex = 1;
+        _lblLocalApiListenPorts.Text = "Listen Ports:";
+        _lblLocalApiListenPorts.TextAlign = ContentAlignment.MiddleRight;
+        // 
+        // _localApiPortPanel
+        // 
+        _localApiPortPanel.ColumnCount = 4;
+        _localApiPortPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 110F));
+        _localApiPortPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 100F));
+        _localApiPortPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 125F));
+        _localApiPortPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 100F));
+        _localApiPortPanel.Controls.Add(_lblOllamaPort, 0, 0);
+        _localApiPortPanel.Controls.Add(_numOllamaPort, 1, 0);
+        _localApiPortPanel.Controls.Add(_lblFoundryPort, 2, 0);
+        _localApiPortPanel.Controls.Add(_numFoundryPort, 3, 0);
+        _localApiPortPanel.Dock = DockStyle.Fill;
+        _localApiPortPanel.Location = new Point(153, 48);
+        _localApiPortPanel.Name = "_localApiPortPanel";
+        _localApiPortPanel.RowCount = 1;
+        _localApiPortPanel.RowStyles.Add(new RowStyle());
+        _localApiPortPanel.Size = new Size(603, 36);
+        _localApiPortPanel.TabIndex = 2;
+        // 
+        // _lblOllamaPort
+        // 
+        _lblOllamaPort.Dock = DockStyle.Fill;
+        _lblOllamaPort.Location = new Point(3, 0);
+        _lblOllamaPort.Name = "_lblOllamaPort";
+        _lblOllamaPort.Size = new Size(104, 36);
+        _lblOllamaPort.TabIndex = 0;
+        _lblOllamaPort.Text = "Ollama Port:";
+        _lblOllamaPort.TextAlign = ContentAlignment.MiddleRight;
+        // 
+        // _numOllamaPort
+        // 
+        _numOllamaPort.Dock = DockStyle.Fill;
+        _numOllamaPort.Location = new Point(113, 6);
+        _numOllamaPort.Margin = new Padding(3, 6, 3, 6);
+        _numOllamaPort.Maximum = new decimal(new int[] { 65535, 0, 0, 0 });
+        _numOllamaPort.Minimum = new decimal(new int[] { 1, 0, 0, 0 });
+        _numOllamaPort.Name = "_numOllamaPort";
+        _numOllamaPort.Size = new Size(94, 23);
+        _numOllamaPort.TabIndex = 1;
+        _numOllamaPort.Value = new decimal(new int[] { 11434, 0, 0, 0 });
+        // 
+        // _lblFoundryPort
+        // 
+        _lblFoundryPort.Dock = DockStyle.Fill;
+        _lblFoundryPort.Location = new Point(213, 0);
+        _lblFoundryPort.Name = "_lblFoundryPort";
+        _lblFoundryPort.Size = new Size(119, 36);
+        _lblFoundryPort.TabIndex = 2;
+        _lblFoundryPort.Text = "Foundry Port:";
+        _lblFoundryPort.TextAlign = ContentAlignment.MiddleRight;
+        // 
+        // _numFoundryPort
+        // 
+        _numFoundryPort.Dock = DockStyle.Fill;
+        _numFoundryPort.Location = new Point(338, 6);
+        _numFoundryPort.Margin = new Padding(3, 6, 3, 6);
+        _numFoundryPort.Maximum = new decimal(new int[] { 65535, 0, 0, 0 });
+        _numFoundryPort.Minimum = new decimal(new int[] { 1, 0, 0, 0 });
+        _numFoundryPort.Name = "_numFoundryPort";
+        _numFoundryPort.Size = new Size(262, 23);
+        _numFoundryPort.TabIndex = 3;
+        _numFoundryPort.Value = new decimal(new int[] { 5273, 0, 0, 0 });
+        // 
+        // _lblLocalApiProvider
+        // 
+        _lblLocalApiProvider.Anchor = AnchorStyles.Left | AnchorStyles.Right;
+        _lblLocalApiProvider.Location = new Point(13, 93);
+        _lblLocalApiProvider.Name = "_lblLocalApiProvider";
+        _lblLocalApiProvider.Size = new Size(134, 23);
+        _lblLocalApiProvider.TabIndex = 3;
+        _lblLocalApiProvider.Text = "Provider:";
+        _lblLocalApiProvider.TextAlign = ContentAlignment.MiddleRight;
+        // 
+        // _localApiProviderPanel
+        // 
+        _localApiProviderPanel.ColumnCount = 4;
+        _localApiProviderPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 105F));
+        _localApiProviderPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 153F));
+        _localApiProviderPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 122F));
+        _localApiProviderPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+        _localApiProviderPanel.Controls.Add(_lblLocalApiProtocol, 0, 0);
+        _localApiProviderPanel.Controls.Add(_cmbLocalApiProviderProtocol, 1, 0);
+        _localApiProviderPanel.Controls.Add(_lblLocalApiProviderName, 2, 0);
+        _localApiProviderPanel.Controls.Add(_txtLocalApiProviderName, 3, 0);
+        _localApiProviderPanel.Dock = DockStyle.Fill;
+        _localApiProviderPanel.Location = new Point(153, 87);
+        _localApiProviderPanel.Margin = new Padding(3, 0, 3, 3);
+        _localApiProviderPanel.Name = "_localApiProviderPanel";
+        _localApiProviderPanel.RowCount = 1;
+        _localApiProviderPanel.RowStyles.Add(new RowStyle());
+        _localApiProviderPanel.Size = new Size(603, 33);
+        _localApiProviderPanel.TabIndex = 4;
+        // 
+        // _lblLocalApiProtocol
+        // 
+        _lblLocalApiProtocol.Dock = DockStyle.Fill;
+        _lblLocalApiProtocol.Location = new Point(3, 0);
+        _lblLocalApiProtocol.Name = "_lblLocalApiProtocol";
+        _lblLocalApiProtocol.Size = new Size(99, 33);
+        _lblLocalApiProtocol.TabIndex = 0;
+        _lblLocalApiProtocol.Text = "Protocol:";
+        _lblLocalApiProtocol.TextAlign = ContentAlignment.MiddleRight;
+        // 
+        // _cmbLocalApiProviderProtocol
+        // 
+        _cmbLocalApiProviderProtocol.Dock = DockStyle.Fill;
+        _cmbLocalApiProviderProtocol.DropDownStyle = ComboBoxStyle.DropDownList;
+        _cmbLocalApiProviderProtocol.FormattingEnabled = true;
+        _cmbLocalApiProviderProtocol.Items.AddRange(new object[] { "OpenAICompatible", "Anthropic" });
+        _cmbLocalApiProviderProtocol.Location = new Point(108, 4);
+        _cmbLocalApiProviderProtocol.Margin = new Padding(3, 4, 3, 4);
+        _cmbLocalApiProviderProtocol.Name = "_cmbLocalApiProviderProtocol";
+        _cmbLocalApiProviderProtocol.Size = new Size(147, 25);
+        _cmbLocalApiProviderProtocol.TabIndex = 1;
+        // 
+        // _lblLocalApiProviderName
+        // 
+        _lblLocalApiProviderName.Dock = DockStyle.Fill;
+        _lblLocalApiProviderName.Location = new Point(261, 0);
+        _lblLocalApiProviderName.Name = "_lblLocalApiProviderName";
+        _lblLocalApiProviderName.Size = new Size(116, 33);
+        _lblLocalApiProviderName.TabIndex = 2;
+        _lblLocalApiProviderName.Text = "Provider Name:";
+        _lblLocalApiProviderName.TextAlign = ContentAlignment.MiddleRight;
+        // 
+        // _txtLocalApiProviderName
+        // 
+        _txtLocalApiProviderName.Dock = DockStyle.Fill;
+        _txtLocalApiProviderName.Location = new Point(383, 5);
+        _txtLocalApiProviderName.Margin = new Padding(3, 5, 3, 5);
+        _txtLocalApiProviderName.Name = "_txtLocalApiProviderName";
+        _txtLocalApiProviderName.PlaceholderText = "Third-party provider display name";
+        _txtLocalApiProviderName.Size = new Size(217, 23);
+        _txtLocalApiProviderName.TabIndex = 3;
+        // 
+        // _lblLocalApiProviderUrl
+        // 
+        _lblLocalApiProviderUrl.Anchor = AnchorStyles.Left | AnchorStyles.Right;
+        _lblLocalApiProviderUrl.Location = new Point(13, 129);
+        _lblLocalApiProviderUrl.Name = "_lblLocalApiProviderUrl";
+        _lblLocalApiProviderUrl.Size = new Size(134, 23);
+        _lblLocalApiProviderUrl.TabIndex = 5;
+        _lblLocalApiProviderUrl.Text = "Provider Base URL:";
+        _lblLocalApiProviderUrl.TextAlign = ContentAlignment.MiddleRight;
+        // 
+        // _localApiProviderUrlPanel
+        // 
+        _localApiProviderUrlPanel.ColumnCount = 2;
+        _localApiProviderUrlPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+        _localApiProviderUrlPanel.ColumnStyles.Add(new ColumnStyle());
+        _localApiProviderUrlPanel.Controls.Add(_txtLocalApiProviderUrl, 0, 0);
+        _localApiProviderUrlPanel.Controls.Add(_btnRefreshLocalApiModels, 1, 0);
+        _localApiProviderUrlPanel.Dock = DockStyle.Fill;
+        _localApiProviderUrlPanel.Location = new Point(153, 123);
+        _localApiProviderUrlPanel.Margin = new Padding(3, 0, 3, 3);
+        _localApiProviderUrlPanel.Name = "_localApiProviderUrlPanel";
+        _localApiProviderUrlPanel.RowCount = 1;
+        _localApiProviderUrlPanel.RowStyles.Add(new RowStyle());
+        _localApiProviderUrlPanel.Size = new Size(603, 33);
+        _localApiProviderUrlPanel.TabIndex = 6;
+        // 
+        // _txtLocalApiProviderUrl
+        // 
+        _txtLocalApiProviderUrl.Dock = DockStyle.Fill;
+        _txtLocalApiProviderUrl.Location = new Point(3, 5);
+        _txtLocalApiProviderUrl.Margin = new Padding(3, 5, 3, 5);
+        _txtLocalApiProviderUrl.Name = "_txtLocalApiProviderUrl";
+        _txtLocalApiProviderUrl.PlaceholderText = "https://api.openai.com/v1/";
+        _txtLocalApiProviderUrl.Size = new Size(481, 23);
+        _txtLocalApiProviderUrl.TabIndex = 0;
+        // 
+        // _btnRefreshLocalApiModels
+        // 
+        _btnRefreshLocalApiModels.AutoSize = true;
+        _btnRefreshLocalApiModels.Location = new Point(490, 3);
+        _btnRefreshLocalApiModels.Name = "_btnRefreshLocalApiModels";
+        _btnRefreshLocalApiModels.Size = new Size(110, 27);
+        _btnRefreshLocalApiModels.TabIndex = 1;
+        _btnRefreshLocalApiModels.Text = "Refresh Models";
+        _btnRefreshLocalApiModels.UseVisualStyleBackColor = true;
+        _btnRefreshLocalApiModels.Click += BtnRefreshLocalApiModels_Click;
+        // 
+        // _lblLocalApiDefaultModel
+        // 
+        _lblLocalApiDefaultModel.Anchor = AnchorStyles.Left | AnchorStyles.Right;
+        _lblLocalApiDefaultModel.Location = new Point(13, 163);
+        _lblLocalApiDefaultModel.Name = "_lblLocalApiDefaultModel";
+        _lblLocalApiDefaultModel.Size = new Size(134, 23);
+        _lblLocalApiDefaultModel.TabIndex = 7;
+        _lblLocalApiDefaultModel.Text = "Default Model:";
+        _lblLocalApiDefaultModel.TextAlign = ContentAlignment.MiddleRight;
+        // 
+        // _cmbLocalApiDefaultModel
+        // 
+        _cmbLocalApiDefaultModel.AutoCompleteMode = AutoCompleteMode.SuggestAppend;
+        _cmbLocalApiDefaultModel.AutoCompleteSource = AutoCompleteSource.ListItems;
+        _cmbLocalApiDefaultModel.Dock = DockStyle.Fill;
+        _cmbLocalApiDefaultModel.FormattingEnabled = true;
+        _cmbLocalApiDefaultModel.Location = new Point(153, 162);
+        _cmbLocalApiDefaultModel.Name = "_cmbLocalApiDefaultModel";
+        _cmbLocalApiDefaultModel.Size = new Size(603, 25);
+        _cmbLocalApiDefaultModel.TabIndex = 8;
+        // 
+        // _lblLocalApiDefaultEmbeddingModel
+        // 
+        _lblLocalApiDefaultEmbeddingModel.Anchor = AnchorStyles.Left | AnchorStyles.Right;
+        _lblLocalApiDefaultEmbeddingModel.Location = new Point(13, 194);
+        _lblLocalApiDefaultEmbeddingModel.Name = "_lblLocalApiDefaultEmbeddingModel";
+        _lblLocalApiDefaultEmbeddingModel.Size = new Size(134, 23);
+        _lblLocalApiDefaultEmbeddingModel.TabIndex = 9;
+        _lblLocalApiDefaultEmbeddingModel.Text = "Embedding Model:";
+        _lblLocalApiDefaultEmbeddingModel.TextAlign = ContentAlignment.MiddleRight;
+        // 
+        // _cmbLocalApiDefaultEmbeddingModel
+        // 
+        _cmbLocalApiDefaultEmbeddingModel.AutoCompleteMode = AutoCompleteMode.SuggestAppend;
+        _cmbLocalApiDefaultEmbeddingModel.AutoCompleteSource = AutoCompleteSource.ListItems;
+        _cmbLocalApiDefaultEmbeddingModel.Dock = DockStyle.Fill;
+        _cmbLocalApiDefaultEmbeddingModel.FormattingEnabled = true;
+        _cmbLocalApiDefaultEmbeddingModel.Location = new Point(153, 193);
+        _cmbLocalApiDefaultEmbeddingModel.Name = "_cmbLocalApiDefaultEmbeddingModel";
+        _cmbLocalApiDefaultEmbeddingModel.Size = new Size(603, 25);
+        _cmbLocalApiDefaultEmbeddingModel.TabIndex = 10;
+        // 
+        // _lblLocalApiAuthentication
+        // 
+        _lblLocalApiAuthentication.Anchor = AnchorStyles.Left | AnchorStyles.Right;
+        _lblLocalApiAuthentication.Location = new Point(13, 227);
+        _lblLocalApiAuthentication.Name = "_lblLocalApiAuthentication";
+        _lblLocalApiAuthentication.Size = new Size(134, 23);
+        _lblLocalApiAuthentication.TabIndex = 11;
+        _lblLocalApiAuthentication.Text = "Authentication:";
+        _lblLocalApiAuthentication.TextAlign = ContentAlignment.MiddleRight;
+        // 
+        // _localApiAuthPanel
+        // 
+        _localApiAuthPanel.ColumnCount = 4;
+        _localApiAuthPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 100F));
+        _localApiAuthPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 120F));
+        _localApiAuthPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 120F));
+        _localApiAuthPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+        _localApiAuthPanel.Controls.Add(_lblLocalApiAuthType, 0, 0);
+        _localApiAuthPanel.Controls.Add(_cmbLocalApiAuthType, 1, 0);
+        _localApiAuthPanel.Controls.Add(_lblLocalApiAuthHeaderName, 2, 0);
+        _localApiAuthPanel.Controls.Add(_txtLocalApiAuthHeaderName, 3, 0);
+        _localApiAuthPanel.Dock = DockStyle.Fill;
+        _localApiAuthPanel.Location = new Point(153, 221);
+        _localApiAuthPanel.Margin = new Padding(3, 0, 3, 3);
+        _localApiAuthPanel.Name = "_localApiAuthPanel";
+        _localApiAuthPanel.RowCount = 1;
+        _localApiAuthPanel.RowStyles.Add(new RowStyle());
+        _localApiAuthPanel.Size = new Size(603, 33);
+        _localApiAuthPanel.TabIndex = 12;
+        // 
+        // _lblLocalApiAuthType
+        // 
+        _lblLocalApiAuthType.Dock = DockStyle.Fill;
+        _lblLocalApiAuthType.Location = new Point(3, 0);
+        _lblLocalApiAuthType.Name = "_lblLocalApiAuthType";
+        _lblLocalApiAuthType.Size = new Size(94, 33);
+        _lblLocalApiAuthType.TabIndex = 0;
+        _lblLocalApiAuthType.Text = "Auth Type:";
+        _lblLocalApiAuthType.TextAlign = ContentAlignment.MiddleRight;
+        // 
+        // _cmbLocalApiAuthType
+        // 
+        _cmbLocalApiAuthType.Dock = DockStyle.Fill;
+        _cmbLocalApiAuthType.DropDownStyle = ComboBoxStyle.DropDownList;
+        _cmbLocalApiAuthType.FormattingEnabled = true;
+        _cmbLocalApiAuthType.Items.AddRange(new object[] { "Bearer", "Header", "Query" });
+        _cmbLocalApiAuthType.Location = new Point(103, 4);
+        _cmbLocalApiAuthType.Margin = new Padding(3, 4, 3, 4);
+        _cmbLocalApiAuthType.Name = "_cmbLocalApiAuthType";
+        _cmbLocalApiAuthType.Size = new Size(114, 25);
+        _cmbLocalApiAuthType.TabIndex = 1;
+        // 
+        // _lblLocalApiAuthHeaderName
+        // 
+        _lblLocalApiAuthHeaderName.Dock = DockStyle.Fill;
+        _lblLocalApiAuthHeaderName.Location = new Point(223, 0);
+        _lblLocalApiAuthHeaderName.Name = "_lblLocalApiAuthHeaderName";
+        _lblLocalApiAuthHeaderName.Size = new Size(114, 33);
+        _lblLocalApiAuthHeaderName.TabIndex = 2;
+        _lblLocalApiAuthHeaderName.Text = "Header / Query Name:";
+        _lblLocalApiAuthHeaderName.TextAlign = ContentAlignment.MiddleRight;
+        // 
+        // _txtLocalApiAuthHeaderName
+        // 
+        _txtLocalApiAuthHeaderName.Dock = DockStyle.Fill;
+        _txtLocalApiAuthHeaderName.Location = new Point(343, 5);
+        _txtLocalApiAuthHeaderName.Margin = new Padding(3, 5, 3, 5);
+        _txtLocalApiAuthHeaderName.Name = "_txtLocalApiAuthHeaderName";
+        _txtLocalApiAuthHeaderName.PlaceholderText = "Authorization / x-api-key / key";
+        _txtLocalApiAuthHeaderName.Size = new Size(257, 23);
+        _txtLocalApiAuthHeaderName.TabIndex = 3;
+        // 
+        // _lblLocalApiApiKey
+        // 
+        _lblLocalApiApiKey.Anchor = AnchorStyles.Left | AnchorStyles.Right;
+        _lblLocalApiApiKey.Location = new Point(13, 260);
+        _lblLocalApiApiKey.Name = "_lblLocalApiApiKey";
+        _lblLocalApiApiKey.Size = new Size(134, 23);
+        _lblLocalApiApiKey.TabIndex = 13;
+        _lblLocalApiApiKey.Text = "Provider API Key:";
+        _lblLocalApiApiKey.TextAlign = ContentAlignment.MiddleRight;
+        // 
+        // _txtLocalApiApiKey
+        // 
+        _txtLocalApiApiKey.Dock = DockStyle.Fill;
+        _txtLocalApiApiKey.Location = new Point(153, 260);
+        _txtLocalApiApiKey.Name = "_txtLocalApiApiKey";
+        _txtLocalApiApiKey.PasswordChar = '●';
+        _txtLocalApiApiKey.PlaceholderText = "Stored in Windows Credential Manager, not in config JSON";
+        _txtLocalApiApiKey.Size = new Size(603, 23);
+        _txtLocalApiApiKey.TabIndex = 14;
+        // 
+        // _lblLocalApiExtraHeaders
+        // 
+        _lblLocalApiExtraHeaders.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+        _lblLocalApiExtraHeaders.Location = new Point(13, 286);
+        _lblLocalApiExtraHeaders.Name = "_lblLocalApiExtraHeaders";
+        _lblLocalApiExtraHeaders.Size = new Size(134, 23);
+        _lblLocalApiExtraHeaders.TabIndex = 15;
+        _lblLocalApiExtraHeaders.Text = "Extra Headers:";
+        _lblLocalApiExtraHeaders.TextAlign = ContentAlignment.TopRight;
+        // 
+        // _txtLocalApiAdditionalHeaders
+        // 
+        _txtLocalApiAdditionalHeaders.AcceptsReturn = true;
+        _txtLocalApiAdditionalHeaders.Dock = DockStyle.Fill;
+        _txtLocalApiAdditionalHeaders.Location = new Point(153, 286);
+        _txtLocalApiAdditionalHeaders.Margin = new Padding(3, 0, 3, 3);
+        _txtLocalApiAdditionalHeaders.Multiline = true;
+        _txtLocalApiAdditionalHeaders.Name = "_txtLocalApiAdditionalHeaders";
+        _txtLocalApiAdditionalHeaders.PlaceholderText = "Optional additional upstream headers, one per line:\r\nanthropic-version=2023-06-01\r\nX-Agent-ID=my-agent";
+        _txtLocalApiAdditionalHeaders.ScrollBars = ScrollBars.Vertical;
+        _txtLocalApiAdditionalHeaders.Size = new Size(603, 115);
+        _txtLocalApiAdditionalHeaders.TabIndex = 16;
+        _txtLocalApiAdditionalHeaders.WordWrap = false;
+        // 
+        // _lblLocalApiModelMappings
+        // 
+        _lblLocalApiModelMappings.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+        _lblLocalApiModelMappings.Location = new Point(13, 404);
+        _lblLocalApiModelMappings.Name = "_lblLocalApiModelMappings";
+        _lblLocalApiModelMappings.Size = new Size(134, 23);
+        _lblLocalApiModelMappings.TabIndex = 17;
+        _lblLocalApiModelMappings.Text = "Model Mappings:";
+        _lblLocalApiModelMappings.TextAlign = ContentAlignment.TopRight;
+        // 
+        // _txtLocalApiModelMappings
+        // 
+        _txtLocalApiModelMappings.AcceptsReturn = true;
+        _txtLocalApiModelMappings.Dock = DockStyle.Fill;
+        _txtLocalApiModelMappings.Location = new Point(153, 404);
+        _txtLocalApiModelMappings.Margin = new Padding(3, 0, 3, 3);
+        _txtLocalApiModelMappings.Multiline = true;
+        _txtLocalApiModelMappings.Name = "_txtLocalApiModelMappings";
+        _txtLocalApiModelMappings.PlaceholderText = "One mapping per line:\r\nqwen2.5:7b=gpt-4.1-mini\r\nllama3.2=claude-3-7-sonnet";
+        _txtLocalApiModelMappings.ScrollBars = ScrollBars.Vertical;
+        _txtLocalApiModelMappings.Size = new Size(603, 115);
+        _txtLocalApiModelMappings.TabIndex = 18;
+        _txtLocalApiModelMappings.WordWrap = false;
+        // 
+        // _lblLocalApiDiagnostics
+        // 
+        _lblLocalApiDiagnostics.Anchor = AnchorStyles.Left | AnchorStyles.Right;
+        _lblLocalApiDiagnostics.Location = new Point(13, 542);
+        _lblLocalApiDiagnostics.Name = "_lblLocalApiDiagnostics";
+        _lblLocalApiDiagnostics.Size = new Size(134, 23);
+        _lblLocalApiDiagnostics.TabIndex = 19;
+        _lblLocalApiDiagnostics.Text = "Diagnostics:";
+        _lblLocalApiDiagnostics.TextAlign = ContentAlignment.MiddleRight;
+        // 
+        // _localApiLoggingPanel
+        // 
+        _localApiLoggingPanel.AutoSize = true;
+        _localApiLoggingPanel.Controls.Add(_chkLocalApiRequestResponseLogging);
+        _localApiLoggingPanel.Controls.Add(_chkLocalApiIncludeBodies);
+        _localApiLoggingPanel.Controls.Add(_chkLocalApiIncludeErrorDiagnostics);
+        _localApiLoggingPanel.Controls.Add(_lblLocalApiMaxBodyChars);
+        _localApiLoggingPanel.Controls.Add(_numLocalApiMaxBodyChars);
+        _localApiLoggingPanel.Dock = DockStyle.Fill;
+        _localApiLoggingPanel.Location = new Point(153, 525);
+        _localApiLoggingPanel.Name = "_localApiLoggingPanel";
+        _localApiLoggingPanel.Size = new Size(603, 58);
+        _localApiLoggingPanel.TabIndex = 20;
+        // 
+        // _chkLocalApiRequestResponseLogging
+        // 
+        _chkLocalApiRequestResponseLogging.AutoSize = true;
+        _chkLocalApiRequestResponseLogging.Location = new Point(3, 5);
+        _chkLocalApiRequestResponseLogging.Margin = new Padding(3, 5, 16, 3);
+        _chkLocalApiRequestResponseLogging.Name = "_chkLocalApiRequestResponseLogging";
+        _chkLocalApiRequestResponseLogging.Size = new Size(222, 21);
+        _chkLocalApiRequestResponseLogging.TabIndex = 0;
+        _chkLocalApiRequestResponseLogging.Text = "Enable request/response logging";
+        // 
+        // _chkLocalApiIncludeBodies
+        // 
+        _chkLocalApiIncludeBodies.AutoSize = true;
+        _chkLocalApiIncludeBodies.Location = new Point(244, 5);
+        _chkLocalApiIncludeBodies.Margin = new Padding(3, 5, 16, 3);
+        _chkLocalApiIncludeBodies.Name = "_chkLocalApiIncludeBodies";
+        _chkLocalApiIncludeBodies.Size = new Size(113, 21);
+        _chkLocalApiIncludeBodies.TabIndex = 1;
+        _chkLocalApiIncludeBodies.Text = "Include bodies";
+        // 
+        // _chkLocalApiIncludeErrorDiagnostics
+        // 
+        _chkLocalApiIncludeErrorDiagnostics.AutoSize = true;
+        _chkLocalApiIncludeErrorDiagnostics.Location = new Point(3, 34);
+        _chkLocalApiIncludeErrorDiagnostics.Margin = new Padding(3, 5, 16, 3);
+        _chkLocalApiIncludeErrorDiagnostics.Name = "_chkLocalApiIncludeErrorDiagnostics";
+        _chkLocalApiIncludeErrorDiagnostics.Size = new Size(251, 21);
+        _chkLocalApiIncludeErrorDiagnostics.TabIndex = 2;
+        _chkLocalApiIncludeErrorDiagnostics.Text = "Include error diagnostics in responses";
+        // 
+        // _lblLocalApiMaxBodyChars
+        // 
+        _lblLocalApiMaxBodyChars.Anchor = AnchorStyles.Left;
+        _lblLocalApiMaxBodyChars.AutoSize = true;
+        _lblLocalApiMaxBodyChars.Location = new Point(273, 36);
+        _lblLocalApiMaxBodyChars.Margin = new Padding(3, 6, 3, 3);
+        _lblLocalApiMaxBodyChars.Name = "_lblLocalApiMaxBodyChars";
+        _lblLocalApiMaxBodyChars.Size = new Size(105, 17);
+        _lblLocalApiMaxBodyChars.TabIndex = 3;
+        _lblLocalApiMaxBodyChars.Text = "Max body chars:";
+        // 
+        // _numLocalApiMaxBodyChars
+        // 
+        _numLocalApiMaxBodyChars.Location = new Point(384, 32);
+        _numLocalApiMaxBodyChars.Maximum = new decimal(new int[] { 20000, 0, 0, 0 });
+        _numLocalApiMaxBodyChars.Minimum = new decimal(new int[] { 256, 0, 0, 0 });
+        _numLocalApiMaxBodyChars.Name = "_numLocalApiMaxBodyChars";
+        _numLocalApiMaxBodyChars.Size = new Size(90, 23);
+        _numLocalApiMaxBodyChars.TabIndex = 4;
+        _numLocalApiMaxBodyChars.Value = new decimal(new int[] { 4000, 0, 0, 0 });
+        // 
         // _dnsRedirectTab
         // 
         _dnsRedirectTab.Controls.Add(_dnsRedirectPanel);
         _dnsRedirectTab.Location = new Point(4, 26);
         _dnsRedirectTab.Name = "_dnsRedirectTab";
-        _dnsRedirectTab.Size = new Size(769, 530);
+        _dnsRedirectTab.Size = new Size(769, 596);
         _dnsRedirectTab.TabIndex = 3;
         _dnsRedirectTab.Text = "DNS Redirect";
         // 
@@ -872,7 +1505,7 @@ partial class MainForm
         _dnsRedirectPanel.RowStyles.Add(new RowStyle());
         _dnsRedirectPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 30.2670631F));
         _dnsRedirectPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 69.73294F));
-        _dnsRedirectPanel.Size = new Size(769, 530);
+        _dnsRedirectPanel.Size = new Size(769, 596);
         _dnsRedirectPanel.TabIndex = 0;
         // 
         // _grpRedirectMode
@@ -1076,7 +1709,7 @@ partial class MainForm
         _txtRefreshDomains.Name = "_txtRefreshDomains";
         _txtRefreshDomains.PlaceholderText = "\nalive.github.com\ngithub.com";
         _txtRefreshDomains.ScrollBars = ScrollBars.Vertical;
-        _txtRefreshDomains.Size = new Size(589, 66);
+        _txtRefreshDomains.Size = new Size(589, 86);
         _txtRefreshDomains.TabIndex = 7;
         _txtRefreshDomains.WordWrap = false;
         // 
@@ -1086,9 +1719,9 @@ partial class MainForm
         _lvIpResults.Dock = DockStyle.Fill;
         _lvIpResults.FullRowSelect = true;
         _lvIpResults.GridLines = true;
-        _lvIpResults.Location = new Point(13, 346);
+        _lvIpResults.Location = new Point(13, 366);
         _lvIpResults.Name = "_lvIpResults";
-        _lvIpResults.Size = new Size(743, 171);
+        _lvIpResults.Size = new Size(743, 217);
         _lvIpResults.TabIndex = 8;
         _lvIpResults.UseCompatibleStateImageBehavior = false;
         _lvIpResults.View = View.Details;
@@ -1098,7 +1731,7 @@ partial class MainForm
         _logsTab.Controls.Add(_logPanel);
         _logsTab.Location = new Point(4, 26);
         _logsTab.Name = "_logsTab";
-        _logsTab.Size = new Size(769, 530);
+        _logsTab.Size = new Size(769, 596);
         _logsTab.TabIndex = 1;
         _logsTab.Text = "Logs";
         // 
@@ -1115,7 +1748,7 @@ partial class MainForm
         _logPanel.RowCount = 2;
         _logPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
         _logPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 40F));
-        _logPanel.Size = new Size(769, 530);
+        _logPanel.Size = new Size(769, 596);
         _logPanel.TabIndex = 0;
         // 
         // _rtbLogs
@@ -1127,7 +1760,7 @@ partial class MainForm
         _rtbLogs.Location = new Point(3, 3);
         _rtbLogs.Name = "_rtbLogs";
         _rtbLogs.ReadOnly = true;
-        _rtbLogs.Size = new Size(763, 484);
+        _rtbLogs.Size = new Size(763, 550);
         _rtbLogs.TabIndex = 0;
         _rtbLogs.Text = "";
         _rtbLogs.WordWrap = false;
@@ -1137,7 +1770,7 @@ partial class MainForm
         _btnClearPanel.Controls.Add(_btnClearLogs);
         _btnClearPanel.Dock = DockStyle.Fill;
         _btnClearPanel.FlowDirection = FlowDirection.RightToLeft;
-        _btnClearPanel.Location = new Point(5, 495);
+        _btnClearPanel.Location = new Point(5, 561);
         _btnClearPanel.Margin = new Padding(5);
         _btnClearPanel.Name = "_btnClearPanel";
         _btnClearPanel.Size = new Size(759, 30);
@@ -1157,7 +1790,7 @@ partial class MainForm
         _aboutTab.Controls.Add(_aboutScrollPanel);
         _aboutTab.Location = new Point(4, 26);
         _aboutTab.Name = "_aboutTab";
-        _aboutTab.Size = new Size(769, 530);
+        _aboutTab.Size = new Size(769, 596);
         _aboutTab.TabIndex = 4;
         _aboutTab.Text = "About";
         // 
@@ -1170,7 +1803,7 @@ partial class MainForm
         _aboutScrollPanel.Margin = new Padding(0);
         _aboutScrollPanel.Name = "_aboutScrollPanel";
         _aboutScrollPanel.Padding = new Padding(10);
-        _aboutScrollPanel.Size = new Size(769, 530);
+        _aboutScrollPanel.Size = new Size(769, 596);
         _aboutScrollPanel.TabIndex = 0;
         // 
         // _aboutContentPanel
@@ -1201,7 +1834,7 @@ partial class MainForm
         _aboutContentPanel.RowStyles.Add(new RowStyle());
         _aboutContentPanel.RowStyles.Add(new RowStyle());
         _aboutContentPanel.RowStyles.Add(new RowStyle());
-        _aboutContentPanel.Size = new Size(732, 531);
+        _aboutContentPanel.Size = new Size(732, 667);
         _aboutContentPanel.TabIndex = 0;
         // 
         // titleLabel
@@ -1290,7 +1923,7 @@ partial class MainForm
         descContentLabel.Margin = new Padding(10, 0, 0, 15);
         descContentLabel.MaximumSize = new Size(450, 0);
         descContentLabel.Name = "descContentLabel";
-        descContentLabel.Size = new Size(440, 170);
+        descContentLabel.Size = new Size(450, 306);
         descContentLabel.TabIndex = 3;
         descContentLabel.Text = resources.GetString("descContentLabel.Text");
         // 
@@ -1298,7 +1931,7 @@ partial class MainForm
         // 
         contribLabel.AutoSize = true;
         contribLabel.Font = new Font("Segoe UI", 11F, FontStyle.Bold);
-        contribLabel.Location = new Point(10, 303);
+        contribLabel.Location = new Point(10, 439);
         contribLabel.Margin = new Padding(0, 0, 0, 5);
         contribLabel.Name = "contribLabel";
         contribLabel.Size = new Size(236, 20);
@@ -1308,7 +1941,7 @@ partial class MainForm
         // contribContentLabel
         // 
         contribContentLabel.AutoSize = true;
-        contribContentLabel.Location = new Point(20, 328);
+        contribContentLabel.Location = new Point(20, 464);
         contribContentLabel.Margin = new Padding(10, 0, 0, 15);
         contribContentLabel.MaximumSize = new Size(450, 0);
         contribContentLabel.Name = "contribContentLabel";
@@ -1320,7 +1953,7 @@ partial class MainForm
         // 
         techLabel.AutoSize = true;
         techLabel.Font = new Font("Segoe UI", 11F, FontStyle.Bold);
-        techLabel.Location = new Point(10, 411);
+        techLabel.Location = new Point(10, 547);
         techLabel.Margin = new Padding(0, 0, 0, 5);
         techLabel.Name = "techLabel";
         techLabel.Size = new Size(162, 20);
@@ -1330,7 +1963,7 @@ partial class MainForm
         // techContentLabel
         // 
         techContentLabel.AutoSize = true;
-        techContentLabel.Location = new Point(20, 436);
+        techContentLabel.Location = new Point(20, 572);
         techContentLabel.Margin = new Padding(10, 0, 0, 0);
         techContentLabel.MaximumSize = new Size(450, 0);
         techContentLabel.Name = "techContentLabel";
@@ -1347,7 +1980,7 @@ partial class MainForm
         _statusPanel.Controls.Add(label1);
         _statusPanel.Controls.Add(_btnStartStop);
         _statusPanel.Dock = DockStyle.Fill;
-        _statusPanel.Location = new Point(5, 570);
+        _statusPanel.Location = new Point(5, 636);
         _statusPanel.Margin = new Padding(0);
         _statusPanel.Name = "_statusPanel";
         _statusPanel.Size = new Size(777, 50);
@@ -1399,17 +2032,6 @@ partial class MainForm
         _btnStartStop.Text = "Start Proxy";
         _btnStartStop.UseVisualStyleBackColor = false;
         _btnStartStop.Click += BtnStartStop_Click;
-        // 
-        // _controlPanel
-        // 
-        _controlPanel.Dock = DockStyle.Fill;
-        _controlPanel.FlowDirection = FlowDirection.RightToLeft;
-        _controlPanel.Location = new Point(5, 620);
-        _controlPanel.Margin = new Padding(0);
-        _controlPanel.Name = "_controlPanel";
-        _controlPanel.Size = new Size(777, 50);
-        _controlPanel.TabIndex = 2;
-        _controlPanel.WrapContents = false;
         // 
         // _chkDNSRedirectEnabled
         // 
@@ -1564,7 +2186,7 @@ partial class MainForm
         // 
         // MainForm
         // 
-        ClientSize = new Size(787, 675);
+        ClientSize = new Size(787, 691);
         Controls.Add(_mainPanel);
         Icon = (Icon)resources.GetObject("$this.Icon");
         MinimumSize = new Size(600, 400);
@@ -1593,6 +2215,23 @@ partial class MainForm
         _configActionPanel.ResumeLayout(false);
         _configActionPanel.PerformLayout();
         _configBtnPanel.ResumeLayout(false);
+        _localApiTab.ResumeLayout(false);
+        _localApiPanel.ResumeLayout(false);
+        _localApiPanel.PerformLayout();
+        _localApiHeaderPanel.ResumeLayout(false);
+        _localApiHeaderPanel.PerformLayout();
+        _localApiPortPanel.ResumeLayout(false);
+        ((ISupportInitialize)_numOllamaPort).EndInit();
+        ((ISupportInitialize)_numFoundryPort).EndInit();
+        _localApiProviderPanel.ResumeLayout(false);
+        _localApiProviderPanel.PerformLayout();
+        _localApiProviderUrlPanel.ResumeLayout(false);
+        _localApiProviderUrlPanel.PerformLayout();
+        _localApiAuthPanel.ResumeLayout(false);
+        _localApiAuthPanel.PerformLayout();
+        _localApiLoggingPanel.ResumeLayout(false);
+        _localApiLoggingPanel.PerformLayout();
+        ((ISupportInitialize)_numLocalApiMaxBodyChars).EndInit();
         _dnsRedirectTab.ResumeLayout(false);
         _dnsRedirectPanel.ResumeLayout(false);
         _dnsRedirectPanel.PerformLayout();

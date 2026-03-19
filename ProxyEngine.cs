@@ -26,11 +26,13 @@ internal sealed class ProxyEngine : IDisposable
 	private bool _isRunning = false;
 	private GitHub520HostsProvider? _hostsProvider;
 	private DnsInterceptor? _dnsInterceptor;
+	private LocalApiForwarder? _localApiForwarder;
 
 	public event Action<string>? OnLog;
 	public event Action<RedirectStats>? OnStatsUpdated;
 
 	public bool IsRunning => _isRunning;
+	public bool IsLocalApiForwarderRunning => _localApiForwarder is not null;
 	public ushort RelayPort { get; private set; }
 
 	public ProxyEngine(ProxyOptions options)
@@ -45,8 +47,17 @@ internal sealed class ProxyEngine : IDisposable
 	{
 		if (_isRunning) return;
 
-		if (!_options.ProxyEnabled && !_options.HostsRedirectEnabled)
-			throw new InvalidOperationException("Both proxy and hosts redirect are disabled.");
+		if (!_options.ProxyEnabled && !_options.HostsRedirectEnabled && _options.LocalApiForwarder?.Enabled != true)
+			throw new InvalidOperationException("Proxy, hosts redirect, and local API forwarding are all disabled.");
+
+		if (_options.LocalApiForwarder?.Enabled == true)
+		{
+			var providerName = _options.LocalApiForwarder.Provider?.Name ?? "Default";
+			var apiKey = CredentialManager.LoadToken(CredentialManager.GetLocalApiTargetName(providerName));
+			_localApiForwarder = new LocalApiForwarder(_options.LocalApiForwarder, apiKey);
+			_localApiForwarder.OnLog += LogInfo;
+			await _localApiForwarder.StartAsync();
+		}
 
 		// Start hosts redirect in appropriate mode
 		if (_options.HostsRedirectEnabled)
@@ -85,7 +96,7 @@ internal sealed class ProxyEngine : IDisposable
 
 		if (!_options.ProxyEnabled)
 		{
-			// Hosts redirect only mode: no TCP relay or packet loop needed.
+			// Hosts redirect and/or local API forwarder only mode: no TCP relay or packet loop needed.
 			_isRunning = true;
 			return;
 		}
@@ -140,6 +151,8 @@ internal sealed class ProxyEngine : IDisposable
 		}
 		if (_dnsInterceptor != null)
 			await _dnsInterceptor.StopAsync();
+		if (_localApiForwarder != null)
+			await _localApiForwarder.StopAsync();
 
         // Clean up hosts file entries if in hosts file mode
 		if (_options.HostsRedirectEnabled && 
@@ -156,6 +169,22 @@ internal sealed class ProxyEngine : IDisposable
                LogInfo($"Warning: Failed to clean up Windows/WSL hosts files: {ex.Message}");
 			}
 		}
+	}
+
+	public async Task<IReadOnlyList<string>> RefreshLocalApiModelCatalogAsync(CancellationToken ct = default)
+	{
+		if (_options.LocalApiForwarder?.Enabled != true || _localApiForwarder is null)
+			throw new InvalidOperationException("Local API forwarder is not running.");
+
+		return await _localApiForwarder.RefreshModelCatalogAsync(ct);
+	}
+
+	public async Task<IReadOnlyList<LocalApiAdvertisedModel>> RefreshLocalApiModelCatalogEntriesAsync(CancellationToken ct = default)
+	{
+		if (_options.LocalApiForwarder?.Enabled != true || _localApiForwarder is null)
+			throw new InvalidOperationException("Local API forwarder is not running.");
+
+		return await _localApiForwarder.RefreshModelCatalogEntriesAsync(ct);
 	}
 
 	/// <summary>Pushes freshly resolved IPs into the live DNS interceptor without restarting it.</summary>
@@ -191,6 +220,7 @@ internal sealed class ProxyEngine : IDisposable
 		_connInfoCache?.Dispose();
 		_dnsInterceptor?.Dispose();
 		_hostsProvider?.Dispose();
+		_localApiForwarder?.Dispose();
 		if (_winDivertHandle != IntPtr.Zero && _winDivertHandle != new IntPtr(-1))
 			WinDivertNative.WinDivertClose(_winDivertHandle);
 	}

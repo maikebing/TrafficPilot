@@ -368,7 +368,8 @@ internal sealed record ProxyOptions(
 	bool ProxyEnabled = true,
 	bool HostsRedirectEnabled = false,
 	string HostsRedirectUrl = GitHub520HostsProvider.DefaultUrl,
-	string HostsRedirectMode = "DnsInterception") // "DnsInterception" or "HostsFile"
+	string HostsRedirectMode = "DnsInterception",
+	LocalApiForwarderSettings? LocalApiForwarder = null) // "DnsInterception" or "HostsFile"
 {
     internal static readonly string[] DefaultProcessNames =
 	[
@@ -727,5 +728,18 @@ internal static class CredentialManager
 			!provider.Equals("Gitee", StringComparison.Ordinal))
 			throw new ArgumentException($"Unknown sync provider: {provider}", nameof(provider));
 		return $"TrafficPilot_ConfigSync_{provider}";
+	}
+
+	public static string GetLocalApiTargetName(string providerName)
+	{
+		if (string.IsNullOrWhiteSpace(providerName))
+			return "TrafficPilot_LocalApi_Default";
+
+		var normalized = Regex.Replace(providerName.Trim(), @"[^A-Za-z0-9_-]+", "_");
+		normalized = normalized.Trim('_');
+		if (normalized.Length == 0)
+			normalized = "Default";
+
+		return $"TrafficPilot_LocalApi_{normalized}";
 	}
 }
