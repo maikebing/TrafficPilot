@@ -1278,6 +1278,38 @@ internal partial class MainForm : Form
 		return new LocalApiForwarder(settings, apiKey);
 	}
 
+	private async Task TrySilentRefreshLocalApiModelsAsync(LocalApiForwarderSettings settings)
+	{
+		if (string.IsNullOrWhiteSpace(settings.Provider?.BaseUrl))
+			return;
+		if (!Uri.TryCreate(settings.Provider.BaseUrl, UriKind.Absolute, out var uri)
+			|| (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+			return;
+
+		try
+		{
+			IReadOnlyList<string> models;
+			if (_engine?.IsRunning == true && _engine.IsLocalApiForwarderRunning)
+			{
+				models = await _engine.RefreshLocalApiModelCatalogAsync();
+			}
+			else
+			{
+				using var forwarder = CreateDetachedLocalApiForwarder(settings);
+				models = await forwarder.RefreshModelCatalogAsync();
+			}
+
+			UpdateLocalApiModelSelectors(
+				models,
+				_cmbLocalApiDefaultModel?.Text ?? string.Empty,
+				_cmbLocalApiDefaultEmbeddingModel?.Text ?? string.Empty);
+		}
+		catch
+		{
+			// Silent failure: model list will show only configured items until user manually refreshes.
+		}
+	}
+
 	private void UpdateLocalApiModelSelectors(
 		IEnumerable<string>? models,
 		string selectedDefaultModel,
@@ -1317,10 +1349,15 @@ internal partial class MainForm : Form
 			items.Add(settings.Provider.DefaultEmbeddingModel.Trim());
 
 		items.AddRange(settings.ModelMappings
+			.Where(static mapping => !string.IsNullOrWhiteSpace(mapping.LocalModel))
+			.Select(static mapping => mapping.LocalModel.Trim()));
+		items.AddRange(settings.ModelMappings
 			.Where(static mapping => !string.IsNullOrWhiteSpace(mapping.UpstreamModel))
 			.Select(static mapping => mapping.UpstreamModel.Trim()));
 
-		return items;
+		return items
+			.Where(static item => !string.IsNullOrWhiteSpace(item))
+			.Distinct(StringComparer.OrdinalIgnoreCase);
 	}
 
 	private static void RebindEditableComboBox(ComboBox comboBox, IEnumerable<string> items, string selectedText)
@@ -1888,6 +1925,9 @@ internal partial class MainForm : Form
 					&& !string.IsNullOrWhiteSpace(mapping.UpstreamModel))
 				.Select(static mapping => $"{mapping.LocalModel.Trim()}={mapping.UpstreamModel.Trim()}")
 				.ToArray();
+
+		if (settings.Enabled && !string.IsNullOrWhiteSpace(settings.Provider?.BaseUrl))
+			_ = TrySilentRefreshLocalApiModelsAsync(settings);
 	}
 
 	private static List<LocalApiModelMapping> ParseLocalApiModelMappings(IEnumerable<string> lines)

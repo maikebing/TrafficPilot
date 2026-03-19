@@ -1,5 +1,19 @@
 # Changelog
 
+## [Unreleased]
+
+### 新增
+- **本地 API 转发**（Local API Forwarder）：新增独立标签页，支持将本地 Ollama / AI Foundry 兼容端口（默认 11434 / 5273）的请求转发至第三方 AI 提供商（OpenAI、Anthropic 等）。
+  - 支持 OpenAI 兼容协议及 Anthropic Messages API 适配。
+  - 支持 Ollama 原生 chat/generate/embeddings 端点及 OpenAI `/v1/chat/completions`、`/v1/responses`、`/v1/embeddings` 等端点。
+  - 支持模型名称映射（`localModel=upstreamModel`），允许客户端使用本地别名。
+  - 提供商 API Key 存储在 Windows Credential Manager，不写入配置文件。
+
+### 修复
+- **模型选择下拉菜单无法选择 `gpt-5.4` 等自定义模型名称**：
+  - 修复 `BuildLocalApiSelectorItems` 方法只包含 `UpstreamModel` 而遗漏 `LocalModel` 的问题，现在模型映射中的本地别名（如 `gpt-5.4`）也会出现在下拉列表中。
+  - 在加载本地 API 配置时自动触发后台模型刷新：当已配置有效的上游提供商地址时，程序会静默从上游（Ollama 等）获取可用模型列表并填充下拉菜单，无需用户手动点击"Refresh Models"。
+
 ## [1.1.0.0] - 2026-03-18
 
 ### 概述
