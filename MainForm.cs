@@ -46,6 +46,7 @@ internal partial class MainForm : Form
 	private ComboBox? _cmbLocalApiAuthType;
 	private TextBox? _txtLocalApiAuthHeaderName;
 	private TextBox? _txtLocalApiApiKey;
+	private Button? _btnRefreshLocalApiModels;
 	private TextBox? _txtLocalApiAdditionalHeaders;
 	private TextBox? _txtLocalApiModelMappings;
 	private CheckBox? _chkLocalApiRequestResponseLogging;
@@ -183,6 +184,9 @@ internal partial class MainForm : Form
 
 		try
 		{
+			var persistedConfig = PersistCurrentConfig();
+			LogRuntimeConfigSnapshot(persistedConfig);
+
 			var opts = BuildProxyOptions();
 			_engine = new ProxyEngine(opts);
 			_engine.OnLog += (msg) => AppendLog(msg);
@@ -579,9 +583,7 @@ internal partial class MainForm : Form
 		if (string.IsNullOrWhiteSpace(configPath))
 			throw new ArgumentException("Config path cannot be empty.", nameof(configPath));
 
-		_currentConfig = BuildConfigModel();
-		_activeConfigPath = Path.GetFullPath(configPath);
-		_configManager.Save(_currentConfig, _activeConfigPath);
+		PersistCurrentConfig(configPath);
 		LoadConfigToUI();
 		RefreshConfigShortcutButtons();
 
@@ -590,6 +592,34 @@ internal partial class MainForm : Form
 			dialogTitle,
 			MessageBoxButtons.OK,
 			MessageBoxIcon.Information);
+	}
+
+	private ProxyConfigModel PersistCurrentConfig(string? configPath = null)
+	{
+		var path = Path.GetFullPath(configPath ?? _activeConfigPath);
+		_currentConfig = BuildConfigModel();
+		_activeConfigPath = path;
+		_configManager.Save(_currentConfig, _activeConfigPath);
+		return _currentConfig;
+	}
+
+	private void LogRuntimeConfigSnapshot(ProxyConfigModel config)
+	{
+		AppendLog($"[{DateTime.Now:HH:mm:ss.fff}] [Config] Active config: {_activeConfigPath}");
+
+		var localApi = config.LocalApiForwarder;
+		if (localApi?.Enabled != true)
+			return;
+
+		var provider = localApi.Provider ?? new LocalApiProviderSettings();
+		var defaultModel = string.IsNullOrWhiteSpace(provider.DefaultModel)
+			? "<empty>"
+			: provider.DefaultModel;
+		var embeddingModel = string.IsNullOrWhiteSpace(provider.DefaultEmbeddingModel)
+			? "<empty>"
+			: provider.DefaultEmbeddingModel;
+		AppendLog(
+			$"[{DateTime.Now:HH:mm:ss.fff}] [Config] Local API provider='{provider.Name}', protocol={provider.Protocol}, baseUrl={provider.BaseUrl}, defaultModel={defaultModel}, embeddingModel={embeddingModel}");
 	}
 
 	private void RefreshConfigShortcutButtons()
@@ -800,6 +830,8 @@ internal partial class MainForm : Form
 			MessageBox.Show("Please stop the proxy before exiting.", "Proxy Running", MessageBoxButtons.OK, MessageBoxIcon.Warning);
 			return;
 		}
+
+		PersistCurrentConfig();
 		_engine?.Dispose();
 		_notifyIcon?.Dispose();
 		Application.Exit();
@@ -1178,6 +1210,70 @@ internal partial class MainForm : Form
 		}
 	}
 
+	private async void BtnRefreshLocalApiModels_Click(object? sender, EventArgs e)
+	{
+		if (_btnRefreshLocalApiModels is null)
+			return;
+
+		var originalText = _btnRefreshLocalApiModels.Text;
+		_btnRefreshLocalApiModels.Enabled = false;
+		_btnRefreshLocalApiModels.Text = "Refreshing...";
+
+		try
+		{
+			var persistedConfig = PersistCurrentConfig();
+			LogRuntimeConfigSnapshot(persistedConfig);
+
+			var localApiSettings = persistedConfig.LocalApiForwarder;
+
+			IReadOnlyList<string> models;
+			if (_engine?.IsRunning == true && _engine.IsLocalApiForwarderRunning)
+			{
+				AppendLog(
+					$"[{DateTime.Now:HH:mm:ss.fff}] [Config] Refreshing upstream model catalog for the running Local API forwarder. Restart the proxy to apply any provider changes currently shown in the UI.");
+				models = await _engine.RefreshLocalApiModelCatalogAsync();
+			}
+			else
+			{
+				if (localApiSettings?.Enabled != true)
+					throw new InvalidOperationException("Enable local Ollama / Foundry forwarding before refreshing models.");
+
+				AppendLog(
+					$"[{DateTime.Now:HH:mm:ss.fff}] [Config] Refreshing upstream model catalog using the current UI settings (proxy not running).");
+				using var forwarder = CreateDetachedLocalApiForwarder(localApiSettings);
+				forwarder.OnLog += AppendLog;
+				models = await forwarder.RefreshModelCatalogAsync();
+			}
+
+			var preview = models.Count == 0
+				? "<none>"
+				: string.Join(", ", models.Take(5)) + (models.Count > 5 ? ", ..." : string.Empty);
+			AppendLog(
+				$"[{DateTime.Now:HH:mm:ss.fff}] [Config] Upstream model refresh completed: {models.Count} models ({preview})");
+		}
+		catch (Exception ex)
+		{
+			AppendLog($"[{DateTime.Now:HH:mm:ss.fff}] [Config] Upstream model refresh failed: {ex.Message}");
+			MessageBox.Show(
+				$"Failed to refresh upstream models: {ex.Message}",
+				"Local API Models",
+				MessageBoxButtons.OK,
+				MessageBoxIcon.Error);
+		}
+		finally
+		{
+			_btnRefreshLocalApiModels.Text = originalText;
+			_btnRefreshLocalApiModels.Enabled = true;
+		}
+	}
+
+	private static LocalApiForwarder CreateDetachedLocalApiForwarder(LocalApiForwarderSettings settings)
+	{
+		var providerName = settings.Provider?.Name ?? "Default";
+		var apiKey = CredentialManager.LoadToken(CredentialManager.GetLocalApiTargetName(providerName));
+		return new LocalApiForwarder(settings, apiKey);
+	}
+
 	private void ChkAutoFetch_CheckedChanged(object? sender, EventArgs e)
 	{
 		if (_chkAutoFetch!.Checked)
@@ -1434,8 +1530,25 @@ internal partial class MainForm : Form
 		providerPanel.Controls.Add(_txtLocalApiProviderName, 3, 0);
 		AddLocalApiRow(2, "Provider:", providerPanel);
 
+		var providerUrlPanel = new TableLayoutPanel
+		{
+			ColumnCount = 2,
+			Dock = DockStyle.Fill,
+			Margin = Padding.Empty
+		};
+		providerUrlPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+		providerUrlPanel.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
 		_txtLocalApiProviderUrl = CreateFillTextBox("https://api.openai.com/v1/");
-		AddLocalApiRow(3, "Provider Base URL:", _txtLocalApiProviderUrl);
+		providerUrlPanel.Controls.Add(_txtLocalApiProviderUrl, 0, 0);
+		_btnRefreshLocalApiModels = new Button
+		{
+			AutoSize = true,
+			Text = "Refresh Models",
+			Margin = new Padding(8, 0, 0, 0)
+		};
+		_btnRefreshLocalApiModels.Click += BtnRefreshLocalApiModels_Click;
+		providerUrlPanel.Controls.Add(_btnRefreshLocalApiModels, 1, 0);
+		AddLocalApiRow(3, "Provider Base URL:", providerUrlPanel);
 
 		_txtLocalApiDefaultModel = CreateFillTextBox("Remote default model, e.g. gpt-4.1-mini");
 		AddLocalApiRow(4, "Default Model:", _txtLocalApiDefaultModel);

@@ -9,6 +9,8 @@ namespace TrafficPilot;
 internal sealed class LocalApiForwarder : IDisposable
 {
 	private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+	private static readonly TimeSpan ModelCatalogSuccessCacheDuration = TimeSpan.FromMinutes(2);
+	private static readonly TimeSpan ModelCatalogFailureCacheDuration = TimeSpan.FromSeconds(20);
 
 	private readonly LocalApiForwarderSettings _settings;
 	private readonly string _apiKey;
@@ -16,8 +18,22 @@ internal sealed class LocalApiForwarder : IDisposable
 	private readonly CancellationTokenSource _cts = new();
 	private readonly List<HttpListener> _listeners = [];
 	private readonly List<Task> _acceptLoops = [];
+	private readonly object _loadedModelsLock = new();
+	private readonly SemaphoreSlim _modelCatalogSyncLock = new(1, 1);
+	private readonly HashSet<string> _loadedModels = new(StringComparer.OrdinalIgnoreCase);
+	private IReadOnlyList<ModelCatalogEntry> _cachedModelCatalog = [];
+	private bool _hasCachedModelCatalog;
+	private DateTimeOffset _modelCatalogExpiresAt = DateTimeOffset.MinValue;
+	private long _requestCounter;
 
 	public event Action<string>? OnLog;
+
+	private sealed record ModelCatalogEntry(
+		string LocalName,
+		string UpstreamModel,
+		string OwnedBy,
+		long CreatedUnixTime,
+		bool IsAlias);
 
 	public LocalApiForwarder(LocalApiForwarderSettings settings, string? apiKey)
 	{
@@ -27,6 +43,9 @@ internal sealed class LocalApiForwarder : IDisposable
 		{
 			Timeout = Timeout.InfiniteTimeSpan
 		};
+
+		foreach (var modelName in GetConfiguredLocalModelNames())
+			_loadedModels.Add(modelName);
 	}
 
 	public Task StartAsync()
@@ -35,6 +54,7 @@ internal sealed class LocalApiForwarder : IDisposable
 			return Task.CompletedTask;
 
 		ValidateSettings(_settings);
+		LogStartupConfiguration();
 
 		foreach (var port in GetDistinctPorts())
 		{
@@ -48,6 +68,28 @@ internal sealed class LocalApiForwarder : IDisposable
 		}
 
 		return Task.CompletedTask;
+	}
+
+	public async Task<IReadOnlyList<string>> RefreshModelCatalogAsync(CancellationToken ct = default)
+	{
+		if (!_settings.Enabled)
+			throw new InvalidOperationException("Local API forwarding is disabled.");
+
+		LogInfo("manual model catalog refresh requested");
+		var catalog = await GetAdvertisedModelCatalogAsync(ct, forceRefresh: true);
+		LogInfo($"manual model catalog refresh completed: {catalog.Count} models");
+		return catalog
+			.Select(static model => model.LocalName)
+			.ToList();
+	}
+
+	private void LogStartupConfiguration()
+	{
+		var provider = _settings.Provider ?? new LocalApiProviderSettings();
+		LogInfo(
+			$"startup config: provider='{provider.Name}', protocol={provider.Protocol}, baseUrl={provider.BaseUrl}, defaultModel={FormatSettingValue(provider.DefaultModel)}, embeddingModel={FormatSettingValue(provider.DefaultEmbeddingModel)}");
+		LogInfo(
+			$"startup ports: ollama={_settings.OllamaPort}, foundry={_settings.FoundryPort}, modelMappings={_settings.ModelMappings.Count}");
 	}
 
 	public async Task StopAsync()
@@ -72,6 +114,7 @@ internal sealed class LocalApiForwarder : IDisposable
 		}
 
 		_httpClient.Dispose();
+		_modelCatalogSyncLock.Dispose();
 		_cts.Dispose();
 	}
 
@@ -132,11 +175,13 @@ internal sealed class LocalApiForwarder : IDisposable
 	private async Task HandleContextAsync(HttpListenerContext context, CancellationToken ct)
 	{
 		var path = context.Request.Url?.AbsolutePath ?? "/";
+		var requestId = Interlocked.Increment(ref _requestCounter);
+		LogIncomingRequest(requestId, context.Request, path);
 		try
 		{
 			if (HttpMethodsEqual(context.Request.HttpMethod, "GET") && path.Equals("/api/tags", StringComparison.OrdinalIgnoreCase))
 			{
-				await WriteJsonAsync(context.Response, HttpStatusCode.OK, BuildOllamaTagsResponse());
+				await WriteJsonAsync(context.Response, HttpStatusCode.OK, await BuildOllamaTagsResponseAsync(ct));
 				return;
 			}
 
@@ -149,11 +194,87 @@ internal sealed class LocalApiForwarder : IDisposable
 				return;
 			}
 
+			if (HttpMethodsEqual(context.Request.HttpMethod, "GET") && path.Equals("/api/ps", StringComparison.OrdinalIgnoreCase))
+			{
+				await WriteJsonAsync(context.Response, HttpStatusCode.OK, BuildOllamaPsResponse());
+				return;
+			}
+
+			if (HttpMethodsEqual(context.Request.HttpMethod, "POST") && path.Equals("/api/show", StringComparison.OrdinalIgnoreCase))
+			{
+				await HandleOllamaShowAsync(context, ct);
+				return;
+			}
+
+			if (HttpMethodsEqual(context.Request.HttpMethod, "GET") && path.Equals("/openai/status", StringComparison.OrdinalIgnoreCase))
+			{
+				await WriteJsonAsync(context.Response, HttpStatusCode.OK, BuildFoundryLocalStatusResponse());
+				return;
+			}
+
+			if (HttpMethodsEqual(context.Request.HttpMethod, "GET") && path.Equals("/openai/models", StringComparison.OrdinalIgnoreCase))
+			{
+				await WriteJsonAsync(context.Response, HttpStatusCode.OK, await BuildFoundryLocalModelsResponseAsync(ct));
+				return;
+			}
+
+			if (HttpMethodsEqual(context.Request.HttpMethod, "GET") && path.Equals("/openai/loadedmodels", StringComparison.OrdinalIgnoreCase))
+			{
+				await WriteJsonAsync(context.Response, HttpStatusCode.OK, BuildFoundryLocalModelsResponse(GetLoadedModelNames()));
+				return;
+			}
+
+			if (HttpMethodsEqual(context.Request.HttpMethod, "GET") && path.Equals("/foundry/list", StringComparison.OrdinalIgnoreCase))
+			{
+				await WriteJsonAsync(context.Response, HttpStatusCode.OK, await BuildFoundryLocalCatalogResponseAsync(ct));
+				return;
+			}
+
+			if (HttpMethodsEqual(context.Request.HttpMethod, "GET") && path.Equals("/openai/unloadall", StringComparison.OrdinalIgnoreCase))
+			{
+				ClearLoadedModels();
+				await WriteJsonAsync(context.Response, HttpStatusCode.OK, new JsonObject
+				{
+					["success"] = true
+				});
+				return;
+			}
+
+			if (HttpMethodsEqual(context.Request.HttpMethod, "GET") && TryExtractModelName(path, "/openai/load/", out var modelToLoad))
+			{
+				if (!await ModelExistsAsync(modelToLoad, ct))
+				{
+					await WriteErrorAsync(context.Response, path, HttpStatusCode.NotFound,
+						$"Model '{modelToLoad}' is not registered in TrafficPilot.",
+						"openai", null, null, modelToLoad);
+					return;
+				}
+
+				MarkModelLoaded(modelToLoad);
+				await WriteJsonAsync(context.Response, HttpStatusCode.OK, new JsonObject
+				{
+					["success"] = true,
+					["model"] = modelToLoad
+				});
+				return;
+			}
+
+			if (HttpMethodsEqual(context.Request.HttpMethod, "GET") && TryExtractModelName(path, "/openai/unload/", out var modelToUnload))
+			{
+				MarkModelUnloaded(modelToUnload);
+				await WriteJsonAsync(context.Response, HttpStatusCode.OK, new JsonObject
+				{
+					["success"] = true,
+					["model"] = modelToUnload
+				});
+				return;
+			}
+
 			if (HttpMethodsEqual(context.Request.HttpMethod, "GET")
 				&& (path.Equals("/v1/models", StringComparison.OrdinalIgnoreCase)
 					|| path.Equals("/models", StringComparison.OrdinalIgnoreCase)))
 			{
-				await WriteJsonAsync(context.Response, HttpStatusCode.OK, BuildOpenAiModelsResponse());
+				await WriteJsonAsync(context.Response, HttpStatusCode.OK, await BuildOpenAiModelsResponseAsync(ct));
 				return;
 			}
 
@@ -205,7 +326,7 @@ internal sealed class LocalApiForwarder : IDisposable
 		}
 		catch (Exception ex) when (ex is not OperationCanceledException)
 		{
-			LogInfo($"Local API request error on {path}: {ex.Message}");
+			LogInfo($"request #{requestId} failed on {path}: {ex.Message}");
 			var style = path.StartsWith("/api/", StringComparison.OrdinalIgnoreCase) ? "ollama" : "openai";
 			await WriteErrorAsync(context.Response, path, HttpStatusCode.BadGateway, ex.Message, style, null, null, null);
 		}
@@ -533,14 +654,63 @@ internal sealed class LocalApiForwarder : IDisposable
 		await WriteJsonAsync(context.Response, HttpStatusCode.OK, converted);
 	}
 
+	private async Task HandleOllamaShowAsync(HttpListenerContext context, CancellationToken ct)
+	{
+		var requestJson = await ReadRequestJsonAsync(context.Request, ct);
+		var modelName = requestJson["model"]?.GetValue<string>()
+			?? requestJson["name"]?.GetValue<string>()
+			?? string.Empty;
+
+		if (string.IsNullOrWhiteSpace(modelName))
+		{
+			await WriteErrorAsync(context.Response, "/api/show", HttpStatusCode.BadRequest,
+				"Ollama show requests must include a model name.",
+				"ollama", null, null, null);
+			return;
+		}
+
+		if (!await ModelExistsAsync(modelName, ct))
+		{
+			await WriteErrorAsync(context.Response, "/api/show", HttpStatusCode.NotFound,
+				$"Model '{modelName}' is not registered in TrafficPilot.",
+				"ollama", null, null, modelName);
+			return;
+		}
+
+		await WriteJsonAsync(context.Response, HttpStatusCode.OK, BuildOllamaShowResponse(modelName));
+	}
+
 	private HttpRequestMessage CreateUpstreamRequest(string relativePath, JsonNode payload)
 	{
 		var requestUri = BuildUpstreamUri(relativePath);
+		var requestBytes = Encoding.UTF8.GetBytes(payload.ToJsonString(JsonOptions));
+		var content = new ByteArrayContent(requestBytes);
+		content.Headers.ContentType = MediaTypeHeaderValue.Parse("application/json");
 		var request = new HttpRequestMessage(HttpMethod.Post, requestUri)
 		{
-			Content = new StringContent(payload.ToJsonString(JsonOptions), Encoding.UTF8, "application/json")
+			Content = content
 		};
 
+		request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+		LogInfo($"upstream POST {requestUri} | content-type=application/json | bytes={requestBytes.Length}");
+		ApplyAuthentication(request);
+		foreach (var header in _settings.Provider.AdditionalHeaders)
+		{
+			if (string.IsNullOrWhiteSpace(header.Name))
+				continue;
+
+			request.Headers.TryAddWithoutValidation(header.Name.Trim(), header.Value ?? string.Empty);
+		}
+
+		return request;
+	}
+
+	private HttpRequestMessage CreateUpstreamGetRequest(string relativePath)
+	{
+		var requestUri = BuildUpstreamUri(relativePath);
+		var request = new HttpRequestMessage(HttpMethod.Get, requestUri);
+		request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+		LogInfo($"upstream GET {requestUri} | accept=application/json");
 		ApplyAuthentication(request);
 		foreach (var header in _settings.Provider.AdditionalHeaders)
 		{
@@ -613,20 +783,33 @@ internal sealed class LocalApiForwarder : IDisposable
 				&& !string.IsNullOrWhiteSpace(m.UpstreamModel));
 			if (mapping is not null)
 				return mapping.UpstreamModel.Trim();
+
+			return localModel.Trim();
 		}
 
 		if (!string.IsNullOrWhiteSpace(_settings.Provider.DefaultModel))
 			return _settings.Provider.DefaultModel.Trim();
 
-		return localModel?.Trim() ?? string.Empty;
+		return string.Empty;
 	}
 
 	private string ResolveUpstreamEmbeddingsModel(string? localModel)
 	{
+		if (!string.IsNullOrWhiteSpace(localModel))
+		{
+			var mapping = _settings.ModelMappings.FirstOrDefault(m =>
+				m.LocalModel.Equals(localModel, StringComparison.OrdinalIgnoreCase)
+				&& !string.IsNullOrWhiteSpace(m.UpstreamModel));
+			if (mapping is not null)
+				return mapping.UpstreamModel.Trim();
+
+			return localModel.Trim();
+		}
+
 		if (!string.IsNullOrWhiteSpace(_settings.Provider.DefaultEmbeddingModel))
 			return _settings.Provider.DefaultEmbeddingModel.Trim();
 
-		return ResolveUpstreamChatModel(localModel);
+		return ResolveUpstreamChatModel(string.Empty);
 	}
 
 	private JsonObject BuildUpstreamChatRequestFromGenerate(JsonObject source)
@@ -1273,24 +1456,26 @@ internal sealed class LocalApiForwarder : IDisposable
 
 	private void LogRequestIfEnabled(string operation, JsonNode payload)
 	{
-		if (_settings.RequestResponseLogging?.Enabled != true)
-			return;
-
 		var message = $"request {operation}";
-		if (_settings.RequestResponseLogging.IncludeBodies)
+		if (_settings.RequestResponseLogging?.IncludeBodies == true)
 			message += $": {TruncateForLog(payload.ToJsonString(JsonOptions))}";
 		LogInfo(message);
 	}
 
 	private void LogResponseIfEnabled(string operation, HttpStatusCode statusCode, string body)
 	{
-		if (_settings.RequestResponseLogging?.Enabled != true)
-			return;
-
 		var message = $"response {operation}: {(int)statusCode} {statusCode}";
-		if (_settings.RequestResponseLogging.IncludeBodies)
+		if (_settings.RequestResponseLogging?.IncludeBodies == true)
 			message += $" | {TruncateForLog(body)}";
 		LogInfo(message);
+	}
+
+	private void LogIncomingRequest(long requestId, HttpListenerRequest request, string path)
+	{
+		var query = request.Url?.Query ?? string.Empty;
+		var contentType = string.IsNullOrWhiteSpace(request.ContentType) ? "-" : request.ContentType;
+		var contentLength = request.HasEntityBody ? request.ContentLength64 : 0;
+		LogInfo($"incoming #{requestId}: {request.HttpMethod} {path}{query} | content-type={contentType} | length={contentLength}");
 	}
 
 	private string TruncateForLog(string text)
@@ -1467,15 +1652,15 @@ internal sealed class LocalApiForwarder : IDisposable
 		return json ?? throw new InvalidOperationException("The request body must be a JSON object.");
 	}
 
-	private JsonObject BuildOllamaTagsResponse()
+	private async Task<JsonObject> BuildOllamaTagsResponseAsync(CancellationToken ct)
 	{
 		var models = new JsonArray();
-		foreach (var modelName in GetLocalModelNames())
+		foreach (var model in await GetAdvertisedModelCatalogAsync(ct))
 		{
 			models.Add(new JsonObject
 			{
-				["name"] = modelName,
-				["model"] = modelName,
+				["name"] = model.LocalName,
+				["model"] = model.LocalName,
 				["modified_at"] = DateTimeOffset.UtcNow.ToString("O"),
 				["size"] = 0,
 				["digest"] = "trafficpilot",
@@ -1492,17 +1677,156 @@ internal sealed class LocalApiForwarder : IDisposable
 		return new JsonObject { ["models"] = models };
 	}
 
-	private JsonObject BuildOpenAiModelsResponse()
+	private JsonObject BuildOllamaPsResponse()
+	{
+		var models = new JsonArray();
+		foreach (var modelName in GetLoadedModelNames())
+		{
+			models.Add(new JsonObject
+			{
+				["name"] = modelName,
+				["model"] = modelName,
+				["size"] = 0,
+				["digest"] = "trafficpilot",
+				["details"] = new JsonObject
+				{
+					["parent_model"] = string.Empty,
+					["format"] = "trafficpilot",
+					["family"] = "forwarded",
+					["families"] = new JsonArray("forwarded"),
+					["parameter_size"] = "unknown",
+					["quantization_level"] = "unknown"
+				},
+				["expires_at"] = DateTimeOffset.UtcNow.AddHours(1).ToString("O"),
+				["size_vram"] = 0,
+				["context_length"] = 100000
+			});
+		}
+
+		return new JsonObject
+		{
+			["models"] = models
+		};
+	}
+
+	private JsonObject BuildOllamaShowResponse(string modelName)
+	{
+		return new JsonObject
+		{
+			["modelfile"] = $"FROM {ResolveUpstreamChatModel(modelName)}",
+			["parameters"] = "num_ctx 100000\nnum_predict 8192",
+			["template"] = "{{ .Prompt }}",
+			["license"] = $"Forwarded to {_settings.Provider.Name} via TrafficPilot.",
+			["capabilities"] = new JsonArray("completion"),
+			["modified_at"] = DateTimeOffset.UtcNow.ToString("O"),
+			["details"] = new JsonObject
+			{
+				["parent_model"] = ResolveUpstreamChatModel(modelName),
+				["format"] = "trafficpilot",
+				["family"] = "forwarded",
+				["families"] = new JsonArray("forwarded"),
+				["parameter_size"] = "unknown",
+				["quantization_level"] = "unknown"
+			},
+			["model_info"] = new JsonObject
+			{
+				["trafficpilot.context_length"] = 100000,
+				["trafficpilot.max_output_tokens"] = 8192,
+				["trafficpilot.provider_name"] = _settings.Provider.Name,
+				["trafficpilot.provider_base_url"] = _settings.Provider.BaseUrl,
+				["trafficpilot.upstream_model"] = ResolveUpstreamChatModel(modelName)
+			}
+		};
+	}
+
+	private JsonObject BuildFoundryLocalStatusResponse()
+	{
+		var foundryBaseUrl = $"http://127.0.0.1:{_settings.FoundryPort}";
+		var ollamaBaseUrl = $"http://127.0.0.1:{_settings.OllamaPort}";
+
+		return new JsonObject
+		{
+			["Endpoint"] = foundryBaseUrl,
+			["EndpointApiVersion"] = "v1",
+			["Version"] = "trafficpilot-foundry-compat",
+			["ModelDirPath"] = Path.Combine(
+				Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+				"TrafficPilot",
+				"RemoteModels"),
+			["CurrentDevice"] = "CPU",
+			["Label"] = "TrafficPilot Foundry Local Compatibility",
+			["Extensions"] = new JsonObject
+			{
+				["provider_base_url"] = _settings.Provider.BaseUrl,
+				["provider_name"] = _settings.Provider.Name,
+				["openai_endpoint"] = $"{foundryBaseUrl}/v1",
+				["ollama_endpoint"] = ollamaBaseUrl
+			}
+		};
+	}
+
+	private JsonArray BuildFoundryLocalModelsResponse(IEnumerable<string> modelNames)
+	{
+		return new JsonArray(modelNames
+			.Where(static modelName => !string.IsNullOrWhiteSpace(modelName))
+			.Select(static modelName => JsonValue.Create(modelName.Trim()))
+			.ToArray());
+	}
+
+	private async Task<JsonArray> BuildFoundryLocalModelsResponseAsync(CancellationToken ct)
+	{
+		var modelNames = (await GetAdvertisedModelCatalogAsync(ct))
+			.Select(static model => model.LocalName);
+		return BuildFoundryLocalModelsResponse(modelNames);
+	}
+
+	private async Task<JsonObject> BuildFoundryLocalCatalogResponseAsync(CancellationToken ct)
+	{
+		var models = new JsonArray();
+		foreach (var model in await GetAdvertisedModelCatalogAsync(ct))
+		{
+			models.Add(new JsonObject
+			{
+				["name"] = model.LocalName,
+				["displayName"] = model.LocalName,
+				["providerType"] = "AzureFoundryLocal",
+				["publisher"] = _settings.Provider.Name,
+				["task"] = "chat-completion",
+				["version"] = "trafficpilot-remote",
+				["description"] = $"Forwarded to {_settings.Provider.Name} via TrafficPilot.",
+				["supportsToolCalling"] = true,
+				["supportsImageInput"] = false,
+				["maxOutputTokens"] = 8192,
+				["contextWindowTokens"] = 100000,
+				["endpoints"] = new JsonArray
+				{
+					new JsonObject
+					{
+						["protocol"] = "OpenAI",
+						["url"] = $"http://127.0.0.1:{_settings.FoundryPort}/v1",
+						["model"] = model.LocalName
+					}
+				}
+			});
+		}
+
+		return new JsonObject
+		{
+			["models"] = models
+		};
+	}
+
+	private async Task<JsonObject> BuildOpenAiModelsResponseAsync(CancellationToken ct)
 	{
 		var data = new JsonArray();
-		foreach (var modelName in GetLocalModelNames())
+		foreach (var model in await GetAdvertisedModelCatalogAsync(ct))
 		{
 			data.Add(new JsonObject
 			{
-				["id"] = modelName,
+				["id"] = model.LocalName,
 				["object"] = "model",
-				["created"] = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
-				["owned_by"] = _settings.Provider.Name
+				["created"] = model.CreatedUnixTime,
+				["owned_by"] = string.IsNullOrWhiteSpace(model.OwnedBy) ? _settings.Provider.Name : model.OwnedBy
 			});
 		}
 
@@ -1513,25 +1837,321 @@ internal sealed class LocalApiForwarder : IDisposable
 		};
 	}
 
-	private IReadOnlyList<string> GetLocalModelNames()
+	private async Task<IReadOnlyList<ModelCatalogEntry>> GetAdvertisedModelCatalogAsync(CancellationToken ct, bool forceRefresh = false)
 	{
-		var models = _settings.ModelMappings
-			.Where(static mapping => !string.IsNullOrWhiteSpace(mapping.LocalModel))
-			.Select(static mapping => mapping.LocalModel.Trim())
-			.ToList();
+		var now = DateTimeOffset.UtcNow;
+		if (!forceRefresh && _hasCachedModelCatalog && now < _modelCatalogExpiresAt)
+			return _cachedModelCatalog;
 
-		if (!string.IsNullOrWhiteSpace(_settings.Provider.DefaultModel))
-			models.Add(_settings.Provider.DefaultModel.Trim());
+		await _modelCatalogSyncLock.WaitAsync(ct);
+		try
+		{
+			now = DateTimeOffset.UtcNow;
+			if (!forceRefresh && _hasCachedModelCatalog && now < _modelCatalogExpiresAt)
+				return _cachedModelCatalog;
 
-		if (!string.IsNullOrWhiteSpace(_settings.Provider.DefaultEmbeddingModel))
-			models.Add(_settings.Provider.DefaultEmbeddingModel.Trim());
+			var configuredCatalog = BuildConfiguredModelCatalog();
+			try
+			{
+				var upstreamCatalog = await FetchUpstreamModelCatalogAsync(ct);
+				var mergedCatalog = MergeModelCatalogs(upstreamCatalog, configuredCatalog);
+				CacheModelCatalog(mergedCatalog, now + ModelCatalogSuccessCacheDuration);
+				LogInfo($"model catalog synced: upstream={upstreamCatalog.Count}, configured={configuredCatalog.Count}, advertised={mergedCatalog.Count}");
+				return mergedCatalog;
+			}
+			catch (Exception ex)
+			{
+				if (_hasCachedModelCatalog)
+				{
+					_modelCatalogExpiresAt = now + ModelCatalogFailureCacheDuration;
+					LogInfo($"model catalog sync failed: {ex.Message}; using cached catalog ({_cachedModelCatalog.Count} models)");
+					return _cachedModelCatalog;
+				}
+
+				CacheModelCatalog(configuredCatalog, now + ModelCatalogFailureCacheDuration);
+				LogInfo($"model catalog sync failed: {ex.Message}; using configured fallback ({configuredCatalog.Count} models)");
+				return configuredCatalog;
+			}
+		}
+		finally
+		{
+			_modelCatalogSyncLock.Release();
+		}
+	}
+
+	private async Task<IReadOnlyList<ModelCatalogEntry>> FetchUpstreamModelCatalogAsync(CancellationToken ct)
+	{
+		using var request = CreateUpstreamGetRequest("models");
+		using var response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
+		var responseBody = await response.Content.ReadAsStringAsync(ct);
+		LogResponseIfEnabled("openai.models", response.StatusCode, responseBody);
+		if (!response.IsSuccessStatusCode)
+			throw new InvalidOperationException(await ExtractUpstreamErrorAsync(response.StatusCode, responseBody));
+
+		return ParseUpstreamModelCatalog(responseBody);
+	}
+
+	private IReadOnlyList<ModelCatalogEntry> ParseUpstreamModelCatalog(string responseBody)
+	{
+		JsonNode? parsed;
+		try
+		{
+			parsed = JsonNode.Parse(responseBody);
+		}
+		catch (JsonException ex)
+		{
+			throw new InvalidOperationException($"Upstream models payload was not valid JSON: {ex.Message}", ex);
+		}
+
+		if (parsed is null)
+			throw new InvalidOperationException("Upstream models payload was empty.");
+
+		var models = new Dictionary<string, ModelCatalogEntry>(StringComparer.OrdinalIgnoreCase);
+		if (parsed is JsonObject parsedObject)
+		{
+			AddModelCatalogEntries(models, parsedObject["data"] as JsonArray);
+			AddModelCatalogEntries(models, parsedObject["models"] as JsonArray);
+		}
+		else if (parsed is JsonArray parsedArray)
+		{
+			AddModelCatalogEntries(models, parsedArray);
+		}
 
 		if (models.Count == 0)
-			models.Add("default");
+			throw new InvalidOperationException("Upstream models payload did not include any model IDs.");
 
-		return models.Distinct(StringComparer.OrdinalIgnoreCase)
-			.OrderBy(static model => model, StringComparer.OrdinalIgnoreCase)
+		return models.Values
+			.OrderBy(static model => model.LocalName, StringComparer.OrdinalIgnoreCase)
 			.ToList();
+	}
+
+	private void AddModelCatalogEntries(
+		IDictionary<string, ModelCatalogEntry> catalog,
+		JsonArray? source)
+	{
+		if (source is null)
+			return;
+
+		foreach (var item in source)
+		{
+			var modelId = TryReadModelId(item);
+			if (string.IsNullOrWhiteSpace(modelId))
+				continue;
+
+			var normalizedId = modelId.Trim();
+			catalog[normalizedId] = new ModelCatalogEntry(
+				normalizedId,
+				normalizedId,
+				TryReadModelOwner(item) ?? _settings.Provider.Name,
+				TryReadModelCreatedUnixTime(item) ?? DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
+				false);
+		}
+	}
+
+	private IReadOnlyList<ModelCatalogEntry> BuildConfiguredModelCatalog()
+	{
+		var models = new Dictionary<string, ModelCatalogEntry>(StringComparer.OrdinalIgnoreCase);
+		var createdUnixTime = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+
+		foreach (var mapping in _settings.ModelMappings)
+		{
+			if (string.IsNullOrWhiteSpace(mapping.LocalModel))
+				continue;
+
+			var localModel = mapping.LocalModel.Trim();
+			var upstreamModel = string.IsNullOrWhiteSpace(mapping.UpstreamModel)
+				? localModel
+				: mapping.UpstreamModel.Trim();
+			models[localModel] = new ModelCatalogEntry(
+				localModel,
+				upstreamModel,
+				_settings.Provider.Name,
+				createdUnixTime,
+				!localModel.Equals(upstreamModel, StringComparison.OrdinalIgnoreCase));
+		}
+
+		AddConfiguredModelCatalogEntry(models, _settings.Provider.DefaultModel, createdUnixTime);
+		AddConfiguredModelCatalogEntry(models, _settings.Provider.DefaultEmbeddingModel, createdUnixTime);
+
+		return models.Values
+			.OrderBy(static model => model.LocalName, StringComparer.OrdinalIgnoreCase)
+			.ToList();
+	}
+
+	private void AddConfiguredModelCatalogEntry(
+		IDictionary<string, ModelCatalogEntry> catalog,
+		string? modelName,
+		long createdUnixTime)
+	{
+		if (string.IsNullOrWhiteSpace(modelName))
+			return;
+
+		var normalizedModel = modelName.Trim();
+		catalog[normalizedModel] = new ModelCatalogEntry(
+			normalizedModel,
+			normalizedModel,
+			_settings.Provider.Name,
+			createdUnixTime,
+			false);
+	}
+
+	private IReadOnlyList<string> GetConfiguredLocalModelNames() =>
+		BuildConfiguredModelCatalog()
+			.Select(static model => model.LocalName)
+			.ToList();
+
+	private static IReadOnlyList<ModelCatalogEntry> MergeModelCatalogs(
+		IReadOnlyList<ModelCatalogEntry> upstreamCatalog,
+		IReadOnlyList<ModelCatalogEntry> configuredCatalog)
+	{
+		var merged = new Dictionary<string, ModelCatalogEntry>(StringComparer.OrdinalIgnoreCase);
+		foreach (var model in upstreamCatalog)
+			merged[model.LocalName] = model;
+		foreach (var model in configuredCatalog)
+			merged.TryAdd(model.LocalName, model);
+
+		return merged.Values
+			.OrderBy(static model => model.LocalName, StringComparer.OrdinalIgnoreCase)
+			.ToList();
+	}
+
+	private void CacheModelCatalog(IReadOnlyList<ModelCatalogEntry> catalog, DateTimeOffset expiresAt)
+	{
+		_cachedModelCatalog = catalog;
+		_hasCachedModelCatalog = true;
+		_modelCatalogExpiresAt = expiresAt;
+	}
+
+	private async Task<bool> ModelExistsAsync(string modelName, CancellationToken ct)
+	{
+		if (string.IsNullOrWhiteSpace(modelName))
+			return false;
+
+		var catalog = await GetAdvertisedModelCatalogAsync(ct);
+		if (catalog.Any(model => model.LocalName.Equals(modelName, StringComparison.OrdinalIgnoreCase)))
+			return true;
+
+		catalog = await GetAdvertisedModelCatalogAsync(ct, forceRefresh: true);
+		return catalog.Any(model => model.LocalName.Equals(modelName, StringComparison.OrdinalIgnoreCase));
+	}
+
+	private static string? TryReadModelId(JsonNode? node)
+	{
+		if (node is null)
+			return null;
+
+		if (node is JsonObject obj)
+		{
+			return TryReadString(obj["id"])
+				?? TryReadString(obj["name"])
+				?? TryReadString(obj["model"]);
+		}
+
+		return TryReadString(node);
+	}
+
+	private static string? TryReadModelOwner(JsonNode? node)
+	{
+		if (node is not JsonObject obj)
+			return null;
+
+		return TryReadString(obj["owned_by"])
+			?? TryReadString(obj["organization"])
+			?? TryReadString(obj["publisher"]);
+	}
+
+	private static long? TryReadModelCreatedUnixTime(JsonNode? node)
+	{
+		if (node is not JsonObject obj)
+			return null;
+
+		return TryReadInt64(obj["created"])
+			?? TryReadInt64(obj["created_at"]);
+	}
+
+	private static string? TryReadString(JsonNode? node)
+	{
+		if (node is null)
+			return null;
+
+		try
+		{
+			return node.GetValue<string>();
+		}
+		catch
+		{
+			return null;
+		}
+	}
+
+	private static long? TryReadInt64(JsonNode? node)
+	{
+		if (node is null)
+			return null;
+
+		try
+		{
+			return node.GetValue<long>();
+		}
+		catch
+		{
+		}
+
+		try
+		{
+			return node.GetValue<int>();
+		}
+		catch
+		{
+		}
+
+		var stringValue = TryReadString(node);
+		return long.TryParse(stringValue, out var parsed) ? parsed : null;
+	}
+
+	private IReadOnlyList<string> GetLoadedModelNames()
+	{
+		lock (_loadedModelsLock)
+		{
+			if (_loadedModels.Count == 0)
+				return [];
+
+			return _loadedModels
+				.OrderBy(static model => model, StringComparer.OrdinalIgnoreCase)
+				.ToList();
+		}
+	}
+
+	private void MarkModelLoaded(string modelName)
+	{
+		lock (_loadedModelsLock)
+			_loadedModels.Add(modelName);
+	}
+
+	private void MarkModelUnloaded(string modelName)
+	{
+		lock (_loadedModelsLock)
+			_loadedModels.RemoveWhere(existing => existing.Equals(modelName, StringComparison.OrdinalIgnoreCase));
+	}
+
+	private void ClearLoadedModels()
+	{
+		lock (_loadedModelsLock)
+			_loadedModels.Clear();
+	}
+
+	private static bool TryExtractModelName(string path, string prefix, out string modelName)
+	{
+		modelName = string.Empty;
+		if (!path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+			return false;
+
+		var encodedName = path[prefix.Length..].Trim();
+		if (encodedName.Length == 0)
+			return false;
+
+		modelName = Uri.UnescapeDataString(encodedName);
+		return modelName.Length > 0;
 	}
 
 	private async Task WriteErrorAsync(
@@ -1574,6 +2194,7 @@ internal sealed class LocalApiForwarder : IDisposable
 			};
 		}
 
+		LogInfo($"error {localPath}: {(int)statusCode} {statusCode} | {message}");
 		await WriteJsonAsync(response, statusCode, payload);
 	}
 
@@ -1631,4 +2252,11 @@ internal sealed class LocalApiForwarder : IDisposable
 	}
 
 	private void LogInfo(string message) => OnLog?.Invoke($"[Local API] {message}");
+
+	private static string FormatSettingValue(string? value)
+	{
+		return string.IsNullOrWhiteSpace(value)
+			? "<empty>"
+			: value.Trim();
+	}
 }

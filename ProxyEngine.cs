@@ -32,6 +32,7 @@ internal sealed class ProxyEngine : IDisposable
 	public event Action<RedirectStats>? OnStatsUpdated;
 
 	public bool IsRunning => _isRunning;
+	public bool IsLocalApiForwarderRunning => _localApiForwarder is not null;
 	public ushort RelayPort { get; private set; }
 
 	public ProxyEngine(ProxyOptions options)
@@ -168,6 +169,14 @@ internal sealed class ProxyEngine : IDisposable
                LogInfo($"Warning: Failed to clean up Windows/WSL hosts files: {ex.Message}");
 			}
 		}
+	}
+
+	public async Task<IReadOnlyList<string>> RefreshLocalApiModelCatalogAsync(CancellationToken ct = default)
+	{
+		if (_options.LocalApiForwarder?.Enabled != true || _localApiForwarder is null)
+			throw new InvalidOperationException("Local API forwarder is not running.");
+
+		return await _localApiForwarder.RefreshModelCatalogAsync(ct);
 	}
 
 	/// <summary>Pushes freshly resolved IPs into the live DNS interceptor without restarting it.</summary>
