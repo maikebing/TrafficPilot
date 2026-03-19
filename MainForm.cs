@@ -38,11 +38,20 @@ internal partial class MainForm : Form
 	private CheckBox? _chkLocalApiForwarderEnabled;
 	private NumericUpDown? _numOllamaPort;
 	private NumericUpDown? _numFoundryPort;
+	private ComboBox? _cmbLocalApiProviderProtocol;
 	private TextBox? _txtLocalApiProviderName;
 	private TextBox? _txtLocalApiProviderUrl;
 	private TextBox? _txtLocalApiDefaultModel;
+	private TextBox? _txtLocalApiDefaultEmbeddingModel;
+	private ComboBox? _cmbLocalApiAuthType;
+	private TextBox? _txtLocalApiAuthHeaderName;
 	private TextBox? _txtLocalApiApiKey;
+	private TextBox? _txtLocalApiAdditionalHeaders;
 	private TextBox? _txtLocalApiModelMappings;
+	private CheckBox? _chkLocalApiRequestResponseLogging;
+	private CheckBox? _chkLocalApiIncludeBodies;
+	private CheckBox? _chkLocalApiIncludeErrorDiagnostics;
+	private NumericUpDown? _numLocalApiMaxBodyChars;
 
 	public MainForm(bool startMinimized = false)
 	{
@@ -1327,13 +1336,13 @@ internal partial class MainForm : Form
 		_localApiPanel = new TableLayoutPanel
 		{
 			ColumnCount = 2,
-			RowCount = 7,
+			RowCount = 11,
 			Dock = DockStyle.Fill,
 			Padding = new Padding(10)
 		};
 		_localApiPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 140F));
 		_localApiPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-		for (var i = 0; i < 6; i++)
+		for (var i = 0; i < 10; i++)
 			_localApiPanel.RowStyles.Add(new RowStyle());
 		_localApiPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
 
@@ -1393,8 +1402,37 @@ internal partial class MainForm : Form
 		}, 0, 1);
 		_localApiPanel.Controls.Add(portPanel, 1, 1);
 
+		var providerPanel = new TableLayoutPanel
+		{
+			ColumnCount = 4,
+			Dock = DockStyle.Fill
+		};
+		providerPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 120F));
+		providerPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 150F));
+		providerPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 110F));
+		providerPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+		providerPanel.Controls.Add(new Label
+		{
+			Text = "Protocol:",
+			TextAlign = ContentAlignment.MiddleRight,
+			Dock = DockStyle.Fill
+		}, 0, 0);
+		_cmbLocalApiProviderProtocol = new ComboBox
+		{
+			Dock = DockStyle.Fill,
+			DropDownStyle = ComboBoxStyle.DropDownList
+		};
+		_cmbLocalApiProviderProtocol.Items.AddRange(["OpenAICompatible", "Anthropic"]);
+		providerPanel.Controls.Add(_cmbLocalApiProviderProtocol, 1, 0);
+		providerPanel.Controls.Add(new Label
+		{
+			Text = "Provider Name:",
+			TextAlign = ContentAlignment.MiddleRight,
+			Dock = DockStyle.Fill
+		}, 2, 0);
 		_txtLocalApiProviderName = CreateFillTextBox("Third-party provider display name");
-		AddLocalApiRow(2, "Provider Name:", _txtLocalApiProviderName);
+		providerPanel.Controls.Add(_txtLocalApiProviderName, 3, 0);
+		AddLocalApiRow(2, "Provider:", providerPanel);
 
 		_txtLocalApiProviderUrl = CreateFillTextBox("https://api.openai.com/v1/");
 		AddLocalApiRow(3, "Provider Base URL:", _txtLocalApiProviderUrl);
@@ -1402,9 +1440,54 @@ internal partial class MainForm : Form
 		_txtLocalApiDefaultModel = CreateFillTextBox("Remote default model, e.g. gpt-4.1-mini");
 		AddLocalApiRow(4, "Default Model:", _txtLocalApiDefaultModel);
 
+		_txtLocalApiDefaultEmbeddingModel = CreateFillTextBox("Optional embeddings model override");
+		AddLocalApiRow(5, "Embedding Model:", _txtLocalApiDefaultEmbeddingModel);
+
+		var authPanel = new TableLayoutPanel
+		{
+			ColumnCount = 4,
+			Dock = DockStyle.Fill
+		};
+		authPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 100F));
+		authPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 120F));
+		authPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 120F));
+		authPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+		authPanel.Controls.Add(new Label
+		{
+			Text = "Auth Type:",
+			TextAlign = ContentAlignment.MiddleRight,
+			Dock = DockStyle.Fill
+		}, 0, 0);
+		_cmbLocalApiAuthType = new ComboBox
+		{
+			Dock = DockStyle.Fill,
+			DropDownStyle = ComboBoxStyle.DropDownList
+		};
+		_cmbLocalApiAuthType.Items.AddRange(["Bearer", "Header", "Query"]);
+		authPanel.Controls.Add(_cmbLocalApiAuthType, 1, 0);
+		authPanel.Controls.Add(new Label
+		{
+			Text = "Header / Query Name:",
+			TextAlign = ContentAlignment.MiddleRight,
+			Dock = DockStyle.Fill
+		}, 2, 0);
+		_txtLocalApiAuthHeaderName = CreateFillTextBox("Authorization / x-api-key / key");
+		authPanel.Controls.Add(_txtLocalApiAuthHeaderName, 3, 0);
+		AddLocalApiRow(6, "Authentication:", authPanel);
+
 		_txtLocalApiApiKey = CreateFillTextBox("Stored in Windows Credential Manager, not in config JSON");
 		_txtLocalApiApiKey.PasswordChar = '●';
-		AddLocalApiRow(5, "Provider API Key:", _txtLocalApiApiKey);
+		AddLocalApiRow(7, "Provider API Key:", _txtLocalApiApiKey);
+
+		_txtLocalApiAdditionalHeaders = new TextBox
+		{
+			Dock = DockStyle.Fill,
+			Multiline = true,
+			ScrollBars = ScrollBars.Vertical,
+			WordWrap = false,
+			PlaceholderText = "Optional additional upstream headers, one per line:\r\nanthropic-version=2023-06-01\r\nX-Agent-ID=my-agent"
+		};
+		AddLocalApiRow(8, "Extra Headers:", _txtLocalApiAdditionalHeaders);
 
 		_txtLocalApiModelMappings = new TextBox
 		{
@@ -1414,7 +1497,50 @@ internal partial class MainForm : Form
 			WordWrap = false,
 			PlaceholderText = "One mapping per line:\r\nqwen2.5:7b=gpt-4.1-mini\r\nllama3.2=claude-3-7-sonnet"
 		};
-		AddLocalApiRow(6, "Model Mappings:", _txtLocalApiModelMappings);
+		AddLocalApiRow(9, "Model Mappings:", _txtLocalApiModelMappings);
+
+		var loggingPanel = new FlowLayoutPanel
+		{
+			AutoSize = true,
+			Dock = DockStyle.Top,
+			WrapContents = true
+		};
+		_chkLocalApiRequestResponseLogging = new CheckBox
+		{
+			AutoSize = true,
+			Text = "Enable request/response logging",
+			Margin = new Padding(3, 3, 16, 3)
+		};
+		_chkLocalApiIncludeBodies = new CheckBox
+		{
+			AutoSize = true,
+			Text = "Include bodies",
+			Margin = new Padding(3, 3, 16, 3)
+		};
+		_chkLocalApiIncludeErrorDiagnostics = new CheckBox
+		{
+			AutoSize = true,
+			Text = "Include error diagnostics in responses",
+			Margin = new Padding(3, 3, 16, 3)
+		};
+		_numLocalApiMaxBodyChars = new NumericUpDown
+		{
+			Minimum = 256,
+			Maximum = 20000,
+			Value = 4000,
+			Width = 90
+		};
+		loggingPanel.Controls.Add(_chkLocalApiRequestResponseLogging);
+		loggingPanel.Controls.Add(_chkLocalApiIncludeBodies);
+		loggingPanel.Controls.Add(_chkLocalApiIncludeErrorDiagnostics);
+		loggingPanel.Controls.Add(new Label
+		{
+			AutoSize = true,
+			Text = "Max body chars:",
+			Margin = new Padding(3, 6, 3, 3)
+		});
+		loggingPanel.Controls.Add(_numLocalApiMaxBodyChars);
+		AddLocalApiRow(10, "Diagnostics:", loggingPanel);
 
 		_localApiTab.Controls.Add(_localApiPanel);
 		_tabControl.TabPages.Insert(1, _localApiTab);
@@ -1459,10 +1585,19 @@ internal partial class MainForm : Form
 		if (_chkLocalApiForwarderEnabled is null
 			|| _numOllamaPort is null
 			|| _numFoundryPort is null
+			|| _cmbLocalApiProviderProtocol is null
 			|| _txtLocalApiProviderName is null
 			|| _txtLocalApiProviderUrl is null
 			|| _txtLocalApiDefaultModel is null
+			|| _txtLocalApiDefaultEmbeddingModel is null
+			|| _cmbLocalApiAuthType is null
+			|| _txtLocalApiAuthHeaderName is null
 			|| _txtLocalApiApiKey is null
+			|| _txtLocalApiAdditionalHeaders is null
+			|| _chkLocalApiRequestResponseLogging is null
+			|| _chkLocalApiIncludeBodies is null
+			|| _chkLocalApiIncludeErrorDiagnostics is null
+			|| _numLocalApiMaxBodyChars is null
 			|| _txtLocalApiModelMappings is null)
 		{
 			return null;
@@ -1483,11 +1618,23 @@ internal partial class MainForm : Form
 			FoundryPort = (ushort)_numFoundryPort.Value,
 			Provider = new LocalApiProviderSettings
 			{
+				Protocol = _cmbLocalApiProviderProtocol.SelectedItem?.ToString() ?? "OpenAICompatible",
 				Name = providerName,
 				BaseUrl = _txtLocalApiProviderUrl.Text.Trim(),
-				DefaultModel = _txtLocalApiDefaultModel.Text.Trim()
+				DefaultModel = _txtLocalApiDefaultModel.Text.Trim(),
+				DefaultEmbeddingModel = _txtLocalApiDefaultEmbeddingModel.Text.Trim(),
+				AuthType = _cmbLocalApiAuthType.SelectedItem?.ToString() ?? "Bearer",
+				AuthHeaderName = _txtLocalApiAuthHeaderName.Text.Trim(),
+				AdditionalHeaders = ParseLocalApiHeaders(_txtLocalApiAdditionalHeaders.Lines)
 			},
-			ModelMappings = ParseLocalApiModelMappings(_txtLocalApiModelMappings.Lines)
+			ModelMappings = ParseLocalApiModelMappings(_txtLocalApiModelMappings.Lines),
+			RequestResponseLogging = new LocalApiRequestResponseLoggingSettings
+			{
+				Enabled = _chkLocalApiRequestResponseLogging.Checked,
+				IncludeBodies = _chkLocalApiIncludeBodies.Checked,
+				MaxBodyCharacters = (int)_numLocalApiMaxBodyChars.Value
+			},
+			IncludeErrorDiagnostics = _chkLocalApiIncludeErrorDiagnostics.Checked
 		};
 	}
 
@@ -1496,10 +1643,19 @@ internal partial class MainForm : Form
 		if (_chkLocalApiForwarderEnabled is null
 			|| _numOllamaPort is null
 			|| _numFoundryPort is null
+			|| _cmbLocalApiProviderProtocol is null
 			|| _txtLocalApiProviderName is null
 			|| _txtLocalApiProviderUrl is null
 			|| _txtLocalApiDefaultModel is null
+			|| _txtLocalApiDefaultEmbeddingModel is null
+			|| _cmbLocalApiAuthType is null
+			|| _txtLocalApiAuthHeaderName is null
 			|| _txtLocalApiApiKey is null
+			|| _txtLocalApiAdditionalHeaders is null
+			|| _chkLocalApiRequestResponseLogging is null
+			|| _chkLocalApiIncludeBodies is null
+			|| _chkLocalApiIncludeErrorDiagnostics is null
+			|| _numLocalApiMaxBodyChars is null
 			|| _txtLocalApiModelMappings is null)
 		{
 			return;
@@ -1509,11 +1665,30 @@ internal partial class MainForm : Form
 		_chkLocalApiForwarderEnabled.Checked = settings.Enabled;
 		_numOllamaPort.Value = settings.OllamaPort == 0 ? 11434 : settings.OllamaPort;
 		_numFoundryPort.Value = settings.FoundryPort == 0 ? 5273 : settings.FoundryPort;
+		_cmbLocalApiProviderProtocol.SelectedItem = _cmbLocalApiProviderProtocol.Items.Contains(settings.Provider?.Protocol ?? "OpenAICompatible")
+			? settings.Provider?.Protocol ?? "OpenAICompatible"
+			: "OpenAICompatible";
 		_txtLocalApiProviderName.Text = settings.Provider?.Name ?? string.Empty;
 		_txtLocalApiProviderUrl.Text = settings.Provider?.BaseUrl ?? string.Empty;
 		_txtLocalApiDefaultModel.Text = settings.Provider?.DefaultModel ?? string.Empty;
+		_txtLocalApiDefaultEmbeddingModel.Text = settings.Provider?.DefaultEmbeddingModel ?? string.Empty;
+		_cmbLocalApiAuthType.SelectedItem = _cmbLocalApiAuthType.Items.Contains(settings.Provider?.AuthType ?? "Bearer")
+			? settings.Provider?.AuthType ?? "Bearer"
+			: "Bearer";
+		_txtLocalApiAuthHeaderName.Text = settings.Provider?.AuthHeaderName ?? "Authorization";
 		_txtLocalApiApiKey.Text = CredentialManager.LoadToken(
 			CredentialManager.GetLocalApiTargetName(settings.Provider?.Name ?? string.Empty)) ?? string.Empty;
+		_txtLocalApiAdditionalHeaders.Lines = settings.Provider?.AdditionalHeaders?.Count > 0
+			? settings.Provider.AdditionalHeaders
+				.Where(static header => !string.IsNullOrWhiteSpace(header.Name))
+				.Select(static header => $"{header.Name.Trim()}={header.Value}")
+				.ToArray()
+			: [];
+		_chkLocalApiRequestResponseLogging.Checked = settings.RequestResponseLogging?.Enabled ?? false;
+		_chkLocalApiIncludeBodies.Checked = settings.RequestResponseLogging?.IncludeBodies ?? false;
+		_chkLocalApiIncludeErrorDiagnostics.Checked = settings.IncludeErrorDiagnostics;
+		var maxBodyChars = settings.RequestResponseLogging?.MaxBodyCharacters ?? 4000;
+		_numLocalApiMaxBodyChars.Value = Math.Clamp(maxBodyChars, (int)_numLocalApiMaxBodyChars.Minimum, (int)_numLocalApiMaxBodyChars.Maximum);
 		_txtLocalApiModelMappings.Lines = settings.ModelMappings.Count == 0
 			? []
 			: settings.ModelMappings
@@ -1552,6 +1727,27 @@ internal partial class MainForm : Form
 		return mappings
 			.GroupBy(static mapping => mapping.LocalModel, StringComparer.OrdinalIgnoreCase)
 			.Select(static group => group.Last())
+			.ToList();
+	}
+
+	private static List<LocalApiHeaderSetting> ParseLocalApiHeaders(IEnumerable<string> lines)
+	{
+		return lines
+			.Select(static rawLine => rawLine.Trim())
+			.Where(static line => line.Length > 0 && !line.StartsWith('#'))
+			.Select(static line =>
+			{
+				var separatorIndex = line.IndexOf('=');
+				return separatorIndex <= 0
+					? null
+					: new LocalApiHeaderSetting
+					{
+						Name = line[..separatorIndex].Trim(),
+						Value = line[(separatorIndex + 1)..].Trim()
+					};
+			})
+			.Where(static header => header is not null && !string.IsNullOrWhiteSpace(header.Name))
+			.Select(static header => header!)
 			.ToList();
 	}
 }

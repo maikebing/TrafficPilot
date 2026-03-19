@@ -44,11 +44,39 @@
 
 1. 切换到 `Local API` 选项卡
 2. 勾选 `Enable local Ollama / Foundry forwarding`
-3. 配置本地监听端口（默认 Ollama `11434`、Foundry `5273`）
-4. 填写第三方供应商的 `Provider Name`、`Provider Base URL` 与默认远程模型
-5. 在 `Model Mappings` 中按 `本地模型名=远程模型名` 逐行填写映射关系
-6. 输入供应商 API Key（会保存到 Windows Credential Manager，不会写入 JSON 配置）
-7. 保存配置后启动 TrafficPilot，本机其他应用即可继续访问 `http://127.0.0.1:<端口>/...`
+3. 配置本地监听端口（默认 Ollama `11434`、Foundry / Agent `5273`）
+4. 选择上游 `Protocol`：
+   - `OpenAICompatible`：适配大多数 OpenAI 风格供应商
+   - `Anthropic`：将本地请求转换为 Anthropic Messages API
+5. 填写 `Provider Name`、`Provider Base URL`、`Default Model`，如需 embeddings 可额外填写 `Embedding Model`
+6. 按供应商要求设置 `Auth Type` 与 `Header / Query Name`
+   - `Bearer`：标准 `Authorization: Bearer <token>`
+   - `Header`：如 `x-api-key: <token>`
+   - `Query`：如 `?key=<token>`
+7. 如需给上游透传智能体上下文，可在 `Extra Headers` 中按 `Header=Value` 逐行填写
+8. 在 `Model Mappings` 中按 `本地模型名=远程模型名` 逐行填写映射关系
+9. 可按需开启 `Enable request/response logging`、`Include bodies` 和 `Include error diagnostics in responses`
+10. 输入供应商 API Key（会保存到 Windows Credential Manager，不会写入 JSON 配置）
+11. 保存配置后启动 TrafficPilot，本机其他应用即可继续访问 `http://127.0.0.1:<端口>/...`
+
+**当前已兼容的本地接口：**
+
+- **Ollama 兼容**
+  - `POST /api/generate`
+  - `POST /api/chat`
+  - `POST /api/embeddings`
+  - `POST /api/embed`
+  - `GET /api/tags`
+  - `GET /api/version`
+- **Foundry / OpenAI / 智能体 兼容**
+  - `POST /v1/chat/completions`
+  - `POST /chat/completions`
+  - `POST /v1/embeddings`
+  - `POST /embeddings`
+  - `POST /v1/responses`
+  - `POST /responses`
+  - `GET /v1/models`
+  - `GET /models`
 
 **使用 GitHub520 Hosts 重定向（可选）：**
 
@@ -112,15 +140,66 @@
     "enabled": true,
     "ollamaPort": 11434,
     "foundryPort": 5273,
+    "includeErrorDiagnostics": true,
     "provider": {
+      "protocol": "OpenAICompatible",
       "name": "OpenAI Compatible",
       "baseUrl": "https://api.openai.com/v1/",
-      "defaultModel": "gpt-4.1-mini"
+      "defaultModel": "gpt-4.1-mini",
+      "defaultEmbeddingModel": "text-embedding-3-small",
+      "authType": "Header",
+      "authHeaderName": "x-api-key",
+      "chatEndpoint": "chat/completions",
+      "embeddingsEndpoint": "embeddings",
+      "additionalHeaders": [
+        {
+          "name": "X-Agent-ID",
+          "value": "trafficpilot-agent"
+        }
+      ]
     },
     "modelMappings": [
       {
         "localModel": "qwen2.5:7b",
         "upstreamModel": "gpt-4.1-mini"
+      }
+    ],
+    "requestResponseLogging": {
+      "enabled": true,
+      "includeBodies": false,
+      "maxBodyCharacters": 4000
+    }
+  }
+}
+```
+
+**Anthropic 配置示例：**
+
+```json
+{
+  "localApiForwarder": {
+    "enabled": true,
+    "ollamaPort": 11434,
+    "foundryPort": 5273,
+    "provider": {
+      "protocol": "Anthropic",
+      "name": "Anthropic",
+      "baseUrl": "https://api.anthropic.com/v1/",
+      "defaultModel": "claude-sonnet-4-20250514",
+      "authType": "Bearer",
+      "authHeaderName": "Authorization",
+      "chatEndpoint": "messages",
+      "additionalHeaders": [
+        {
+          "name": "anthropic-version",
+          "value": "2023-06-01"
+        }
+      ]
+    },
+    "modelMappings": [
+      {
+        "localModel": "claude-local",
+        "upstreamModel": "claude-sonnet-4-20250514"
       }
     ]
   }
@@ -150,9 +229,20 @@
 | `localApiForwarder.enabled` | bool | 是否启用本地 Ollama / Foundry Local 接口转发 |
 | `localApiForwarder.ollamaPort` | uint | Ollama 兼容接口监听端口 |
 | `localApiForwarder.foundryPort` | uint | Foundry Local / OpenAI 兼容接口监听端口 |
+| `localApiForwarder.includeErrorDiagnostics` | bool | 是否在错误返回中附带本地路径、上游状态、供应商信息等诊断信息 |
+| `localApiForwarder.requestResponseLogging.enabled` | bool | 是否启用本地转发请求/响应日志 |
+| `localApiForwarder.requestResponseLogging.includeBodies` | bool | 是否在日志中附带请求/响应正文（按长度截断） |
+| `localApiForwarder.requestResponseLogging.maxBodyCharacters` | int | 请求/响应正文日志最大字符数 |
+| `localApiForwarder.provider.protocol` | string | 上游协议适配器（`OpenAICompatible` / `Anthropic`） |
 | `localApiForwarder.provider.name` | string | 第三方 API 供应商显示名称 |
 | `localApiForwarder.provider.baseUrl` | string | 第三方 OpenAI-compatible API 基础地址（建议包含 `/v1/`） |
 | `localApiForwarder.provider.defaultModel` | string | 未命中映射时使用的默认远程模型 |
+| `localApiForwarder.provider.defaultEmbeddingModel` | string | embeddings 请求默认使用的远程模型 |
+| `localApiForwarder.provider.authType` | string | 上游鉴权方式（`Bearer` / `Header` / `Query`） |
+| `localApiForwarder.provider.authHeaderName` | string | Header 或 Query 模式下的键名（例如 `x-api-key`、`key`） |
+| `localApiForwarder.provider.chatEndpoint` | string | 上游聊天接口相对路径；Anthropic 典型值为 `messages` |
+| `localApiForwarder.provider.embeddingsEndpoint` | string | 上游 embeddings 接口相对路径 |
+| `localApiForwarder.provider.additionalHeaders` | object[] | 要附加到上游请求的固定 Header，可用于智能体上下文或供应商版本头 |
 | `localApiForwarder.modelMappings` | object[] | 本地模型别名与远程模型名的映射列表 |
 
 ### 配置管理说明
@@ -164,6 +254,13 @@
 - 配置区左侧会显示最近使用的配置快捷按钮，便于快速切换
 - 系统托盘菜单中也提供相同的配置切换与保存入口
 - 本地 API 转发的供应商 API Key 存储在 **Windows Credential Manager**，不会写入配置文件
+
+### 本地转发说明
+
+- 本地监听地址固定为 `127.0.0.1` / `localhost`，不会绑定外网地址
+- `/v1/responses` 主要用于兼容智能体 / agent 客户端；TrafficPilot 会尽量将其转换为上游聊天接口
+- 对于 `Anthropic` 适配器，当前主要覆盖聊天与智能体相关请求；embeddings 会返回明确错误提示
+- 开启 `Include request/response bodies` 后，正文会按 `maxBodyCharacters` 截断后写入日志，请注意敏感内容
 
 ## 技术架构
 
