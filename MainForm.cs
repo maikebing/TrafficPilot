@@ -684,6 +684,47 @@ internal partial class MainForm : Form
 		ApplyGatewayProviderCapabilityUiState();
 	}
 
+	private void ChkGatewayProviderShowAdvanced_CheckedChanged(object? sender, EventArgs e)
+	{
+		ApplyGatewayProviderAdvancedVisibility();
+	}
+
+	private async void BtnGatewayDetectProvider_Click(object? sender, EventArgs e)
+	{
+		if (_txtGatewayProviderBaseUrl2 is null || _cmbGatewayProviderSelection is null)
+			return;
+
+		var baseUrl = _txtGatewayProviderBaseUrl2.Text.Trim();
+		PersistGatewayProviderApiKey();
+		if (string.IsNullOrWhiteSpace(baseUrl))
+		{
+			MessageBox.Show("Please enter Provider Base URL first.", "Detect Provider", MessageBoxButtons.OK, MessageBoxIcon.Information);
+			return;
+		}
+
+		if (_btnGatewayDetectProvider is not null)
+			_btnGatewayDetectProvider.Enabled = false;
+
+		try
+		{
+			ApplyDetectedProviderDefaults(baseUrl);
+			await TryProbeProviderAsync(baseUrl);
+			await TryPopulateGatewayProviderModelsAsync(baseUrl);
+			ApplyGatewayProviderBasicFieldPolicy();
+			ApplyGatewayProviderAdvancedVisibility();
+			MessageBox.Show("Provider defaults detected and filled. Review them if needed.", "Detect Provider", MessageBoxButtons.OK, MessageBoxIcon.Information);
+		}
+		catch (Exception ex)
+		{
+			MessageBox.Show($"Detection failed: {ex.Message}", "Detect Provider", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+		}
+		finally
+		{
+			if (_btnGatewayDetectProvider is not null)
+				_btnGatewayDetectProvider.Enabled = true;
+		}
+	}
+
 	private void BtnAddGatewayProvider_Click(object? sender, EventArgs e)
 	{
 		var gatewaySettings = _currentConfig.OllamaGateway ?? BuildOllamaGatewaySettings();
@@ -786,11 +827,15 @@ internal partial class MainForm : Form
 
 		_cmbGatewayProviderSelection.SelectedIndexChanged += CmbGatewayProviderSelection_SelectedIndexChanged;
 		UpdateGatewayProviderEditorFields(gatewaySettings, _cmbGatewayProviderSelection.SelectedItem?.ToString());
+		LoadGatewayProviderApiKey(gatewaySettings, _cmbGatewayProviderSelection.SelectedItem?.ToString());
+		ApplyGatewayProviderBasicFieldPolicy();
+		ApplyGatewayProviderAdvancedVisibility();
 	}
 
 	private void UpdateGatewayProviderEditorFields(OllamaGatewaySettings? gatewaySettings, string? providerId)
 	{
 		if (_txtGatewayProviderId is null
+			|| _txtGatewayDetectedProtocol is null
 			|| _cmbGatewayProviderProtocol2 is null
 			|| _cmbGatewayProviderAuthType is null
 			|| _txtGatewayProviderName2 is null
@@ -817,11 +862,12 @@ internal partial class MainForm : Form
 		if (provider is null)
 		{
 			_txtGatewayProviderId.Text = string.Empty;
+			_txtGatewayDetectedProtocol.Text = string.Empty;
 			_cmbGatewayProviderProtocol2.SelectedItem = null;
 			_txtGatewayProviderName2.Text = string.Empty;
 			_txtGatewayProviderBaseUrl2.Text = string.Empty;
-			_txtGatewayProviderDefaultModel2.Text = string.Empty;
-			_txtGatewayProviderEmbeddingModel2.Text = string.Empty;
+			RebindEditableComboBox(_txtGatewayProviderDefaultModel2, [], string.Empty);
+			RebindEditableComboBox(_txtGatewayProviderEmbeddingModel2, [], string.Empty);
 			_cmbGatewayProviderAuthType.SelectedItem = null;
 			_txtGatewayProviderAuthHeader.Text = string.Empty;
 			_txtGatewayProviderChatEndpoint.Text = string.Empty;
@@ -836,6 +882,7 @@ internal partial class MainForm : Form
 		}
 
 		_txtGatewayProviderId.Text = provider.Id ?? string.Empty;
+		_txtGatewayDetectedProtocol.Text = provider.Protocol ?? string.Empty;
 		_cmbGatewayProviderProtocol2.SelectedItem = _cmbGatewayProviderProtocol2.Items.Contains(provider.Protocol)
 			? provider.Protocol
 			: "OpenAICompatible";
@@ -843,6 +890,8 @@ internal partial class MainForm : Form
 		_txtGatewayProviderBaseUrl2.Text = provider.BaseUrl ?? string.Empty;
 		_txtGatewayProviderDefaultModel2.Text = provider.DefaultModel ?? string.Empty;
 		_txtGatewayProviderEmbeddingModel2.Text = provider.DefaultEmbeddingModel ?? string.Empty;
+		RebindEditableComboBox(_txtGatewayProviderDefaultModel2, provider.CachedModels ?? [], provider.DefaultModel ?? string.Empty);
+		RebindEditableComboBox(_txtGatewayProviderEmbeddingModel2, provider.CachedEmbeddingModels ?? provider.CachedModels ?? [], provider.DefaultEmbeddingModel ?? string.Empty);
 		_cmbGatewayProviderAuthType.SelectedItem = _cmbGatewayProviderAuthType.Items.Contains(provider.AuthType)
 			? provider.AuthType
 			: "Bearer";
@@ -860,6 +909,28 @@ internal partial class MainForm : Form
 		_chkGatewaySupportsEmbeddings.Checked = provider.Capabilities?.SupportsEmbeddings ?? true;
 		_chkGatewaySupportsResponses.Checked = provider.Capabilities?.SupportsResponses ?? true;
 		_chkGatewaySupportsStreaming.Checked = provider.Capabilities?.SupportsStreaming ?? true;
+		ApplyGatewayProviderCapabilityUiState();
+	}
+
+	private void ApplyGatewayProviderAdvancedVisibility()
+	{
+		if (_grpGatewayProviderAdvanced is null || _chkGatewayProviderShowAdvanced is null)
+			return;
+
+		_grpGatewayProviderAdvanced.Visible = _chkGatewayProviderShowAdvanced.Checked;
+	}
+
+	private void ApplyGatewayProviderBasicFieldPolicy()
+	{
+		if (_txtGatewayDetectedProtocol is null
+			|| _txtGatewayProviderName2 is null
+			|| _lblGatewayProviderDisplayName is null)
+		{
+			return;
+		}
+
+		_txtGatewayDetectedProtocol.ReadOnly = true;
+		_lblGatewayProviderDisplayName.Text = "Display Name (optional):";
 	}
 
 	private void ApplyGatewayProviderProtocolTemplate()
@@ -901,6 +972,230 @@ internal partial class MainForm : Form
 		_chkGatewaySupportsResponses.Checked = true;
 		_chkGatewaySupportsStreaming.Checked = true;
 		ApplyGatewayProviderCapabilityUiState();
+	}
+
+	private void ApplyDetectedProviderDefaults(string baseUrl)
+	{
+		if (_cmbGatewayProviderProtocol2 is null || _txtGatewayDetectedProtocol is null)
+			return;
+
+		var normalized = baseUrl.Trim();
+		var isAnthropic = normalized.Contains("anthropic", StringComparison.OrdinalIgnoreCase);
+		var detectedProtocol = isAnthropic ? "Anthropic" : "OpenAICompatible";
+		_txtGatewayDetectedProtocol.Text = detectedProtocol;
+		_cmbGatewayProviderProtocol2.SelectedItem = detectedProtocol;
+
+		if (_txtGatewayProviderName2 is not null && string.IsNullOrWhiteSpace(_txtGatewayProviderName2.Text))
+		{
+			_txtGatewayProviderName2.Text = isAnthropic ? "Anthropic" : "OpenAI Compatible";
+		}
+	}
+
+	private async Task TryProbeProviderAsync(string baseUrl)
+	{
+		using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
+		var probeTargets = BuildProviderProbeTargets(baseUrl);
+		var apiKey = _txtLocalApiApiKey?.Text.Trim();
+
+		foreach (var probe in probeTargets)
+		{
+			try
+			{
+				using var request = new HttpRequestMessage(HttpMethod.Get, probe.Uri);
+				ApplyProbeAuthentication(request, probe.Kind, apiKey);
+				using var response = await client.SendAsync(request);
+				if (!response.IsSuccessStatusCode && response.StatusCode != System.Net.HttpStatusCode.Unauthorized)
+					continue;
+
+				ApplyProbeResult(probe.Kind);
+				return;
+			}
+			catch
+			{
+				// ignore and try next probe
+			}
+		}
+	}
+
+	private async Task TryPopulateGatewayProviderModelsAsync(string baseUrl)
+	{
+		if (_txtGatewayProviderDefaultModel2 is null
+			|| _txtGatewayProviderEmbeddingModel2 is null
+			|| _cmbGatewayProviderProtocol2 is null)
+		{
+			return;
+		}
+
+		var protocol = _cmbGatewayProviderProtocol2.SelectedItem?.ToString() ?? _txtGatewayDetectedProtocol?.Text ?? "OpenAICompatible";
+		var apiKey = _txtLocalApiApiKey?.Text.Trim();
+		var models = await FetchGatewayProviderModelNamesAsync(baseUrl, protocol, apiKey);
+		if (models.Count == 0)
+			return;
+
+		CacheGatewayProviderModels(models, protocol);
+
+		var suggestedChat = models[0];
+		var suggestedEmbedding = models.FirstOrDefault(static m => m.Contains("embed", StringComparison.OrdinalIgnoreCase) || m.Contains("embedding", StringComparison.OrdinalIgnoreCase));
+		var preview = string.Join(", ", models.Take(6)) + (models.Count > 6 ? ", ..." : string.Empty);
+
+		var result = MessageBox.Show(
+			$"检测成功，发现 {models.Count} 个模型。\r\n\r\n示例：{preview}\r\n\r\n是否自动填入默认 Chat 模型{(string.IsNullOrWhiteSpace(suggestedEmbedding) ? string.Empty : "和 Embedding 模型")}？",
+			"Detect Models",
+			MessageBoxButtons.YesNo,
+			MessageBoxIcon.Information);
+
+		if (result != DialogResult.Yes)
+			return;
+
+		if (string.IsNullOrWhiteSpace(_txtGatewayProviderDefaultModel2.Text))
+			_txtGatewayProviderDefaultModel2.Text = suggestedChat;
+
+		if (!string.IsNullOrWhiteSpace(suggestedEmbedding)
+			&& string.IsNullOrWhiteSpace(_txtGatewayProviderEmbeddingModel2.Text)
+			&& (_chkGatewaySupportsEmbeddings?.Checked ?? false))
+		{
+			_txtGatewayProviderEmbeddingModel2.Text = suggestedEmbedding;
+		}
+	}
+
+	private static async Task<List<string>> FetchGatewayProviderModelNamesAsync(string baseUrl, string protocol, string? apiKey)
+	{
+		using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(8) };
+		var normalized = baseUrl.Trim().TrimEnd('/');
+		var isAnthropic = protocol.Equals("Anthropic", StringComparison.OrdinalIgnoreCase);
+		var uri = normalized.EndsWith("/v1", StringComparison.OrdinalIgnoreCase)
+			? $"{normalized}/models"
+			: $"{normalized}/v1/models";
+
+		using var request = new HttpRequestMessage(HttpMethod.Get, uri);
+		ApplyProbeAuthentication(request, protocol, apiKey);
+		if (isAnthropic)
+			request.Headers.TryAddWithoutValidation("anthropic-version", "2023-06-01");
+		using var response = await client.SendAsync(request);
+		if (!response.IsSuccessStatusCode)
+			return [];
+
+		var json = await response.Content.ReadAsStringAsync();
+		using var doc = System.Text.Json.JsonDocument.Parse(json);
+		System.Text.Json.JsonElement data;
+		if (doc.RootElement.TryGetProperty("data", out var openAiData) && openAiData.ValueKind == System.Text.Json.JsonValueKind.Array)
+		{
+			data = openAiData;
+		}
+		else if (isAnthropic && doc.RootElement.ValueKind == System.Text.Json.JsonValueKind.Array)
+		{
+			data = doc.RootElement;
+		}
+		else
+		{
+			return [];
+		}
+
+		var results = new List<string>();
+		foreach (var item in data.EnumerateArray())
+		{
+			if (item.TryGetProperty("id", out var id) && id.ValueKind == System.Text.Json.JsonValueKind.String)
+			{
+				var value = id.GetString();
+				if (!string.IsNullOrWhiteSpace(value))
+					results.Add(value.Trim());
+			}
+			else if (isAnthropic && item.TryGetProperty("name", out var name) && name.ValueKind == System.Text.Json.JsonValueKind.String)
+			{
+				var value = name.GetString();
+				if (!string.IsNullOrWhiteSpace(value))
+					results.Add(value.Trim());
+			}
+		}
+
+		return results.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+	}
+
+	private void CacheGatewayProviderModels(IReadOnlyList<string> models, string protocol)
+	{
+		if (_currentConfig.OllamaGateway is null || _cmbGatewayProviderSelection is null)
+			return;
+
+		var selectedProviderId = _cmbGatewayProviderSelection.SelectedItem?.ToString();
+		if (string.IsNullOrWhiteSpace(selectedProviderId))
+			return;
+
+		var provider = _currentConfig.OllamaGateway.Providers.FirstOrDefault(p =>
+			string.Equals(string.IsNullOrWhiteSpace(p.Id) ? "default" : p.Id.Trim(), selectedProviderId, StringComparison.OrdinalIgnoreCase));
+		if (provider is null)
+			return;
+
+		provider.CachedModels = models.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+		provider.CachedEmbeddingModels = protocol.Equals("Anthropic", StringComparison.OrdinalIgnoreCase)
+			? []
+			: models.Where(static m => m.Contains("embed", StringComparison.OrdinalIgnoreCase) || m.Contains("embedding", StringComparison.OrdinalIgnoreCase))
+				.Distinct(StringComparer.OrdinalIgnoreCase)
+				.ToList();
+
+		RebindEditableComboBox(_txtGatewayProviderDefaultModel2!, provider.CachedModels, _txtGatewayProviderDefaultModel2!.Text);
+		RebindEditableComboBox(_txtGatewayProviderEmbeddingModel2!, provider.CachedEmbeddingModels.Count > 0 ? provider.CachedEmbeddingModels : provider.CachedModels, _txtGatewayProviderEmbeddingModel2!.Text);
+	}
+
+	private IEnumerable<(string Kind, string Uri)> BuildProviderProbeTargets(string baseUrl)
+	{
+		var normalized = baseUrl.Trim().TrimEnd('/');
+		yield return ("Anthropic", normalized.EndsWith("/v1", StringComparison.OrdinalIgnoreCase) ? $"{normalized}/messages" : $"{normalized}/v1/messages");
+		yield return ("OpenAICompatible", normalized.EndsWith("/v1", StringComparison.OrdinalIgnoreCase) ? $"{normalized}/models" : $"{normalized}/v1/models");
+	}
+
+	private void ApplyProbeResult(string kind)
+	{
+		if (_cmbGatewayProviderProtocol2 is null || _txtGatewayDetectedProtocol is null)
+			return;
+
+		_txtGatewayDetectedProtocol.Text = kind;
+		_cmbGatewayProviderProtocol2.SelectedItem = kind;
+	}
+
+	private static void ApplyProbeAuthentication(HttpRequestMessage request, string kind, string? apiKey)
+	{
+		if (string.IsNullOrWhiteSpace(apiKey))
+			return;
+
+		if (kind.Equals("Anthropic", StringComparison.OrdinalIgnoreCase))
+		{
+			request.Headers.TryAddWithoutValidation("x-api-key", apiKey.Trim());
+			request.Headers.TryAddWithoutValidation("anthropic-version", "2023-06-01");
+			return;
+		}
+
+		request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", apiKey.Trim());
+	}
+
+	private void PersistGatewayProviderApiKey()
+	{
+		if (_cmbGatewayProviderSelection is null || _txtLocalApiApiKey is null)
+			return;
+
+		var providerKey = _cmbGatewayProviderSelection.SelectedItem?.ToString();
+		if (string.IsNullOrWhiteSpace(providerKey))
+			return;
+
+		var targetName = CredentialManager.GetLocalApiTargetName(providerKey.Trim());
+		var apiKey = _txtLocalApiApiKey.Text.Trim();
+		if (string.IsNullOrWhiteSpace(apiKey))
+			CredentialManager.DeleteToken(targetName);
+		else
+			CredentialManager.SaveToken(targetName, apiKey);
+	}
+
+	private void LoadGatewayProviderApiKey(OllamaGatewaySettings? gatewaySettings, string? providerId)
+	{
+		if (_txtLocalApiApiKey is null)
+			return;
+
+		if (string.IsNullOrWhiteSpace(providerId))
+		{
+			_txtLocalApiApiKey.Text = string.Empty;
+			return;
+		}
+
+		_txtLocalApiApiKey.Text = CredentialManager.LoadToken(CredentialManager.GetLocalApiTargetName(providerId.Trim())) ?? string.Empty;
 	}
 
 	private void ApplyGatewayProviderCapabilityUiState()

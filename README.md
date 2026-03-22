@@ -33,6 +33,18 @@
 
 > Route 编辑增强：Gateway route 文本区已增加实时格式校验、重复 `local model` 提示，以及错误高亮反馈；格式错误时不会将当前 route 文本写回配置。
 
+> Gateway UI 调整：`Ollama Gateway` 页面现已拆分为内部多选项卡：`Overview / Providers / Routes / Diagnostics`，避免所有配置堆叠在单页中，便于理解与操作。
+
+> Providers 进一步简化：基础区现在优先围绕 `Provider Base URL` 和 `API Key` 配置，并新增 `Test / Detect Defaults` 按钮。点击后程序会按地址尝试推测协议类型，并自动回填默认鉴权和端点模板。
+
+> 基础区继续收敛：`Detected Protocol` 现在改为只读展示，`Display Name` 为可选项；`Test / Detect Defaults` 会优先结合已填写的 API Key 做探测，以提高默认值判断准确度。
+
+> Provider 基础体验进一步优化：当前会按 provider 维度单独保存/读取 API Key；点击 `Test / Detect Defaults` 前会先持久化当前 Key，切换 provider 后也会自动载入对应 Key，减少重复输入。
+
+> 本轮可用性补充：`Test / Detect Defaults` 在探测成功后，会进一步尝试读取上游模型列表，并提示是否自动填入默认 `Chat Model` / `Embedding Model`；同时高级区已拆分为 `Auth / Endpoints / Capabilities` 三组，降低理解成本。
+
+> 本轮继续优化：`Chat Model / Embedding Model` 已改为可编辑下拉框；检测得到的模型列表会缓存到当前 provider，下次切换回来可直接选用；Anthropic 模型探测也增加了专门兼容处理，优先兼容其返回格式与请求头要求。
+
 ## 主要功能
 
 - **进程流量重定向**：支持按进程名（含通配符匹配）进行筛选，将相关网络请求通过指定代理服务器转发到目标网络。

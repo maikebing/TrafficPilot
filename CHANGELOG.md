@@ -28,6 +28,15 @@
 - Gateway provider 编辑区现已支持基础新增/删除，并补充高级字段编辑：鉴权、端点、附加头与能力开关均可保存到 `ollamaGateway.providers`。
 - 新增 provider protocol 模板联动：切换 `OpenAICompatible / Anthropic` 时，默认鉴权、端点、baseUrl 与能力开关会自动同步更新；embeddings 关闭时相关输入框自动禁用。
 - Gateway route 编辑区新增实时校验与交互反馈：无效行会高亮提示，重复 `localModel` 会提示“last one wins”，并阻止错误 route 写回配置。
+- `Ollama Gateway` 页面已重构为更直观的内部多选项卡布局：`Overview / Providers / Routes / Diagnostics`，改善可发现性与可操作性。
+- Providers 基础区已进一步简化，并新增 `Test / Detect Defaults`：可基于提供者地址自动推测协议并回填默认值，减少手工填写高级参数的需求。
+- Providers 基础区继续精简：协议改为只读探测结果显示，显示名为可选；`Test / Detect Defaults` 现在会结合 API Key 进行探测，提高协议和默认模板识别的准确度。
+- Provider 基础区已支持按 provider 单独保存与载入 API Key；`Test / Detect Defaults` 现在会在探测前先保存当前 Key，并在切换 provider 时自动恢复对应凭据。
+- `Test / Detect Defaults` 探测成功后，会继续尝试读取上游模型列表，并提示用户一键填入默认 `Chat Model` / `Embedding Model`。
+- Providers 高级区已进一步按 `Auth / Endpoints / Capabilities` 分组，减少单块高级配置的认知负担。
+- Providers 中的 `Chat Model / Embedding Model` 已改为可编辑下拉框，优先从当前 provider 的已缓存模型列表中选择。
+- 模型探测结果现在会缓存到对应 provider 的配置中，切换 provider 后仍可复用该模型列表。
+- Anthropic 模型探测增加了专门兼容逻辑：补充所需请求头，并兼容非 OpenAI 风格的模型列表返回结构。
 
 ### 兼容性
 - 保留 `localApiForwarder` 字段，避免旧配置立即失效。

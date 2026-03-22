@@ -193,6 +193,12 @@ internal class GatewayProviderSettings
 	[JsonPropertyName("defaultEmbeddingModel")]
 	public string DefaultEmbeddingModel { get; set; } = string.Empty;
 
+	[JsonPropertyName("cachedModels")]
+	public List<string> CachedModels { get; set; } = [];
+
+	[JsonPropertyName("cachedEmbeddingModels")]
+	public List<string> CachedEmbeddingModels { get; set; } = [];
+
 	[JsonPropertyName("authType")]
 	public string AuthType { get; set; } = "Bearer";
 
