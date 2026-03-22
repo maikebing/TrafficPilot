@@ -746,7 +746,7 @@ internal partial class MainForm : Form
 
 	private void BtnAddGatewayProvider_Click(object? sender, EventArgs e)
 	{
-		MessageBox.Show("当前已改为固定内置提供商：OpenAI、Anthropic、Google Gemini。请直接切换页签并使用启用/停用。", "Providers", MessageBoxButtons.OK, MessageBoxIcon.Information);
+		MessageBox.Show("当前不再支持新增 provider。请直接使用内置的 OpenAI、Anthropic、Gemini。", "Providers", MessageBoxButtons.OK, MessageBoxIcon.Information);
 	}
 
 	private void BtnRemoveGatewayProvider_Click(object? sender, EventArgs e)
@@ -1008,7 +1008,6 @@ internal partial class MainForm : Form
 			|| _chkGatewaySupportsEmbeddings is null
 			|| _chkGatewaySupportsResponses is null
 			|| _chkGatewaySupportsStreaming is null
-			|| _btnAddGatewayProvider is null
 			|| _btnDuplicateGatewayProvider is null
 			|| _btnRemoveGatewayProvider is null)
 		{
@@ -1022,7 +1021,6 @@ internal partial class MainForm : Form
 		_chkGatewaySupportsEmbeddings.Enabled = false;
 		_chkGatewaySupportsResponses.Enabled = false;
 		_chkGatewaySupportsStreaming.Enabled = false;
-		_btnAddGatewayProvider.Text = "Preset";
 		_btnDuplicateGatewayProvider.Text = "Enable";
 		_btnRemoveGatewayProvider.Text = "Disable";
 		_lblGatewayProviderDisplayName.Text = "Display Name:";
