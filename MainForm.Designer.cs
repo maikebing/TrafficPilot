@@ -144,6 +144,11 @@ partial class MainForm
     private TabPage? _gatewayRouteTab;
     private TabPage? _gatewayDiagnosticsTab;
     private TableLayoutPanel? _gatewayOverviewPanel;
+    private Label? _lblGatewayProviderEnabled;
+    private FlowLayoutPanel? _gatewayProviderEnabledPanel;
+    private CheckBox? _chkGatewayOpenAiEnabled;
+    private CheckBox? _chkGatewayAnthropicEnabled;
+    private CheckBox? _chkGatewayGeminiEnabled;
     private Label? _lblGatewayOverviewSummary;
     private TextBox? _txtGatewayOverviewProviders;
     private GroupBox? _grpGatewayProviderBasic;
@@ -332,8 +337,19 @@ partial class MainForm
         _numOllamaPort = new NumericUpDown();
         _lblFoundryPort = new Label();
         _numFoundryPort = new NumericUpDown();
+        _lblGatewayProviderEnabled = new Label();
+        _gatewayProviderEnabledPanel = new FlowLayoutPanel();
+        _chkGatewayOpenAiEnabled = new CheckBox();
+        _chkGatewayAnthropicEnabled = new CheckBox();
+        _chkGatewayGeminiEnabled = new CheckBox();
         _lblGatewayOverviewSummary = new Label();
         _txtGatewayOverviewProviders = new TextBox();
+        _gatewayOpenAiProviderTab = new TabPage();
+        _gatewayOpenAiProviderControl = new GatewayProviderSettingsControl();
+        _gatewayAnthropicProviderTab = new TabPage();
+        _gatewayAnthropicProviderControl = new GatewayProviderSettingsControl();
+        _gatewayGeminiProviderTab = new TabPage();
+        _gatewayGeminiProviderControl = new GatewayProviderSettingsControl();
         _gatewayProviderTab = new TabPage();
         _gatewayProviderEditorPanel = new TableLayoutPanel();
         _lblGatewayProviderSelection = new Label();
@@ -342,35 +358,9 @@ partial class MainForm
         _gatewayProviderAnthropicTab = new TabPage();
         _gatewayProviderGeminiTab = new TabPage();
         _gatewayProviderButtonsPanel = new FlowLayoutPanel();
-        _gatewayProviderContentScrollPanel = new Panel();
-        _btnAddGatewayProvider = new Button();
         _btnDuplicateGatewayProvider = new Button();
         _btnRemoveGatewayProvider = new Button();
-        _grpGatewayProviderBasic = new GroupBox();
-        _gatewayProviderBasicPanel = new TableLayoutPanel();
-        _lblLocalApiProviderUrl = new Label();
-        _localApiProviderUrlPanel = new TableLayoutPanel();
-        _txtLocalApiProviderUrl = new TextBox();
-        _btnRefreshLocalApiModels = new Button();
-        _lblLocalApiApiKey = new Label();
-        _txtLocalApiApiKey = new TextBox();
-        _lblGatewayDetectedProtocol = new Label();
-        _txtGatewayDetectedProtocol = new TextBox();
-        _lblGatewayProviderDisplayName = new Label();
-        _txtGatewayProviderName2 = new TextBox();
-        _btnGatewayDetectProvider = new Button();
-        _gatewayProviderModelActionsPanel = new FlowLayoutPanel();
-        _btnGatewayRefreshProviderModels = new Button();
-        _btnGatewayRefreshProviderModelsApply = new Button();
-        _lblGatewayProviderModelPreview = new Label();
-        _txtGatewayProviderModelPreview = new ListBox();
-        _gatewayModelPreviewContextMenu = new ContextMenuStrip(components);
-        _gatewaySetAsChatModelMenuItem = new ToolStripMenuItem();
-        _gatewaySetAsEmbeddingModelMenuItem = new ToolStripMenuItem();
-        _lblGatewayProviderModelMetadata = new Label();
-        _txtGatewayProviderModelMetadata = new TextBox();
-        _btnGatewayCopyModelMetadata = new Button();
-        _chkGatewayProviderShowAdvanced = new CheckBox();
+        _gatewayProviderContentScrollPanel = new Panel();
         _grpGatewayProviderAdvanced = new GroupBox();
         _gatewayProviderAdvancedLayout = new TableLayoutPanel();
         _gatewayProviderDetailsPanel = new TableLayoutPanel();
@@ -379,6 +369,7 @@ partial class MainForm
         _lblGatewayProviderProtocol2 = new Label();
         _cmbGatewayProviderProtocol2 = new ComboBox();
         _lblGatewayProviderName2 = new Label();
+        _txtGatewayProviderName2 = new TextBox();
         _lblGatewayProviderBaseUrl2 = new Label();
         _txtGatewayProviderBaseUrl2 = new TextBox();
         _lblGatewayProviderDefaultModel2 = new Label();
@@ -407,6 +398,30 @@ partial class MainForm
         _chkGatewaySupportsEmbeddings = new CheckBox();
         _chkGatewaySupportsResponses = new CheckBox();
         _chkGatewaySupportsStreaming = new CheckBox();
+        _chkGatewayProviderShowAdvanced = new CheckBox();
+        _grpGatewayProviderBasic = new GroupBox();
+        _gatewayProviderBasicPanel = new TableLayoutPanel();
+        _lblLocalApiProviderUrl = new Label();
+        _localApiProviderUrlPanel = new TableLayoutPanel();
+        _txtLocalApiProviderUrl = new TextBox();
+        _btnRefreshLocalApiModels = new Button();
+        _lblLocalApiApiKey = new Label();
+        _txtLocalApiApiKey = new TextBox();
+        _lblGatewayDetectedProtocol = new Label();
+        _txtGatewayDetectedProtocol = new TextBox();
+        _lblGatewayProviderDisplayName = new Label();
+        _btnGatewayDetectProvider = new Button();
+        _gatewayProviderModelActionsPanel = new FlowLayoutPanel();
+        _btnGatewayRefreshProviderModels = new Button();
+        _btnGatewayRefreshProviderModelsApply = new Button();
+        _lblGatewayProviderModelPreview = new Label();
+        _txtGatewayProviderModelPreview = new ListBox();
+        _gatewayModelPreviewContextMenu = new ContextMenuStrip(components);
+        _gatewaySetAsChatModelMenuItem = new ToolStripMenuItem();
+        _gatewaySetAsEmbeddingModelMenuItem = new ToolStripMenuItem();
+        _lblGatewayProviderModelMetadata = new Label();
+        _txtGatewayProviderModelMetadata = new TextBox();
+        _btnGatewayCopyModelMetadata = new Button();
         _gatewayRouteTab = new TabPage();
         _gatewayRouteEditorPanel = new TableLayoutPanel();
         _lblGatewayRouteProvider = new Label();
@@ -470,6 +485,7 @@ partial class MainForm
         lblBytes = new Label();
         label1 = new Label();
         _btnStartStop = new Button();
+        _btnAddGatewayProvider = new Button();
         _lblLocalApiProvider = new Label();
         _localApiProviderPanel = new TableLayoutPanel();
         _lblLocalApiProtocol = new Label();
@@ -541,12 +557,9 @@ partial class MainForm
         ((ISupportInitialize)_numFoundryPort).BeginInit();
         _gatewayProviderTab.SuspendLayout();
         _gatewayProviderEditorPanel.SuspendLayout();
+        _gatewayProviderTabs.SuspendLayout();
         _gatewayProviderButtonsPanel.SuspendLayout();
-        _grpGatewayProviderBasic.SuspendLayout();
-        _gatewayProviderBasicPanel.SuspendLayout();
-        _localApiProviderUrlPanel.SuspendLayout();
-        _gatewayProviderModelActionsPanel.SuspendLayout();
-        _gatewayModelPreviewContextMenu.SuspendLayout();
+        _gatewayProviderContentScrollPanel.SuspendLayout();
         _grpGatewayProviderAdvanced.SuspendLayout();
         _gatewayProviderAdvancedLayout.SuspendLayout();
         _gatewayProviderDetailsPanel.SuspendLayout();
@@ -556,6 +569,11 @@ partial class MainForm
         _gatewayProviderEndpointsPanel.SuspendLayout();
         _grpGatewayProviderCapabilities.SuspendLayout();
         _gatewayProviderCapabilitiesPanel.SuspendLayout();
+        _grpGatewayProviderBasic.SuspendLayout();
+        _gatewayProviderBasicPanel.SuspendLayout();
+        _localApiProviderUrlPanel.SuspendLayout();
+        _gatewayProviderModelActionsPanel.SuspendLayout();
+        _gatewayModelPreviewContextMenu.SuspendLayout();
         _gatewayRouteTab.SuspendLayout();
         _gatewayRouteEditorPanel.SuspendLayout();
         _gatewayDiagnosticsTab.SuspendLayout();
@@ -1189,7 +1207,9 @@ partial class MainForm
         // 
         _localApiPanel.SetColumnSpan(_gatewayTabControl, 2);
         _gatewayTabControl.Controls.Add(_gatewayOverviewTab);
-        _gatewayTabControl.Controls.Add(_gatewayProviderTab);
+        _gatewayTabControl.Controls.Add(_gatewayOpenAiProviderTab);
+        _gatewayTabControl.Controls.Add(_gatewayAnthropicProviderTab);
+        _gatewayTabControl.Controls.Add(_gatewayGeminiProviderTab);
         _gatewayTabControl.Controls.Add(_gatewayRouteTab);
         _gatewayTabControl.Controls.Add(_gatewayDiagnosticsTab);
         _gatewayTabControl.Dock = DockStyle.Fill;
@@ -1216,12 +1236,15 @@ partial class MainForm
         _gatewayOverviewPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
         _gatewayOverviewPanel.Controls.Add(_lblLocalApiListenPorts, 0, 0);
         _gatewayOverviewPanel.Controls.Add(_localApiPortPanel, 1, 0);
-        _gatewayOverviewPanel.Controls.Add(_lblGatewayOverviewSummary, 0, 1);
-        _gatewayOverviewPanel.Controls.Add(_txtGatewayOverviewProviders, 1, 1);
+        _gatewayOverviewPanel.Controls.Add(_lblGatewayProviderEnabled, 0, 1);
+        _gatewayOverviewPanel.Controls.Add(_gatewayProviderEnabledPanel, 1, 1);
+        _gatewayOverviewPanel.Controls.Add(_lblGatewayOverviewSummary, 0, 2);
+        _gatewayOverviewPanel.Controls.Add(_txtGatewayOverviewProviders, 1, 2);
         _gatewayOverviewPanel.Dock = DockStyle.Fill;
         _gatewayOverviewPanel.Location = new Point(8, 8);
         _gatewayOverviewPanel.Name = "_gatewayOverviewPanel";
-        _gatewayOverviewPanel.RowCount = 2;
+        _gatewayOverviewPanel.RowCount = 3;
+        _gatewayOverviewPanel.RowStyles.Add(new RowStyle());
         _gatewayOverviewPanel.RowStyles.Add(new RowStyle());
         _gatewayOverviewPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
         _gatewayOverviewPanel.Size = new Size(719, 489);
@@ -1255,23 +1278,6 @@ partial class MainForm
         _localApiPortPanel.RowStyles.Add(new RowStyle());
         _localApiPortPanel.Size = new Size(563, 36);
         _localApiPortPanel.TabIndex = 2;
-        // 
-        // _txtGatewayOverviewProviders
-        // 
-        _txtGatewayOverviewProviders.BackColor = SystemColors.Window;
-        _txtGatewayOverviewProviders.Cursor = Cursors.Hand;
-        _txtGatewayOverviewProviders.Dock = DockStyle.Fill;
-        _txtGatewayOverviewProviders.Location = new Point(153, 45);
-        _txtGatewayOverviewProviders.Multiline = true;
-        _txtGatewayOverviewProviders.Name = "_txtGatewayOverviewProviders";
-        _txtGatewayOverviewProviders.ReadOnly = true;
-        _txtGatewayOverviewProviders.ScrollBars = ScrollBars.Vertical;
-        _txtGatewayOverviewProviders.ShortcutsEnabled = false;
-        _txtGatewayOverviewProviders.Size = new Size(563, 441);
-        _txtGatewayOverviewProviders.TabIndex = 3;
-        _txtGatewayOverviewProviders.WordWrap = false;
-        _txtGatewayOverviewProviders.Click += TxtGatewayOverviewProviders_Click;
-        _txtGatewayOverviewProviders.DoubleClick += TxtGatewayOverviewProviders_DoubleClick;
         // 
         // _lblOllamaPort
         // 
@@ -1317,445 +1323,160 @@ partial class MainForm
         _numFoundryPort.TabIndex = 3;
         _numFoundryPort.Value = new decimal(new int[] { 5273, 0, 0, 0 });
         // 
+        // _lblGatewayProviderEnabled
+        // 
+        _lblGatewayProviderEnabled.Anchor = AnchorStyles.Left | AnchorStyles.Right;
+        _lblGatewayProviderEnabled.Location = new Point(3, 45);
+        _lblGatewayProviderEnabled.Name = "_lblGatewayProviderEnabled";
+        _lblGatewayProviderEnabled.Size = new Size(144, 23);
+        _lblGatewayProviderEnabled.TabIndex = 3;
+        _lblGatewayProviderEnabled.Text = "Providers:";
+        _lblGatewayProviderEnabled.TextAlign = ContentAlignment.MiddleRight;
+        // 
+        // _gatewayProviderEnabledPanel
+        // 
+        _gatewayProviderEnabledPanel.AutoSize = true;
+        _gatewayProviderEnabledPanel.Controls.Add(_chkGatewayOpenAiEnabled);
+        _gatewayProviderEnabledPanel.Controls.Add(_chkGatewayAnthropicEnabled);
+        _gatewayProviderEnabledPanel.Controls.Add(_chkGatewayGeminiEnabled);
+        _gatewayProviderEnabledPanel.Dock = DockStyle.Fill;
+        _gatewayProviderEnabledPanel.Location = new Point(153, 42);
+        _gatewayProviderEnabledPanel.Name = "_gatewayProviderEnabledPanel";
+        _gatewayProviderEnabledPanel.Size = new Size(563, 29);
+        _gatewayProviderEnabledPanel.TabIndex = 4;
+        _gatewayProviderEnabledPanel.WrapContents = false;
+        // 
+        // _chkGatewayOpenAiEnabled
+        // 
+        _chkGatewayOpenAiEnabled.AutoSize = true;
+        _chkGatewayOpenAiEnabled.Location = new Point(3, 4);
+        _chkGatewayOpenAiEnabled.Margin = new Padding(3, 4, 12, 3);
+        _chkGatewayOpenAiEnabled.Name = "_chkGatewayOpenAiEnabled";
+        _chkGatewayOpenAiEnabled.Size = new Size(75, 21);
+        _chkGatewayOpenAiEnabled.TabIndex = 0;
+        _chkGatewayOpenAiEnabled.Tag = "openai";
+        _chkGatewayOpenAiEnabled.Text = "OpenAI";
+        _chkGatewayOpenAiEnabled.UseVisualStyleBackColor = true;
+        _chkGatewayOpenAiEnabled.CheckedChanged += ChkGatewayProviderEnabled_CheckedChanged;
+        // 
+        // _chkGatewayAnthropicEnabled
+        // 
+        _chkGatewayAnthropicEnabled.AutoSize = true;
+        _chkGatewayAnthropicEnabled.Location = new Point(93, 4);
+        _chkGatewayAnthropicEnabled.Margin = new Padding(3, 4, 12, 3);
+        _chkGatewayAnthropicEnabled.Name = "_chkGatewayAnthropicEnabled";
+        _chkGatewayAnthropicEnabled.Size = new Size(90, 21);
+        _chkGatewayAnthropicEnabled.TabIndex = 1;
+        _chkGatewayAnthropicEnabled.Tag = "anthropic";
+        _chkGatewayAnthropicEnabled.Text = "Anthropic";
+        _chkGatewayAnthropicEnabled.UseVisualStyleBackColor = true;
+        _chkGatewayAnthropicEnabled.CheckedChanged += ChkGatewayProviderEnabled_CheckedChanged;
+        // 
+        // _chkGatewayGeminiEnabled
+        // 
+        _chkGatewayGeminiEnabled.AutoSize = true;
+        _chkGatewayGeminiEnabled.Location = new Point(198, 4);
+        _chkGatewayGeminiEnabled.Margin = new Padding(3, 4, 12, 3);
+        _chkGatewayGeminiEnabled.Name = "_chkGatewayGeminiEnabled";
+        _chkGatewayGeminiEnabled.Size = new Size(73, 21);
+        _chkGatewayGeminiEnabled.TabIndex = 2;
+        _chkGatewayGeminiEnabled.Tag = "google";
+        _chkGatewayGeminiEnabled.Text = "Gemini";
+        _chkGatewayGeminiEnabled.UseVisualStyleBackColor = true;
+        _chkGatewayGeminiEnabled.CheckedChanged += ChkGatewayProviderEnabled_CheckedChanged;
+        // 
         // _lblGatewayOverviewSummary
         // 
         _lblGatewayOverviewSummary.AutoSize = true;
         _lblGatewayOverviewSummary.Dock = DockStyle.Fill;
-        _lblGatewayOverviewSummary.Location = new Point(3, 42);
+        _lblGatewayOverviewSummary.Location = new Point(3, 74);
         _lblGatewayOverviewSummary.Name = "_lblGatewayOverviewSummary";
         _lblGatewayOverviewSummary.Padding = new Padding(0, 8, 0, 0);
-        _lblGatewayOverviewSummary.Size = new Size(144, 447);
-        _lblGatewayOverviewSummary.TabIndex = 2;
+        _lblGatewayOverviewSummary.Size = new Size(144, 415);
+        _lblGatewayOverviewSummary.TabIndex = 5;
         _lblGatewayOverviewSummary.Text = "Overview 只保留全局项。\r\n在 Providers 里先填写提供者地址和 API Key；协议、鉴权和端点默认自动判断。\r\n只有在需要覆盖默认行为时，再展开高级设置。";
         // 
-        // _gatewayProviderTab
-        // 
-        _gatewayProviderTab.Controls.Add(_gatewayProviderEditorPanel);
-        _gatewayProviderTab.Location = new Point(4, 26);
-        _gatewayProviderTab.Name = "_gatewayProviderTab";
-        _gatewayProviderTab.Padding = new Padding(8);
-        _gatewayProviderTab.Size = new Size(735, 505);
-        _gatewayProviderTab.TabIndex = 1;
-        _gatewayProviderTab.Text = "Providers";
-        // 
-        // _gatewayProviderEditorPanel
-        // 
-        _gatewayProviderEditorPanel.ColumnCount = 2;
-        _gatewayProviderEditorPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 120F));
-        _gatewayProviderEditorPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-        _gatewayProviderEditorPanel.Controls.Add(_lblGatewayProviderSelection, 0, 0);
-        _gatewayProviderEditorPanel.Controls.Add(_gatewayProviderTabs, 1, 0);
-        _gatewayProviderEditorPanel.Controls.Add(_gatewayProviderButtonsPanel, 1, 1);
-        _gatewayProviderEditorPanel.Controls.Add(_gatewayProviderContentScrollPanel, 0, 2);
-        _gatewayProviderEditorPanel.Dock = DockStyle.Fill;
-        _gatewayProviderEditorPanel.Location = new Point(8, 8);
-        _gatewayProviderEditorPanel.Margin = new Padding(0);
-        _gatewayProviderEditorPanel.Name = "_gatewayProviderEditorPanel";
-        _gatewayProviderEditorPanel.RowCount = 3;
-        _gatewayProviderEditorPanel.RowStyles.Add(new RowStyle());
-        _gatewayProviderEditorPanel.RowStyles.Add(new RowStyle());
-        _gatewayProviderEditorPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
-        _gatewayProviderEditorPanel.Size = new Size(719, 489);
-        _gatewayProviderEditorPanel.TabIndex = 20;
-        // 
-        // _lblGatewayProviderSelection
-        // 
-        _lblGatewayProviderSelection.Anchor = AnchorStyles.Left | AnchorStyles.Right;
-        _lblGatewayProviderSelection.Location = new Point(3, 5);
-        _lblGatewayProviderSelection.Name = "_lblGatewayProviderSelection";
-        _lblGatewayProviderSelection.Size = new Size(114, 31);
-        _lblGatewayProviderSelection.TabIndex = 0;
-        _lblGatewayProviderSelection.Text = "Providers:";
-        _lblGatewayProviderSelection.TextAlign = ContentAlignment.MiddleRight;
-        // 
-        // _gatewayProviderTabs
-        // 
-        _gatewayProviderTabs.Controls.Add(_gatewayProviderOpenAiTab);
-        _gatewayProviderTabs.Controls.Add(_gatewayProviderAnthropicTab);
-        _gatewayProviderTabs.Controls.Add(_gatewayProviderGeminiTab);
-        _gatewayProviderTabs.Dock = DockStyle.Fill;
-        _gatewayProviderTabs.Location = new Point(123, 3);
-        _gatewayProviderTabs.Margin = new Padding(3, 3, 3, 3);
-        _gatewayProviderTabs.Multiline = false;
-        _gatewayProviderTabs.Name = "_gatewayProviderTabs";
-        _gatewayProviderTabs.SelectedIndex = 0;
-        _gatewayProviderTabs.Size = new Size(593, 31);
-        _gatewayProviderTabs.TabIndex = 1;
-        _gatewayProviderTabs.SelectedIndexChanged += GatewayProviderTabs_SelectedIndexChanged;
-        // 
-        // _gatewayProviderOpenAiTab
-        // 
-        _gatewayProviderOpenAiTab.Location = new Point(4, 26);
-        _gatewayProviderOpenAiTab.Name = "_gatewayProviderOpenAiTab";
-        _gatewayProviderOpenAiTab.Padding = new Padding(3);
-        _gatewayProviderOpenAiTab.Size = new Size(585, 1);
-        _gatewayProviderOpenAiTab.TabIndex = 0;
-        _gatewayProviderOpenAiTab.Text = "OpenAI";
-        // 
-        // _gatewayProviderAnthropicTab
-        // 
-        _gatewayProviderAnthropicTab.Location = new Point(4, 26);
-        _gatewayProviderAnthropicTab.Name = "_gatewayProviderAnthropicTab";
-        _gatewayProviderAnthropicTab.Padding = new Padding(3);
-        _gatewayProviderAnthropicTab.Size = new Size(585, 1);
-        _gatewayProviderAnthropicTab.TabIndex = 1;
-        _gatewayProviderAnthropicTab.Text = "Anthropic";
-        // 
-        // _gatewayProviderGeminiTab
-        // 
-        _gatewayProviderGeminiTab.Location = new Point(4, 26);
-        _gatewayProviderGeminiTab.Name = "_gatewayProviderGeminiTab";
-        _gatewayProviderGeminiTab.Padding = new Padding(3);
-        _gatewayProviderGeminiTab.Size = new Size(585, 1);
-        _gatewayProviderGeminiTab.TabIndex = 2;
-        _gatewayProviderGeminiTab.Text = "Gemini";
-        // 
-        // _gatewayProviderButtonsPanel
-        // 
-        _gatewayProviderButtonsPanel.AutoSize = true;
-        _gatewayProviderButtonsPanel.AutoSizeMode = AutoSizeMode.GrowAndShrink;
-        _gatewayProviderButtonsPanel.Controls.Add(_btnDuplicateGatewayProvider);
-        _gatewayProviderButtonsPanel.Controls.Add(_btnRemoveGatewayProvider);
-        _gatewayProviderButtonsPanel.Anchor = AnchorStyles.Left;
-        _gatewayProviderButtonsPanel.Location = new Point(123, 40);
-        _gatewayProviderButtonsPanel.Margin = new Padding(3, 3, 3, 6);
-        _gatewayProviderButtonsPanel.Name = "_gatewayProviderButtonsPanel";
-        _gatewayProviderButtonsPanel.Size = new Size(162, 31);
-        _gatewayProviderButtonsPanel.TabIndex = 2;
-        _gatewayProviderButtonsPanel.WrapContents = false;
-        // 
-        // _gatewayProviderContentScrollPanel
-        // 
-        _gatewayProviderEditorPanel.SetColumnSpan(_gatewayProviderContentScrollPanel, 2);
-        _gatewayProviderContentScrollPanel.AutoScroll = true;
-        _gatewayProviderContentScrollPanel.Controls.Add(_grpGatewayProviderAdvanced);
-        _gatewayProviderContentScrollPanel.Controls.Add(_chkGatewayProviderShowAdvanced);
-        _gatewayProviderContentScrollPanel.Controls.Add(_grpGatewayProviderBasic);
-        _gatewayProviderContentScrollPanel.Dock = DockStyle.Fill;
-        _gatewayProviderContentScrollPanel.Location = new Point(3, 77);
-        _gatewayProviderContentScrollPanel.Name = "_gatewayProviderContentScrollPanel";
-        _gatewayProviderContentScrollPanel.Size = new Size(713, 409);
-        _gatewayProviderContentScrollPanel.TabIndex = 5;
-        // 
-        // _btnDuplicateGatewayProvider
-        // 
-        _btnDuplicateGatewayProvider.AutoSize = true;
-        _btnDuplicateGatewayProvider.Location = new Point(0, 0);
-        _btnDuplicateGatewayProvider.Margin = new Padding(0, 0, 6, 0);
-        _btnDuplicateGatewayProvider.Name = "_btnDuplicateGatewayProvider";
-        _btnDuplicateGatewayProvider.Size = new Size(77, 27);
-        _btnDuplicateGatewayProvider.TabIndex = 1;
-        _btnDuplicateGatewayProvider.Text = "Enable";
-        _btnDuplicateGatewayProvider.UseVisualStyleBackColor = true;
-        _btnDuplicateGatewayProvider.Click += BtnDuplicateGatewayProvider_Click;
-        // 
-        // _btnRemoveGatewayProvider
-        // 
-        _btnRemoveGatewayProvider.AutoSize = true;
-        _btnRemoveGatewayProvider.Location = new Point(83, 0);
-        _btnRemoveGatewayProvider.Margin = new Padding(0);
-        _btnRemoveGatewayProvider.Name = "_btnRemoveGatewayProvider";
-        _btnRemoveGatewayProvider.Size = new Size(84, 27);
-        _btnRemoveGatewayProvider.TabIndex = 2;
-        _btnRemoveGatewayProvider.Text = "Disable";
-        _btnRemoveGatewayProvider.UseVisualStyleBackColor = true;
-        _btnRemoveGatewayProvider.Click += BtnRemoveGatewayProvider_Click;
-        // 
-        // _grpGatewayProviderBasic
-        // 
-        _gatewayProviderEditorPanel.SetColumnSpan(_grpGatewayProviderBasic, 2);
-        _grpGatewayProviderBasic.Controls.Add(_gatewayProviderBasicPanel);
-        _grpGatewayProviderBasic.Dock = DockStyle.Top;
-        _grpGatewayProviderBasic.Location = new Point(3, 3);
-        _grpGatewayProviderBasic.Name = "_grpGatewayProviderBasic";
-        _grpGatewayProviderBasic.Size = new Size(690, 430);
-        _grpGatewayProviderBasic.TabIndex = 3;
-        _grpGatewayProviderBasic.TabStop = false;
-        _grpGatewayProviderBasic.Text = "Basic Settings";
-        // 
-        // _gatewayProviderBasicPanel
-        // 
-        _gatewayProviderBasicPanel.ColumnCount = 2;
-        _gatewayProviderBasicPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 150F));
-        _gatewayProviderBasicPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-        _gatewayProviderBasicPanel.Controls.Add(_lblLocalApiProviderUrl, 0, 0);
-        _gatewayProviderBasicPanel.Controls.Add(_localApiProviderUrlPanel, 1, 0);
-        _gatewayProviderBasicPanel.Controls.Add(_lblLocalApiApiKey, 0, 1);
-        _gatewayProviderBasicPanel.Controls.Add(_txtLocalApiApiKey, 1, 1);
-        _gatewayProviderBasicPanel.Controls.Add(_lblGatewayDetectedProtocol, 0, 2);
-        _gatewayProviderBasicPanel.Controls.Add(_txtGatewayDetectedProtocol, 1, 2);
-        _gatewayProviderBasicPanel.Controls.Add(_lblGatewayProviderDisplayName, 0, 3);
-        _gatewayProviderBasicPanel.Controls.Add(_btnGatewayDetectProvider, 1, 4);
-        _gatewayProviderBasicPanel.Controls.Add(_gatewayProviderModelActionsPanel, 1, 5);
-        _gatewayProviderBasicPanel.Controls.Add(_lblGatewayProviderModelPreview, 0, 6);
-        _gatewayProviderBasicPanel.Controls.Add(_txtGatewayProviderModelPreview, 1, 6);
-        _gatewayProviderBasicPanel.Controls.Add(_lblGatewayProviderModelMetadata, 0, 7);
-        _gatewayProviderBasicPanel.Controls.Add(_txtGatewayProviderModelMetadata, 1, 7);
-        _gatewayProviderBasicPanel.Controls.Add(_btnGatewayCopyModelMetadata, 1, 8);
-        _gatewayProviderBasicPanel.Dock = DockStyle.Fill;
-        _gatewayProviderBasicPanel.Location = new Point(3, 19);
-        _gatewayProviderBasicPanel.Name = "_gatewayProviderBasicPanel";
-        _gatewayProviderBasicPanel.RowCount = 8;
-        _gatewayProviderBasicPanel.RowStyles.Add(new RowStyle());
-        _gatewayProviderBasicPanel.RowStyles.Add(new RowStyle());
-        _gatewayProviderBasicPanel.RowStyles.Add(new RowStyle());
-        _gatewayProviderBasicPanel.RowStyles.Add(new RowStyle());
-        _gatewayProviderBasicPanel.RowStyles.Add(new RowStyle());
-        _gatewayProviderBasicPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
-        _gatewayProviderBasicPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 96F));
-        _gatewayProviderBasicPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 28F));
-        _gatewayProviderBasicPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 36F));
-        _gatewayProviderBasicPanel.Size = new Size(684, 378);
-        _gatewayProviderBasicPanel.TabIndex = 0;
-        // 
-        // _lblLocalApiProviderUrl
-        // 
-        _lblLocalApiProviderUrl.Anchor = AnchorStyles.Left | AnchorStyles.Right;
-        _lblLocalApiProviderUrl.Location = new Point(3, 6);
-        _lblLocalApiProviderUrl.Name = "_lblLocalApiProviderUrl";
-        _lblLocalApiProviderUrl.Size = new Size(144, 23);
-        _lblLocalApiProviderUrl.TabIndex = 5;
-        _lblLocalApiProviderUrl.Text = "Provider Base URL:";
-        _lblLocalApiProviderUrl.TextAlign = ContentAlignment.MiddleRight;
-        // 
-        // _localApiProviderUrlPanel
-        // 
-        _localApiProviderUrlPanel.ColumnCount = 2;
-        _localApiProviderUrlPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-        _localApiProviderUrlPanel.ColumnStyles.Add(new ColumnStyle());
-        _localApiProviderUrlPanel.Controls.Add(_txtLocalApiProviderUrl, 0, 0);
-        _localApiProviderUrlPanel.Controls.Add(_btnRefreshLocalApiModels, 1, 0);
-        _localApiProviderUrlPanel.Dock = DockStyle.Fill;
-        _localApiProviderUrlPanel.Location = new Point(153, 0);
-        _localApiProviderUrlPanel.Margin = new Padding(3, 0, 3, 3);
-        _localApiProviderUrlPanel.Name = "_localApiProviderUrlPanel";
-        _localApiProviderUrlPanel.RowCount = 1;
-        _localApiProviderUrlPanel.RowStyles.Add(new RowStyle());
-        _localApiProviderUrlPanel.Size = new Size(528, 33);
-        _localApiProviderUrlPanel.TabIndex = 6;
-        // 
-        // _txtLocalApiProviderUrl
-        // 
-        _txtLocalApiProviderUrl.Dock = DockStyle.Fill;
-        _txtLocalApiProviderUrl.Location = new Point(3, 5);
-        _txtLocalApiProviderUrl.Margin = new Padding(3, 5, 3, 5);
-        _txtLocalApiProviderUrl.Name = "_txtLocalApiProviderUrl";
-        _txtLocalApiProviderUrl.PlaceholderText = "https://api.openai.com/v1/";
-        _txtLocalApiProviderUrl.Size = new Size(406, 23);
-        _txtLocalApiProviderUrl.TabIndex = 0;
-        // 
-        // _btnRefreshLocalApiModels
-        // 
-        _btnRefreshLocalApiModels.AutoSize = true;
-        _btnRefreshLocalApiModels.Location = new Point(438, 3);
-        _btnRefreshLocalApiModels.Name = "_btnRefreshLocalApiModels";
-        _btnRefreshLocalApiModels.Size = new Size(110, 27);
-        _btnRefreshLocalApiModels.TabIndex = 1;
-        _btnRefreshLocalApiModels.Text = "Refresh Models";
-        _btnRefreshLocalApiModels.UseVisualStyleBackColor = true;
-        _btnRefreshLocalApiModels.Click += BtnRefreshLocalApiModels_Click;
-        // 
-        // _lblLocalApiApiKey
-        // 
-        _lblLocalApiApiKey.Anchor = AnchorStyles.Left | AnchorStyles.Right;
-        _lblLocalApiApiKey.Location = new Point(3, 39);
-        _lblLocalApiApiKey.Name = "_lblLocalApiApiKey";
-        _lblLocalApiApiKey.Size = new Size(144, 23);
-        _lblLocalApiApiKey.TabIndex = 13;
-        _lblLocalApiApiKey.Text = "Provider API Key:";
-        _lblLocalApiApiKey.TextAlign = ContentAlignment.MiddleRight;
-        // 
-        // _txtLocalApiApiKey
-        // 
-        _txtLocalApiApiKey.Dock = DockStyle.Fill;
-        _txtLocalApiApiKey.Location = new Point(153, 39);
-        _txtLocalApiApiKey.Name = "_txtLocalApiApiKey";
-        _txtLocalApiApiKey.PasswordChar = '●';
-        _txtLocalApiApiKey.PlaceholderText = "Stored in Windows Credential Manager, not in config JSON";
-        _txtLocalApiApiKey.Size = new Size(528, 23);
-        _txtLocalApiApiKey.TabIndex = 14;
-        // 
-        // _lblGatewayDetectedProtocol
-        // 
-        _lblGatewayDetectedProtocol.Anchor = AnchorStyles.Left | AnchorStyles.Right;
-        _lblGatewayDetectedProtocol.Location = new Point(3, 68);
-        _lblGatewayDetectedProtocol.Name = "_lblGatewayDetectedProtocol";
-        _lblGatewayDetectedProtocol.Size = new Size(144, 23);
-        _lblGatewayDetectedProtocol.TabIndex = 2;
-        _lblGatewayDetectedProtocol.Text = "Detected Protocol:";
-        _lblGatewayDetectedProtocol.TextAlign = ContentAlignment.MiddleRight;
-        // 
-        // _txtGatewayDetectedProtocol
-        // 
-        _txtGatewayDetectedProtocol.BorderStyle = BorderStyle.FixedSingle;
-        _txtGatewayDetectedProtocol.Dock = DockStyle.Fill;
-        _txtGatewayDetectedProtocol.Location = new Point(153, 68);
-        _txtGatewayDetectedProtocol.Name = "_txtGatewayDetectedProtocol";
-        _txtGatewayDetectedProtocol.ReadOnly = true;
-        _txtGatewayDetectedProtocol.Size = new Size(528, 23);
-        _txtGatewayDetectedProtocol.TabIndex = 3;
-        // 
-        // _lblGatewayProviderDisplayName
-        // 
-        _lblGatewayProviderDisplayName.Anchor = AnchorStyles.Left | AnchorStyles.Right;
-        _lblGatewayProviderDisplayName.Location = new Point(3, 94);
-        _lblGatewayProviderDisplayName.Name = "_lblGatewayProviderDisplayName";
-        _lblGatewayProviderDisplayName.Size = new Size(144, 23);
-        _lblGatewayProviderDisplayName.TabIndex = 4;
-        _lblGatewayProviderDisplayName.Text = "Display Name (optional):";
-        _lblGatewayProviderDisplayName.TextAlign = ContentAlignment.MiddleRight;
-        // 
-        // _txtGatewayProviderName2
-        // 
-        _txtGatewayProviderName2.Dock = DockStyle.Fill;
-        _txtGatewayProviderName2.Location = new Point(93, 34);
-        _txtGatewayProviderName2.Name = "_txtGatewayProviderName2";
-        _txtGatewayProviderName2.Size = new Size(244, 23);
-        _txtGatewayProviderName2.TabIndex = 5;
-        _txtGatewayProviderName2.TextChanged += TxtGatewayProviderName2_TextChanged;
-        // 
-        // _btnGatewayDetectProvider
-        // 
-        _btnGatewayDetectProvider.AutoSize = true;
-        _btnGatewayDetectProvider.Location = new Point(153, 120);
-        _btnGatewayDetectProvider.Name = "_btnGatewayDetectProvider";
-        _btnGatewayDetectProvider.Size = new Size(143, 27);
-        _btnGatewayDetectProvider.TabIndex = 6;
-        _btnGatewayDetectProvider.Text = "Test / Detect Defaults";
-        _btnGatewayDetectProvider.UseVisualStyleBackColor = true;
-        _btnGatewayDetectProvider.Click += BtnGatewayDetectProvider_Click;
-        // 
-        // _gatewayProviderModelActionsPanel
-        // 
-        _gatewayProviderModelActionsPanel.AutoSize = true;
-        _gatewayProviderModelActionsPanel.Controls.Add(_btnGatewayRefreshProviderModels);
-        _gatewayProviderModelActionsPanel.Controls.Add(_btnGatewayRefreshProviderModelsApply);
-        _gatewayProviderModelActionsPanel.Dock = DockStyle.Fill;
-        _gatewayProviderModelActionsPanel.Location = new Point(153, 153);
-        _gatewayProviderModelActionsPanel.Name = "_gatewayProviderModelActionsPanel";
-        _gatewayProviderModelActionsPanel.Size = new Size(528, 55);
-        _gatewayProviderModelActionsPanel.TabIndex = 7;
-        _gatewayProviderModelActionsPanel.WrapContents = false;
-        // 
-        // _btnGatewayRefreshProviderModels
-        // 
-        _btnGatewayRefreshProviderModels.AutoSize = true;
-        _btnGatewayRefreshProviderModels.Location = new Point(0, 0);
-        _btnGatewayRefreshProviderModels.Margin = new Padding(0, 0, 6, 0);
-        _btnGatewayRefreshProviderModels.Name = "_btnGatewayRefreshProviderModels";
-        _btnGatewayRefreshProviderModels.Size = new Size(111, 27);
-        _btnGatewayRefreshProviderModels.TabIndex = 0;
-        _btnGatewayRefreshProviderModels.Text = "Refresh Only";
-        _btnGatewayRefreshProviderModels.UseVisualStyleBackColor = true;
-        _btnGatewayRefreshProviderModels.Click += BtnGatewayRefreshProviderModels_Click;
-        // 
-        // _btnGatewayRefreshProviderModelsApply
-        // 
-        _btnGatewayRefreshProviderModelsApply.AutoSize = true;
-        _btnGatewayRefreshProviderModelsApply.Location = new Point(117, 0);
-        _btnGatewayRefreshProviderModelsApply.Margin = new Padding(0);
-        _btnGatewayRefreshProviderModelsApply.Name = "_btnGatewayRefreshProviderModelsApply";
-        _btnGatewayRefreshProviderModelsApply.Size = new Size(149, 27);
-        _btnGatewayRefreshProviderModelsApply.TabIndex = 1;
-        _btnGatewayRefreshProviderModelsApply.Text = "Refresh + Apply";
-        _btnGatewayRefreshProviderModelsApply.UseVisualStyleBackColor = true;
-        _btnGatewayRefreshProviderModelsApply.Click += BtnGatewayRefreshProviderModelsApply_Click;
-        // 
-        // _lblGatewayProviderModelPreview
-        // 
-        _lblGatewayProviderModelPreview.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
-        _lblGatewayProviderModelPreview.Location = new Point(3, 211);
-        _lblGatewayProviderModelPreview.Name = "_lblGatewayProviderModelPreview";
-        _lblGatewayProviderModelPreview.Size = new Size(144, 23);
-        _lblGatewayProviderModelPreview.TabIndex = 8;
-        _lblGatewayProviderModelPreview.Text = "Detected Models:";
-        _lblGatewayProviderModelPreview.TextAlign = ContentAlignment.TopRight;
-        // 
-        // _txtGatewayProviderModelPreview
-        // 
-        _txtGatewayProviderModelPreview.ContextMenuStrip = _gatewayModelPreviewContextMenu;
-        _txtGatewayProviderModelPreview.Dock = DockStyle.Fill;
-        _txtGatewayProviderModelPreview.FormattingEnabled = true;
-        _txtGatewayProviderModelPreview.IntegralHeight = false;
-        _txtGatewayProviderModelPreview.Location = new Point(153, 214);
-        _txtGatewayProviderModelPreview.Name = "_txtGatewayProviderModelPreview";
-        _txtGatewayProviderModelPreview.Size = new Size(528, 96);
-        _txtGatewayProviderModelPreview.TabIndex = 9;
-        _txtGatewayProviderModelPreview.SelectedIndexChanged += GatewayProviderModelPreview_SelectedIndexChanged;
-        _txtGatewayProviderModelPreview.DoubleClick += GatewayProviderModelPreview_DoubleClick;
-        _txtGatewayProviderModelPreview.MouseDown += GatewayProviderModelPreview_MouseDown;
-        // 
-        // _gatewayModelPreviewContextMenu
-        // 
-        _gatewayModelPreviewContextMenu.Items.AddRange(new ToolStripItem[] { _gatewaySetAsChatModelMenuItem, _gatewaySetAsEmbeddingModelMenuItem });
-        _gatewayModelPreviewContextMenu.Name = "_gatewayModelPreviewContextMenu";
-        _gatewayModelPreviewContextMenu.Size = new Size(225, 48);
-        // 
-        // _gatewaySetAsChatModelMenuItem
-        // 
-        _gatewaySetAsChatModelMenuItem.Name = "_gatewaySetAsChatModelMenuItem";
-        _gatewaySetAsChatModelMenuItem.Size = new Size(224, 22);
-        _gatewaySetAsChatModelMenuItem.Text = "Set as Chat Model";
-        _gatewaySetAsChatModelMenuItem.Click += GatewaySetAsChatModelMenuItem_Click;
-        // 
-        // _gatewaySetAsEmbeddingModelMenuItem
-        // 
-        _gatewaySetAsEmbeddingModelMenuItem.Name = "_gatewaySetAsEmbeddingModelMenuItem";
-        _gatewaySetAsEmbeddingModelMenuItem.Size = new Size(224, 22);
-        _gatewaySetAsEmbeddingModelMenuItem.Text = "Set as Embedding Model";
-        _gatewaySetAsEmbeddingModelMenuItem.Click += GatewaySetAsEmbeddingModelMenuItem_Click;
-        // 
-        // _lblGatewayProviderModelMetadata
-        // 
-        _lblGatewayProviderModelMetadata.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
-        _lblGatewayProviderModelMetadata.Location = new Point(3, 307);
-        _lblGatewayProviderModelMetadata.Name = "_lblGatewayProviderModelMetadata";
-        _lblGatewayProviderModelMetadata.Size = new Size(144, 20);
-        _lblGatewayProviderModelMetadata.TabIndex = 10;
-        _lblGatewayProviderModelMetadata.Text = "Model Info:";
-        _lblGatewayProviderModelMetadata.TextAlign = ContentAlignment.TopRight;
-        // 
-        // _txtGatewayProviderModelMetadata
-        // 
-        _txtGatewayProviderModelMetadata.Dock = DockStyle.Fill;
-        _txtGatewayProviderModelMetadata.Location = new Point(153, 310);
-        _txtGatewayProviderModelMetadata.Multiline = true;
-        _txtGatewayProviderModelMetadata.Name = "_txtGatewayProviderModelMetadata";
-        _txtGatewayProviderModelMetadata.ReadOnly = true;
-        _txtGatewayProviderModelMetadata.ScrollBars = ScrollBars.Vertical;
-        _txtGatewayProviderModelMetadata.Size = new Size(528, 90);
-        _txtGatewayProviderModelMetadata.TabIndex = 11;
-        // 
-        // _btnGatewayCopyModelMetadata
-        // 
-        _btnGatewayCopyModelMetadata.AutoSize = true;
-        _btnGatewayCopyModelMetadata.Location = new Point(153, 406);
-        _btnGatewayCopyModelMetadata.Name = "_btnGatewayCopyModelMetadata";
-        _btnGatewayCopyModelMetadata.Size = new Size(134, 27);
-        _btnGatewayCopyModelMetadata.TabIndex = 12;
-        _btnGatewayCopyModelMetadata.Text = "Copy Raw Summary";
-        _btnGatewayCopyModelMetadata.UseVisualStyleBackColor = true;
-        _btnGatewayCopyModelMetadata.Click += BtnGatewayCopyModelMetadata_Click;
-        // 
-        // _chkGatewayProviderShowAdvanced
-        // 
-        _chkGatewayProviderShowAdvanced.AutoSize = true;
-        _chkGatewayProviderShowAdvanced.Location = new Point(3, 438);
-        _chkGatewayProviderShowAdvanced.Name = "_chkGatewayProviderShowAdvanced";
-        _chkGatewayProviderShowAdvanced.Size = new Size(119, 21);
-        _chkGatewayProviderShowAdvanced.TabIndex = 4;
-        _chkGatewayProviderShowAdvanced.Text = "Show Advanced";
-        _chkGatewayProviderShowAdvanced.UseVisualStyleBackColor = true;
-        _chkGatewayProviderShowAdvanced.CheckedChanged += ChkGatewayProviderShowAdvanced_CheckedChanged;
+        // _txtGatewayOverviewProviders
+        // 
+        _txtGatewayOverviewProviders.BackColor = SystemColors.Window;
+        _txtGatewayOverviewProviders.Cursor = Cursors.Hand;
+        _txtGatewayOverviewProviders.Dock = DockStyle.Fill;
+        _txtGatewayOverviewProviders.Location = new Point(153, 77);
+        _txtGatewayOverviewProviders.Multiline = true;
+        _txtGatewayOverviewProviders.Name = "_txtGatewayOverviewProviders";
+        _txtGatewayOverviewProviders.ReadOnly = true;
+        _txtGatewayOverviewProviders.ScrollBars = ScrollBars.Vertical;
+        _txtGatewayOverviewProviders.ShortcutsEnabled = false;
+        _txtGatewayOverviewProviders.Size = new Size(563, 409);
+        _txtGatewayOverviewProviders.TabIndex = 6;
+        _txtGatewayOverviewProviders.WordWrap = false;
+        _txtGatewayOverviewProviders.Click += TxtGatewayOverviewProviders_Click;
+        _txtGatewayOverviewProviders.DoubleClick += TxtGatewayOverviewProviders_DoubleClick;
+        // 
+        // _gatewayOpenAiProviderTab
+        // 
+        _gatewayOpenAiProviderTab.Controls.Add(_gatewayOpenAiProviderControl);
+        _gatewayOpenAiProviderTab.Location = new Point(4, 26);
+        _gatewayOpenAiProviderTab.Name = "_gatewayOpenAiProviderTab";
+        _gatewayOpenAiProviderTab.Padding = new Padding(8);
+        _gatewayOpenAiProviderTab.Size = new Size(735, 505);
+        _gatewayOpenAiProviderTab.TabIndex = 1;
+        _gatewayOpenAiProviderTab.Tag = "openai";
+        _gatewayOpenAiProviderTab.Text = "OpenAI";
+        // 
+        // _gatewayOpenAiProviderControl
+        // 
+        _gatewayOpenAiProviderControl.Dock = DockStyle.Fill;
+        _gatewayOpenAiProviderControl.Location = new Point(8, 8);
+        _gatewayOpenAiProviderControl.Name = "_gatewayOpenAiProviderControl";
+        _gatewayOpenAiProviderControl.Size = new Size(719, 489);
+        _gatewayOpenAiProviderControl.TabIndex = 0;
+        // 
+        // _gatewayAnthropicProviderTab
+        // 
+        _gatewayAnthropicProviderTab.Controls.Add(_gatewayAnthropicProviderControl);
+        _gatewayAnthropicProviderTab.Location = new Point(4, 26);
+        _gatewayAnthropicProviderTab.Name = "_gatewayAnthropicProviderTab";
+        _gatewayAnthropicProviderTab.Padding = new Padding(8);
+        _gatewayAnthropicProviderTab.Size = new Size(735, 505);
+        _gatewayAnthropicProviderTab.TabIndex = 2;
+        _gatewayAnthropicProviderTab.Tag = "anthropic";
+        _gatewayAnthropicProviderTab.Text = "Anthropic";
+        // 
+        // _gatewayAnthropicProviderControl
+        // 
+        _gatewayAnthropicProviderControl.Dock = DockStyle.Fill;
+        _gatewayAnthropicProviderControl.Location = new Point(8, 8);
+        _gatewayAnthropicProviderControl.Name = "_gatewayAnthropicProviderControl";
+        _gatewayAnthropicProviderControl.Size = new Size(719, 489);
+        _gatewayAnthropicProviderControl.TabIndex = 0;
+        // 
+        // _gatewayGeminiProviderTab
+        // 
+        _gatewayGeminiProviderTab.Controls.Add(_gatewayGeminiProviderControl);
+        _gatewayGeminiProviderTab.Location = new Point(4, 26);
+        _gatewayGeminiProviderTab.Name = "_gatewayGeminiProviderTab";
+        _gatewayGeminiProviderTab.Padding = new Padding(8);
+        _gatewayGeminiProviderTab.Size = new Size(735, 505);
+        _gatewayGeminiProviderTab.TabIndex = 3;
+        _gatewayGeminiProviderTab.Tag = "google";
+        _gatewayGeminiProviderTab.Text = "Gemini";
+        // 
+        // _gatewayGeminiProviderControl
+        // 
+        _gatewayGeminiProviderControl.Dock = DockStyle.Fill;
+        _gatewayGeminiProviderControl.Location = new Point(8, 8);
+        _gatewayGeminiProviderControl.Name = "_gatewayGeminiProviderControl";
+        _gatewayGeminiProviderControl.Size = new Size(719, 489);
+        _gatewayGeminiProviderControl.TabIndex = 0;
         // 
         // _grpGatewayProviderAdvanced
         // 
-        _gatewayProviderEditorPanel.SetColumnSpan(_grpGatewayProviderAdvanced, 2);
         _grpGatewayProviderAdvanced.Controls.Add(_gatewayProviderAdvancedLayout);
         _grpGatewayProviderAdvanced.Dock = DockStyle.Fill;
-        _grpGatewayProviderAdvanced.Location = new Point(3, 465);
+        _grpGatewayProviderAdvanced.Location = new Point(0, 430);
         _grpGatewayProviderAdvanced.Name = "_grpGatewayProviderAdvanced";
-        _grpGatewayProviderAdvanced.Size = new Size(690, 420);
+        _grpGatewayProviderAdvanced.Size = new Size(694, 29);
         _grpGatewayProviderAdvanced.TabIndex = 5;
         _grpGatewayProviderAdvanced.TabStop = false;
         _grpGatewayProviderAdvanced.Text = "Advanced Settings";
@@ -1776,7 +1497,7 @@ partial class MainForm
         _gatewayProviderAdvancedLayout.RowStyles.Add(new RowStyle());
         _gatewayProviderAdvancedLayout.RowStyles.Add(new RowStyle());
         _gatewayProviderAdvancedLayout.RowStyles.Add(new RowStyle());
-        _gatewayProviderAdvancedLayout.Size = new Size(707, 398);
+        _gatewayProviderAdvancedLayout.Size = new Size(688, 7);
         _gatewayProviderAdvancedLayout.TabIndex = 0;
         // 
         // _gatewayProviderDetailsPanel
@@ -1806,7 +1527,7 @@ partial class MainForm
         _gatewayProviderDetailsPanel.RowStyles.Add(new RowStyle());
         _gatewayProviderDetailsPanel.RowStyles.Add(new RowStyle());
         _gatewayProviderDetailsPanel.RowStyles.Add(new RowStyle());
-        _gatewayProviderDetailsPanel.Size = new Size(701, 90);
+        _gatewayProviderDetailsPanel.Size = new Size(682, 90);
         _gatewayProviderDetailsPanel.TabIndex = 4;
         // 
         // _lblGatewayProviderId
@@ -1824,13 +1545,13 @@ partial class MainForm
         _txtGatewayProviderId.Dock = DockStyle.Fill;
         _txtGatewayProviderId.Location = new Point(93, 3);
         _txtGatewayProviderId.Name = "_txtGatewayProviderId";
-        _txtGatewayProviderId.Size = new Size(244, 23);
+        _txtGatewayProviderId.Size = new Size(235, 23);
         _txtGatewayProviderId.TabIndex = 1;
         // 
         // _lblGatewayProviderProtocol2
         // 
         _lblGatewayProviderProtocol2.Anchor = AnchorStyles.Left | AnchorStyles.Right;
-        _lblGatewayProviderProtocol2.Location = new Point(343, 4);
+        _lblGatewayProviderProtocol2.Location = new Point(334, 4);
         _lblGatewayProviderProtocol2.Name = "_lblGatewayProviderProtocol2";
         _lblGatewayProviderProtocol2.Size = new Size(104, 23);
         _lblGatewayProviderProtocol2.TabIndex = 2;
@@ -1843,9 +1564,9 @@ partial class MainForm
         _cmbGatewayProviderProtocol2.DropDownStyle = ComboBoxStyle.DropDownList;
         _cmbGatewayProviderProtocol2.FormattingEnabled = true;
         _cmbGatewayProviderProtocol2.Items.AddRange(new object[] { "OpenAICompatible", "Anthropic" });
-        _cmbGatewayProviderProtocol2.Location = new Point(453, 3);
+        _cmbGatewayProviderProtocol2.Location = new Point(444, 3);
         _cmbGatewayProviderProtocol2.Name = "_cmbGatewayProviderProtocol2";
-        _cmbGatewayProviderProtocol2.Size = new Size(245, 25);
+        _cmbGatewayProviderProtocol2.Size = new Size(235, 25);
         _cmbGatewayProviderProtocol2.TabIndex = 3;
         _cmbGatewayProviderProtocol2.SelectedIndexChanged += CmbGatewayProviderProtocol2_SelectedIndexChanged;
         // 
@@ -1859,10 +1580,19 @@ partial class MainForm
         _lblGatewayProviderName2.Text = "Name:";
         _lblGatewayProviderName2.TextAlign = ContentAlignment.MiddleRight;
         // 
+        // _txtGatewayProviderName2
+        // 
+        _txtGatewayProviderName2.Dock = DockStyle.Fill;
+        _txtGatewayProviderName2.Location = new Point(93, 34);
+        _txtGatewayProviderName2.Name = "_txtGatewayProviderName2";
+        _txtGatewayProviderName2.Size = new Size(235, 23);
+        _txtGatewayProviderName2.TabIndex = 5;
+        _txtGatewayProviderName2.TextChanged += TxtGatewayProviderName2_TextChanged;
+        // 
         // _lblGatewayProviderBaseUrl2
         // 
         _lblGatewayProviderBaseUrl2.Anchor = AnchorStyles.Left | AnchorStyles.Right;
-        _lblGatewayProviderBaseUrl2.Location = new Point(343, 34);
+        _lblGatewayProviderBaseUrl2.Location = new Point(334, 34);
         _lblGatewayProviderBaseUrl2.Name = "_lblGatewayProviderBaseUrl2";
         _lblGatewayProviderBaseUrl2.Size = new Size(104, 23);
         _lblGatewayProviderBaseUrl2.TabIndex = 6;
@@ -1872,9 +1602,9 @@ partial class MainForm
         // _txtGatewayProviderBaseUrl2
         // 
         _txtGatewayProviderBaseUrl2.Dock = DockStyle.Fill;
-        _txtGatewayProviderBaseUrl2.Location = new Point(453, 34);
+        _txtGatewayProviderBaseUrl2.Location = new Point(444, 34);
         _txtGatewayProviderBaseUrl2.Name = "_txtGatewayProviderBaseUrl2";
-        _txtGatewayProviderBaseUrl2.Size = new Size(245, 23);
+        _txtGatewayProviderBaseUrl2.Size = new Size(235, 23);
         _txtGatewayProviderBaseUrl2.TabIndex = 7;
         _txtGatewayProviderBaseUrl2.TextChanged += TxtGatewayProviderBaseUrl2_TextChanged;
         // 
@@ -1894,13 +1624,13 @@ partial class MainForm
         _txtGatewayProviderDefaultModel2.FormattingEnabled = true;
         _txtGatewayProviderDefaultModel2.Location = new Point(93, 63);
         _txtGatewayProviderDefaultModel2.Name = "_txtGatewayProviderDefaultModel2";
-        _txtGatewayProviderDefaultModel2.Size = new Size(244, 25);
+        _txtGatewayProviderDefaultModel2.Size = new Size(235, 25);
         _txtGatewayProviderDefaultModel2.TabIndex = 9;
         // 
         // _lblGatewayProviderEmbeddingModel2
         // 
         _lblGatewayProviderEmbeddingModel2.Anchor = AnchorStyles.Left | AnchorStyles.Right;
-        _lblGatewayProviderEmbeddingModel2.Location = new Point(343, 64);
+        _lblGatewayProviderEmbeddingModel2.Location = new Point(334, 64);
         _lblGatewayProviderEmbeddingModel2.Name = "_lblGatewayProviderEmbeddingModel2";
         _lblGatewayProviderEmbeddingModel2.Size = new Size(104, 23);
         _lblGatewayProviderEmbeddingModel2.TabIndex = 10;
@@ -1911,9 +1641,9 @@ partial class MainForm
         // 
         _txtGatewayProviderEmbeddingModel2.Dock = DockStyle.Fill;
         _txtGatewayProviderEmbeddingModel2.FormattingEnabled = true;
-        _txtGatewayProviderEmbeddingModel2.Location = new Point(453, 63);
+        _txtGatewayProviderEmbeddingModel2.Location = new Point(444, 63);
         _txtGatewayProviderEmbeddingModel2.Name = "_txtGatewayProviderEmbeddingModel2";
-        _txtGatewayProviderEmbeddingModel2.Size = new Size(245, 25);
+        _txtGatewayProviderEmbeddingModel2.Size = new Size(235, 25);
         _txtGatewayProviderEmbeddingModel2.TabIndex = 11;
         // 
         // _grpGatewayProviderAuth
@@ -1922,7 +1652,7 @@ partial class MainForm
         _grpGatewayProviderAuth.Dock = DockStyle.Top;
         _grpGatewayProviderAuth.Location = new Point(3, 99);
         _grpGatewayProviderAuth.Name = "_grpGatewayProviderAuth";
-        _grpGatewayProviderAuth.Size = new Size(701, 58);
+        _grpGatewayProviderAuth.Size = new Size(682, 58);
         _grpGatewayProviderAuth.TabIndex = 1;
         _grpGatewayProviderAuth.TabStop = false;
         _grpGatewayProviderAuth.Text = "Auth";
@@ -1943,7 +1673,7 @@ partial class MainForm
         _gatewayProviderAuthPanel.Name = "_gatewayProviderAuthPanel";
         _gatewayProviderAuthPanel.RowCount = 1;
         _gatewayProviderAuthPanel.RowStyles.Add(new RowStyle());
-        _gatewayProviderAuthPanel.Size = new Size(695, 36);
+        _gatewayProviderAuthPanel.Size = new Size(676, 36);
         _gatewayProviderAuthPanel.TabIndex = 0;
         // 
         // _lblGatewayProviderAuthType
@@ -1964,13 +1694,13 @@ partial class MainForm
         _cmbGatewayProviderAuthType.Items.AddRange(new object[] { "Bearer", "Header", "Query" });
         _cmbGatewayProviderAuthType.Location = new Point(93, 3);
         _cmbGatewayProviderAuthType.Name = "_cmbGatewayProviderAuthType";
-        _cmbGatewayProviderAuthType.Size = new Size(241, 25);
+        _cmbGatewayProviderAuthType.Size = new Size(232, 25);
         _cmbGatewayProviderAuthType.TabIndex = 13;
         // 
         // _lblGatewayProviderAuthHeader
         // 
         _lblGatewayProviderAuthHeader.Anchor = AnchorStyles.Left | AnchorStyles.Right;
-        _lblGatewayProviderAuthHeader.Location = new Point(340, 6);
+        _lblGatewayProviderAuthHeader.Location = new Point(331, 6);
         _lblGatewayProviderAuthHeader.Name = "_lblGatewayProviderAuthHeader";
         _lblGatewayProviderAuthHeader.Size = new Size(104, 23);
         _lblGatewayProviderAuthHeader.TabIndex = 14;
@@ -1980,9 +1710,9 @@ partial class MainForm
         // _txtGatewayProviderAuthHeader
         // 
         _txtGatewayProviderAuthHeader.Dock = DockStyle.Fill;
-        _txtGatewayProviderAuthHeader.Location = new Point(450, 3);
+        _txtGatewayProviderAuthHeader.Location = new Point(441, 3);
         _txtGatewayProviderAuthHeader.Name = "_txtGatewayProviderAuthHeader";
-        _txtGatewayProviderAuthHeader.Size = new Size(242, 23);
+        _txtGatewayProviderAuthHeader.Size = new Size(232, 23);
         _txtGatewayProviderAuthHeader.TabIndex = 15;
         // 
         // _grpGatewayProviderEndpoints
@@ -1991,7 +1721,7 @@ partial class MainForm
         _grpGatewayProviderEndpoints.Dock = DockStyle.Top;
         _grpGatewayProviderEndpoints.Location = new Point(3, 163);
         _grpGatewayProviderEndpoints.Name = "_grpGatewayProviderEndpoints";
-        _grpGatewayProviderEndpoints.Size = new Size(701, 91);
+        _grpGatewayProviderEndpoints.Size = new Size(682, 91);
         _grpGatewayProviderEndpoints.TabIndex = 2;
         _grpGatewayProviderEndpoints.TabStop = false;
         _grpGatewayProviderEndpoints.Text = "Endpoints";
@@ -2017,7 +1747,7 @@ partial class MainForm
         _gatewayProviderEndpointsPanel.RowCount = 2;
         _gatewayProviderEndpointsPanel.RowStyles.Add(new RowStyle());
         _gatewayProviderEndpointsPanel.RowStyles.Add(new RowStyle());
-        _gatewayProviderEndpointsPanel.Size = new Size(695, 69);
+        _gatewayProviderEndpointsPanel.Size = new Size(676, 69);
         _gatewayProviderEndpointsPanel.TabIndex = 0;
         // 
         // _lblGatewayProviderChatEndpoint
@@ -2035,13 +1765,13 @@ partial class MainForm
         _txtGatewayProviderChatEndpoint.Dock = DockStyle.Fill;
         _txtGatewayProviderChatEndpoint.Location = new Point(93, 3);
         _txtGatewayProviderChatEndpoint.Name = "_txtGatewayProviderChatEndpoint";
-        _txtGatewayProviderChatEndpoint.Size = new Size(241, 23);
+        _txtGatewayProviderChatEndpoint.Size = new Size(232, 23);
         _txtGatewayProviderChatEndpoint.TabIndex = 17;
         // 
         // _lblGatewayProviderEmbeddingsEndpoint
         // 
         _lblGatewayProviderEmbeddingsEndpoint.Anchor = AnchorStyles.Left | AnchorStyles.Right;
-        _lblGatewayProviderEmbeddingsEndpoint.Location = new Point(340, 3);
+        _lblGatewayProviderEmbeddingsEndpoint.Location = new Point(331, 3);
         _lblGatewayProviderEmbeddingsEndpoint.Name = "_lblGatewayProviderEmbeddingsEndpoint";
         _lblGatewayProviderEmbeddingsEndpoint.Size = new Size(104, 23);
         _lblGatewayProviderEmbeddingsEndpoint.TabIndex = 18;
@@ -2051,9 +1781,9 @@ partial class MainForm
         // _txtGatewayProviderEmbeddingsEndpoint
         // 
         _txtGatewayProviderEmbeddingsEndpoint.Dock = DockStyle.Fill;
-        _txtGatewayProviderEmbeddingsEndpoint.Location = new Point(450, 3);
+        _txtGatewayProviderEmbeddingsEndpoint.Location = new Point(441, 3);
         _txtGatewayProviderEmbeddingsEndpoint.Name = "_txtGatewayProviderEmbeddingsEndpoint";
-        _txtGatewayProviderEmbeddingsEndpoint.Size = new Size(242, 23);
+        _txtGatewayProviderEmbeddingsEndpoint.Size = new Size(232, 23);
         _txtGatewayProviderEmbeddingsEndpoint.TabIndex = 19;
         // 
         // _lblGatewayProviderResponsesEndpoint
@@ -2071,13 +1801,13 @@ partial class MainForm
         _txtGatewayProviderResponsesEndpoint.Dock = DockStyle.Fill;
         _txtGatewayProviderResponsesEndpoint.Location = new Point(93, 32);
         _txtGatewayProviderResponsesEndpoint.Name = "_txtGatewayProviderResponsesEndpoint";
-        _txtGatewayProviderResponsesEndpoint.Size = new Size(241, 23);
+        _txtGatewayProviderResponsesEndpoint.Size = new Size(232, 23);
         _txtGatewayProviderResponsesEndpoint.TabIndex = 21;
         // 
         // _lblGatewayProviderAdditionalHeaders
         // 
         _lblGatewayProviderAdditionalHeaders.Anchor = AnchorStyles.Left | AnchorStyles.Right;
-        _lblGatewayProviderAdditionalHeaders.Location = new Point(340, 37);
+        _lblGatewayProviderAdditionalHeaders.Location = new Point(331, 37);
         _lblGatewayProviderAdditionalHeaders.Name = "_lblGatewayProviderAdditionalHeaders";
         _lblGatewayProviderAdditionalHeaders.Size = new Size(104, 23);
         _lblGatewayProviderAdditionalHeaders.TabIndex = 22;
@@ -2087,11 +1817,11 @@ partial class MainForm
         // _txtGatewayProviderAdditionalHeaders
         // 
         _txtGatewayProviderAdditionalHeaders.Dock = DockStyle.Fill;
-        _txtGatewayProviderAdditionalHeaders.Location = new Point(450, 32);
+        _txtGatewayProviderAdditionalHeaders.Location = new Point(441, 32);
         _txtGatewayProviderAdditionalHeaders.Multiline = true;
         _txtGatewayProviderAdditionalHeaders.Name = "_txtGatewayProviderAdditionalHeaders";
         _txtGatewayProviderAdditionalHeaders.ScrollBars = ScrollBars.Vertical;
-        _txtGatewayProviderAdditionalHeaders.Size = new Size(242, 34);
+        _txtGatewayProviderAdditionalHeaders.Size = new Size(232, 34);
         _txtGatewayProviderAdditionalHeaders.TabIndex = 23;
         _txtGatewayProviderAdditionalHeaders.WordWrap = false;
         // 
@@ -2101,7 +1831,7 @@ partial class MainForm
         _grpGatewayProviderCapabilities.Dock = DockStyle.Top;
         _grpGatewayProviderCapabilities.Location = new Point(3, 260);
         _grpGatewayProviderCapabilities.Name = "_grpGatewayProviderCapabilities";
-        _grpGatewayProviderCapabilities.Size = new Size(701, 52);
+        _grpGatewayProviderCapabilities.Size = new Size(682, 52);
         _grpGatewayProviderCapabilities.TabIndex = 3;
         _grpGatewayProviderCapabilities.TabStop = false;
         _grpGatewayProviderCapabilities.Text = "Capabilities";
@@ -2116,7 +1846,7 @@ partial class MainForm
         _gatewayProviderCapabilitiesPanel.Dock = DockStyle.Fill;
         _gatewayProviderCapabilitiesPanel.Location = new Point(3, 19);
         _gatewayProviderCapabilitiesPanel.Name = "_gatewayProviderCapabilitiesPanel";
-        _gatewayProviderCapabilitiesPanel.Size = new Size(695, 30);
+        _gatewayProviderCapabilitiesPanel.Size = new Size(676, 30);
         _gatewayProviderCapabilitiesPanel.TabIndex = 24;
         _gatewayProviderCapabilitiesPanel.WrapContents = false;
         // 
@@ -2156,6 +1886,283 @@ partial class MainForm
         _chkGatewaySupportsStreaming.Size = new Size(143, 21);
         _chkGatewaySupportsStreaming.TabIndex = 3;
         _chkGatewaySupportsStreaming.Text = "Supports Streaming";
+        // 
+        // _chkGatewayProviderShowAdvanced
+        // 
+        _chkGatewayProviderShowAdvanced.AutoSize = true;
+        _chkGatewayProviderShowAdvanced.Location = new Point(3, 438);
+        _chkGatewayProviderShowAdvanced.Name = "_chkGatewayProviderShowAdvanced";
+        _chkGatewayProviderShowAdvanced.Size = new Size(119, 21);
+        _chkGatewayProviderShowAdvanced.TabIndex = 4;
+        _chkGatewayProviderShowAdvanced.Text = "Show Advanced";
+        _chkGatewayProviderShowAdvanced.UseVisualStyleBackColor = true;
+        _chkGatewayProviderShowAdvanced.CheckedChanged += ChkGatewayProviderShowAdvanced_CheckedChanged;
+        // 
+        // _grpGatewayProviderBasic
+        // 
+        _grpGatewayProviderBasic.Controls.Add(_gatewayProviderBasicPanel);
+        _grpGatewayProviderBasic.Dock = DockStyle.Top;
+        _grpGatewayProviderBasic.Location = new Point(0, 0);
+        _grpGatewayProviderBasic.Name = "_grpGatewayProviderBasic";
+        _grpGatewayProviderBasic.Size = new Size(694, 430);
+        _grpGatewayProviderBasic.TabIndex = 3;
+        _grpGatewayProviderBasic.TabStop = false;
+        _grpGatewayProviderBasic.Text = "Basic Settings";
+        // 
+        // _gatewayProviderBasicPanel
+        // 
+        _gatewayProviderBasicPanel.ColumnCount = 2;
+        _gatewayProviderBasicPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 150F));
+        _gatewayProviderBasicPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+        _gatewayProviderBasicPanel.Controls.Add(_lblLocalApiProviderUrl, 0, 0);
+        _gatewayProviderBasicPanel.Controls.Add(_localApiProviderUrlPanel, 1, 0);
+        _gatewayProviderBasicPanel.Controls.Add(_lblLocalApiApiKey, 0, 1);
+        _gatewayProviderBasicPanel.Controls.Add(_txtLocalApiApiKey, 1, 1);
+        _gatewayProviderBasicPanel.Controls.Add(_lblGatewayDetectedProtocol, 0, 2);
+        _gatewayProviderBasicPanel.Controls.Add(_txtGatewayDetectedProtocol, 1, 2);
+        _gatewayProviderBasicPanel.Controls.Add(_lblGatewayProviderDisplayName, 0, 3);
+        _gatewayProviderBasicPanel.Controls.Add(_btnGatewayDetectProvider, 1, 4);
+        _gatewayProviderBasicPanel.Controls.Add(_gatewayProviderModelActionsPanel, 1, 5);
+        _gatewayProviderBasicPanel.Controls.Add(_lblGatewayProviderModelPreview, 0, 6);
+        _gatewayProviderBasicPanel.Controls.Add(_txtGatewayProviderModelPreview, 1, 6);
+        _gatewayProviderBasicPanel.Controls.Add(_lblGatewayProviderModelMetadata, 0, 7);
+        _gatewayProviderBasicPanel.Controls.Add(_txtGatewayProviderModelMetadata, 1, 7);
+        _gatewayProviderBasicPanel.Controls.Add(_btnGatewayCopyModelMetadata, 1, 8);
+        _gatewayProviderBasicPanel.Dock = DockStyle.Fill;
+        _gatewayProviderBasicPanel.Location = new Point(3, 19);
+        _gatewayProviderBasicPanel.Name = "_gatewayProviderBasicPanel";
+        _gatewayProviderBasicPanel.RowCount = 8;
+        _gatewayProviderBasicPanel.RowStyles.Add(new RowStyle());
+        _gatewayProviderBasicPanel.RowStyles.Add(new RowStyle());
+        _gatewayProviderBasicPanel.RowStyles.Add(new RowStyle());
+        _gatewayProviderBasicPanel.RowStyles.Add(new RowStyle());
+        _gatewayProviderBasicPanel.RowStyles.Add(new RowStyle());
+        _gatewayProviderBasicPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
+        _gatewayProviderBasicPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 96F));
+        _gatewayProviderBasicPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 28F));
+        _gatewayProviderBasicPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 36F));
+        _gatewayProviderBasicPanel.Size = new Size(688, 408);
+        _gatewayProviderBasicPanel.TabIndex = 0;
+        // 
+        // _lblLocalApiProviderUrl
+        // 
+        _lblLocalApiProviderUrl.Anchor = AnchorStyles.Left | AnchorStyles.Right;
+        _lblLocalApiProviderUrl.Location = new Point(3, 6);
+        _lblLocalApiProviderUrl.Name = "_lblLocalApiProviderUrl";
+        _lblLocalApiProviderUrl.Size = new Size(144, 23);
+        _lblLocalApiProviderUrl.TabIndex = 5;
+        _lblLocalApiProviderUrl.Text = "Provider Base URL:";
+        _lblLocalApiProviderUrl.TextAlign = ContentAlignment.MiddleRight;
+        // 
+        // _localApiProviderUrlPanel
+        // 
+        _localApiProviderUrlPanel.ColumnCount = 2;
+        _localApiProviderUrlPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+        _localApiProviderUrlPanel.ColumnStyles.Add(new ColumnStyle());
+        _localApiProviderUrlPanel.Controls.Add(_txtLocalApiProviderUrl, 0, 0);
+        _localApiProviderUrlPanel.Controls.Add(_btnRefreshLocalApiModels, 1, 0);
+        _localApiProviderUrlPanel.Dock = DockStyle.Fill;
+        _localApiProviderUrlPanel.Location = new Point(153, 0);
+        _localApiProviderUrlPanel.Margin = new Padding(3, 0, 3, 3);
+        _localApiProviderUrlPanel.Name = "_localApiProviderUrlPanel";
+        _localApiProviderUrlPanel.RowCount = 1;
+        _localApiProviderUrlPanel.RowStyles.Add(new RowStyle());
+        _localApiProviderUrlPanel.Size = new Size(532, 33);
+        _localApiProviderUrlPanel.TabIndex = 6;
+        // 
+        // _txtLocalApiProviderUrl
+        // 
+        _txtLocalApiProviderUrl.Dock = DockStyle.Fill;
+        _txtLocalApiProviderUrl.Location = new Point(3, 5);
+        _txtLocalApiProviderUrl.Margin = new Padding(3, 5, 3, 5);
+        _txtLocalApiProviderUrl.Name = "_txtLocalApiProviderUrl";
+        _txtLocalApiProviderUrl.PlaceholderText = "https://api.openai.com/v1/";
+        _txtLocalApiProviderUrl.Size = new Size(410, 23);
+        _txtLocalApiProviderUrl.TabIndex = 0;
+        // 
+        // _btnRefreshLocalApiModels
+        // 
+        _btnRefreshLocalApiModels.AutoSize = true;
+        _btnRefreshLocalApiModels.Location = new Point(419, 3);
+        _btnRefreshLocalApiModels.Name = "_btnRefreshLocalApiModels";
+        _btnRefreshLocalApiModels.Size = new Size(110, 27);
+        _btnRefreshLocalApiModels.TabIndex = 1;
+        _btnRefreshLocalApiModels.Text = "Refresh Models";
+        _btnRefreshLocalApiModels.UseVisualStyleBackColor = true;
+        _btnRefreshLocalApiModels.Click += BtnRefreshLocalApiModels_Click;
+        // 
+        // _lblLocalApiApiKey
+        // 
+        _lblLocalApiApiKey.Anchor = AnchorStyles.Left | AnchorStyles.Right;
+        _lblLocalApiApiKey.Location = new Point(3, 39);
+        _lblLocalApiApiKey.Name = "_lblLocalApiApiKey";
+        _lblLocalApiApiKey.Size = new Size(144, 23);
+        _lblLocalApiApiKey.TabIndex = 13;
+        _lblLocalApiApiKey.Text = "Provider API Key:";
+        _lblLocalApiApiKey.TextAlign = ContentAlignment.MiddleRight;
+        // 
+        // _txtLocalApiApiKey
+        // 
+        _txtLocalApiApiKey.Dock = DockStyle.Fill;
+        _txtLocalApiApiKey.Location = new Point(153, 39);
+        _txtLocalApiApiKey.Name = "_txtLocalApiApiKey";
+        _txtLocalApiApiKey.PasswordChar = '●';
+        _txtLocalApiApiKey.PlaceholderText = "Stored in Windows Credential Manager, not in config JSON";
+        _txtLocalApiApiKey.Size = new Size(532, 23);
+        _txtLocalApiApiKey.TabIndex = 14;
+        // 
+        // _lblGatewayDetectedProtocol
+        // 
+        _lblGatewayDetectedProtocol.Anchor = AnchorStyles.Left | AnchorStyles.Right;
+        _lblGatewayDetectedProtocol.Location = new Point(3, 68);
+        _lblGatewayDetectedProtocol.Name = "_lblGatewayDetectedProtocol";
+        _lblGatewayDetectedProtocol.Size = new Size(144, 23);
+        _lblGatewayDetectedProtocol.TabIndex = 2;
+        _lblGatewayDetectedProtocol.Text = "Detected Protocol:";
+        _lblGatewayDetectedProtocol.TextAlign = ContentAlignment.MiddleRight;
+        // 
+        // _txtGatewayDetectedProtocol
+        // 
+        _txtGatewayDetectedProtocol.BorderStyle = BorderStyle.FixedSingle;
+        _txtGatewayDetectedProtocol.Dock = DockStyle.Fill;
+        _txtGatewayDetectedProtocol.Location = new Point(153, 68);
+        _txtGatewayDetectedProtocol.Name = "_txtGatewayDetectedProtocol";
+        _txtGatewayDetectedProtocol.ReadOnly = true;
+        _txtGatewayDetectedProtocol.Size = new Size(532, 23);
+        _txtGatewayDetectedProtocol.TabIndex = 3;
+        // 
+        // _lblGatewayProviderDisplayName
+        // 
+        _lblGatewayProviderDisplayName.Anchor = AnchorStyles.Left | AnchorStyles.Right;
+        _lblGatewayProviderDisplayName.Location = new Point(3, 94);
+        _lblGatewayProviderDisplayName.Name = "_lblGatewayProviderDisplayName";
+        _lblGatewayProviderDisplayName.Size = new Size(144, 23);
+        _lblGatewayProviderDisplayName.TabIndex = 4;
+        _lblGatewayProviderDisplayName.Text = "Display Name (optional):";
+        _lblGatewayProviderDisplayName.TextAlign = ContentAlignment.MiddleRight;
+        // 
+        // _btnGatewayDetectProvider
+        // 
+        _btnGatewayDetectProvider.AutoSize = true;
+        _btnGatewayDetectProvider.Location = new Point(153, 120);
+        _btnGatewayDetectProvider.Name = "_btnGatewayDetectProvider";
+        _btnGatewayDetectProvider.Size = new Size(143, 27);
+        _btnGatewayDetectProvider.TabIndex = 6;
+        _btnGatewayDetectProvider.Text = "Test / Detect Defaults";
+        _btnGatewayDetectProvider.UseVisualStyleBackColor = true;
+        _btnGatewayDetectProvider.Click += BtnGatewayDetectProvider_Click;
+        // 
+        // _gatewayProviderModelActionsPanel
+        // 
+        _gatewayProviderModelActionsPanel.AutoSize = true;
+        _gatewayProviderModelActionsPanel.Controls.Add(_btnGatewayRefreshProviderModels);
+        _gatewayProviderModelActionsPanel.Controls.Add(_btnGatewayRefreshProviderModelsApply);
+        _gatewayProviderModelActionsPanel.Dock = DockStyle.Fill;
+        _gatewayProviderModelActionsPanel.Location = new Point(153, 153);
+        _gatewayProviderModelActionsPanel.Name = "_gatewayProviderModelActionsPanel";
+        _gatewayProviderModelActionsPanel.Size = new Size(532, 92);
+        _gatewayProviderModelActionsPanel.TabIndex = 7;
+        _gatewayProviderModelActionsPanel.WrapContents = false;
+        // 
+        // _btnGatewayRefreshProviderModels
+        // 
+        _btnGatewayRefreshProviderModels.AutoSize = true;
+        _btnGatewayRefreshProviderModels.Location = new Point(0, 0);
+        _btnGatewayRefreshProviderModels.Margin = new Padding(0, 0, 6, 0);
+        _btnGatewayRefreshProviderModels.Name = "_btnGatewayRefreshProviderModels";
+        _btnGatewayRefreshProviderModels.Size = new Size(111, 27);
+        _btnGatewayRefreshProviderModels.TabIndex = 0;
+        _btnGatewayRefreshProviderModels.Text = "Refresh Only";
+        _btnGatewayRefreshProviderModels.UseVisualStyleBackColor = true;
+        _btnGatewayRefreshProviderModels.Click += BtnGatewayRefreshProviderModels_Click;
+        // 
+        // _btnGatewayRefreshProviderModelsApply
+        // 
+        _btnGatewayRefreshProviderModelsApply.AutoSize = true;
+        _btnGatewayRefreshProviderModelsApply.Location = new Point(117, 0);
+        _btnGatewayRefreshProviderModelsApply.Margin = new Padding(0);
+        _btnGatewayRefreshProviderModelsApply.Name = "_btnGatewayRefreshProviderModelsApply";
+        _btnGatewayRefreshProviderModelsApply.Size = new Size(149, 27);
+        _btnGatewayRefreshProviderModelsApply.TabIndex = 1;
+        _btnGatewayRefreshProviderModelsApply.Text = "Refresh + Apply";
+        _btnGatewayRefreshProviderModelsApply.UseVisualStyleBackColor = true;
+        _btnGatewayRefreshProviderModelsApply.Click += BtnGatewayRefreshProviderModelsApply_Click;
+        // 
+        // _lblGatewayProviderModelPreview
+        // 
+        _lblGatewayProviderModelPreview.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+        _lblGatewayProviderModelPreview.Location = new Point(3, 248);
+        _lblGatewayProviderModelPreview.Name = "_lblGatewayProviderModelPreview";
+        _lblGatewayProviderModelPreview.Size = new Size(144, 23);
+        _lblGatewayProviderModelPreview.TabIndex = 8;
+        _lblGatewayProviderModelPreview.Text = "Detected Models:";
+        _lblGatewayProviderModelPreview.TextAlign = ContentAlignment.TopRight;
+        // 
+        // _txtGatewayProviderModelPreview
+        // 
+        _txtGatewayProviderModelPreview.ContextMenuStrip = _gatewayModelPreviewContextMenu;
+        _txtGatewayProviderModelPreview.Dock = DockStyle.Fill;
+        _txtGatewayProviderModelPreview.FormattingEnabled = true;
+        _txtGatewayProviderModelPreview.IntegralHeight = false;
+        _txtGatewayProviderModelPreview.Location = new Point(153, 251);
+        _txtGatewayProviderModelPreview.Name = "_txtGatewayProviderModelPreview";
+        _txtGatewayProviderModelPreview.Size = new Size(532, 90);
+        _txtGatewayProviderModelPreview.TabIndex = 9;
+        _txtGatewayProviderModelPreview.SelectedIndexChanged += GatewayProviderModelPreview_SelectedIndexChanged;
+        _txtGatewayProviderModelPreview.DoubleClick += GatewayProviderModelPreview_DoubleClick;
+        _txtGatewayProviderModelPreview.MouseDown += GatewayProviderModelPreview_MouseDown;
+        // 
+        // _gatewayModelPreviewContextMenu
+        // 
+        _gatewayModelPreviewContextMenu.Items.AddRange(new ToolStripItem[] { _gatewaySetAsChatModelMenuItem, _gatewaySetAsEmbeddingModelMenuItem });
+        _gatewayModelPreviewContextMenu.Name = "_gatewayModelPreviewContextMenu";
+        _gatewayModelPreviewContextMenu.Size = new Size(225, 48);
+        // 
+        // _gatewaySetAsChatModelMenuItem
+        // 
+        _gatewaySetAsChatModelMenuItem.Name = "_gatewaySetAsChatModelMenuItem";
+        _gatewaySetAsChatModelMenuItem.Size = new Size(224, 22);
+        _gatewaySetAsChatModelMenuItem.Text = "Set as Chat Model";
+        _gatewaySetAsChatModelMenuItem.Click += GatewaySetAsChatModelMenuItem_Click;
+        // 
+        // _gatewaySetAsEmbeddingModelMenuItem
+        // 
+        _gatewaySetAsEmbeddingModelMenuItem.Name = "_gatewaySetAsEmbeddingModelMenuItem";
+        _gatewaySetAsEmbeddingModelMenuItem.Size = new Size(224, 22);
+        _gatewaySetAsEmbeddingModelMenuItem.Text = "Set as Embedding Model";
+        _gatewaySetAsEmbeddingModelMenuItem.Click += GatewaySetAsEmbeddingModelMenuItem_Click;
+        // 
+        // _lblGatewayProviderModelMetadata
+        // 
+        _lblGatewayProviderModelMetadata.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+        _lblGatewayProviderModelMetadata.Location = new Point(3, 344);
+        _lblGatewayProviderModelMetadata.Name = "_lblGatewayProviderModelMetadata";
+        _lblGatewayProviderModelMetadata.Size = new Size(144, 20);
+        _lblGatewayProviderModelMetadata.TabIndex = 10;
+        _lblGatewayProviderModelMetadata.Text = "Model Info:";
+        _lblGatewayProviderModelMetadata.TextAlign = ContentAlignment.TopRight;
+        // 
+        // _txtGatewayProviderModelMetadata
+        // 
+        _txtGatewayProviderModelMetadata.Dock = DockStyle.Fill;
+        _txtGatewayProviderModelMetadata.Location = new Point(153, 347);
+        _txtGatewayProviderModelMetadata.Multiline = true;
+        _txtGatewayProviderModelMetadata.Name = "_txtGatewayProviderModelMetadata";
+        _txtGatewayProviderModelMetadata.ReadOnly = true;
+        _txtGatewayProviderModelMetadata.ScrollBars = ScrollBars.Vertical;
+        _txtGatewayProviderModelMetadata.Size = new Size(532, 22);
+        _txtGatewayProviderModelMetadata.TabIndex = 11;
+        // 
+        // _btnGatewayCopyModelMetadata
+        // 
+        _btnGatewayCopyModelMetadata.AutoSize = true;
+        _btnGatewayCopyModelMetadata.Location = new Point(153, 375);
+        _btnGatewayCopyModelMetadata.Name = "_btnGatewayCopyModelMetadata";
+        _btnGatewayCopyModelMetadata.Size = new Size(134, 27);
+        _btnGatewayCopyModelMetadata.TabIndex = 12;
+        _btnGatewayCopyModelMetadata.Text = "Copy Raw Summary";
+        _btnGatewayCopyModelMetadata.UseVisualStyleBackColor = true;
+        _btnGatewayCopyModelMetadata.Click += BtnGatewayCopyModelMetadata_Click;
         // 
         // _gatewayRouteTab
         // 
@@ -2251,14 +2258,14 @@ partial class MainForm
         // 
         _txtGatewayRoutesPreview.AcceptsReturn = true;
         _txtGatewayRoutesPreview.Dock = DockStyle.Fill;
-        _txtGatewayRoutesPreview.Location = new Point(8, 220);
+        _txtGatewayRoutesPreview.Location = new Point(8, 8);
         _txtGatewayRoutesPreview.Margin = new Padding(0);
         _txtGatewayRoutesPreview.Multiline = true;
         _txtGatewayRoutesPreview.Name = "_txtGatewayRoutesPreview";
         _txtGatewayRoutesPreview.PlaceholderText = "Gateway routes preview (design-time visible, runtime generated):\r\ndefault -> gpt-4.1-mini\r\nanthropic -> claude-sonnet";
         _txtGatewayRoutesPreview.ReadOnly = true;
         _txtGatewayRoutesPreview.ScrollBars = ScrollBars.Vertical;
-        _txtGatewayRoutesPreview.Size = new Size(719, 277);
+        _txtGatewayRoutesPreview.Size = new Size(719, 489);
         _txtGatewayRoutesPreview.TabIndex = 24;
         _txtGatewayRoutesPreview.WordWrap = false;
         // 
@@ -2910,6 +2917,13 @@ partial class MainForm
         _btnStartStop.UseVisualStyleBackColor = false;
         _btnStartStop.Click += BtnStartStop_Click;
         // 
+        // _btnAddGatewayProvider
+        // 
+        _btnAddGatewayProvider.Location = new Point(0, 0);
+        _btnAddGatewayProvider.Name = "_btnAddGatewayProvider";
+        _btnAddGatewayProvider.Size = new Size(75, 23);
+        _btnAddGatewayProvider.TabIndex = 0;
+        // 
         // _lblLocalApiProvider
         // 
         _lblLocalApiProvider.Anchor = AnchorStyles.Left | AnchorStyles.Right;
@@ -3378,19 +3392,20 @@ partial class MainForm
         _localApiPortPanel.ResumeLayout(false);
         ((ISupportInitialize)_numOllamaPort).EndInit();
         ((ISupportInitialize)_numFoundryPort).EndInit();
+        _gatewayOpenAiProviderTab.ResumeLayout(false);
+        _gatewayAnthropicProviderTab.ResumeLayout(false);
+        _gatewayGeminiProviderTab.ResumeLayout(false);
+        _gatewayOpenAiProviderControl.ResumeLayout(false);
+        _gatewayAnthropicProviderControl.ResumeLayout(false);
+        _gatewayGeminiProviderControl.ResumeLayout(false);
         _gatewayProviderTab.ResumeLayout(false);
         _gatewayProviderEditorPanel.ResumeLayout(false);
         _gatewayProviderEditorPanel.PerformLayout();
+        _gatewayProviderTabs.ResumeLayout(false);
         _gatewayProviderButtonsPanel.ResumeLayout(false);
         _gatewayProviderButtonsPanel.PerformLayout();
-        _grpGatewayProviderBasic.ResumeLayout(false);
-        _gatewayProviderBasicPanel.ResumeLayout(false);
-        _gatewayProviderBasicPanel.PerformLayout();
-        _localApiProviderUrlPanel.ResumeLayout(false);
-        _localApiProviderUrlPanel.PerformLayout();
-        _gatewayProviderModelActionsPanel.ResumeLayout(false);
-        _gatewayProviderModelActionsPanel.PerformLayout();
-        _gatewayModelPreviewContextMenu.ResumeLayout(false);
+        _gatewayProviderContentScrollPanel.ResumeLayout(false);
+        _gatewayProviderContentScrollPanel.PerformLayout();
         _grpGatewayProviderAdvanced.ResumeLayout(false);
         _gatewayProviderAdvancedLayout.ResumeLayout(false);
         _gatewayProviderDetailsPanel.ResumeLayout(false);
@@ -3405,6 +3420,14 @@ partial class MainForm
         _grpGatewayProviderCapabilities.PerformLayout();
         _gatewayProviderCapabilitiesPanel.ResumeLayout(false);
         _gatewayProviderCapabilitiesPanel.PerformLayout();
+        _grpGatewayProviderBasic.ResumeLayout(false);
+        _gatewayProviderBasicPanel.ResumeLayout(false);
+        _gatewayProviderBasicPanel.PerformLayout();
+        _localApiProviderUrlPanel.ResumeLayout(false);
+        _localApiProviderUrlPanel.PerformLayout();
+        _gatewayProviderModelActionsPanel.ResumeLayout(false);
+        _gatewayProviderModelActionsPanel.PerformLayout();
+        _gatewayModelPreviewContextMenu.ResumeLayout(false);
         _gatewayRouteTab.ResumeLayout(false);
         _gatewayRouteTab.PerformLayout();
         _gatewayRouteEditorPanel.ResumeLayout(false);
@@ -3457,6 +3480,12 @@ partial class MainForm
     private Label techContentLabel;
     private Button? _btnCheckUpdate;
     private Label? _lblUpdateStatus;
+    private TabPage _gatewayOpenAiProviderTab;
+    private TabPage _gatewayAnthropicProviderTab;
+    private TabPage _gatewayGeminiProviderTab;
+    private GatewayProviderSettingsControl _gatewayOpenAiProviderControl;
+    private GatewayProviderSettingsControl _gatewayAnthropicProviderControl;
+    private GatewayProviderSettingsControl _gatewayGeminiProviderControl;
 
     // Hosts Redirect Mode Selection (dynamically created)
     private GroupBox? _grpRedirectMode;
