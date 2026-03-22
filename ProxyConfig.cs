@@ -499,11 +499,51 @@ internal sealed class ProxyConfigManager
 			[
 				new GatewayProviderSettings
 				{
-					Id = "default",
+					Id = "openai",
 					Enabled = true,
 					Protocol = "OpenAICompatible",
-					Name = "OpenAI Compatible",
+					Name = "OpenAI",
 					BaseUrl = "https://api.openai.com/v1/",
+					Capabilities = new GatewayProviderCapabilitySettings
+					{
+						SupportsChat = true,
+						SupportsEmbeddings = true,
+						SupportsResponses = true,
+						SupportsStreaming = true
+					}
+				},
+				new GatewayProviderSettings
+				{
+					Id = "anthropic",
+					Enabled = true,
+					Protocol = "Anthropic",
+					Name = "Anthropic",
+					BaseUrl = "https://api.anthropic.com/v1/",
+					AuthType = "Header",
+					AuthHeaderName = "x-api-key",
+					ChatEndpoint = "messages",
+					EmbeddingsEndpoint = string.Empty,
+					ResponsesEndpoint = "responses",
+					Capabilities = new GatewayProviderCapabilitySettings
+					{
+						SupportsChat = true,
+						SupportsEmbeddings = false,
+						SupportsResponses = true,
+						SupportsStreaming = true
+					}
+				},
+				new GatewayProviderSettings
+				{
+					Id = "google",
+					Enabled = true,
+					Protocol = "OpenAICompatible",
+					Name = "Google Gemini",
+					BaseUrl = "https://generativelanguage.googleapis.com/v1beta/openai/",
+					AuthType = "Bearer",
+					AuthHeaderName = "Authorization",
+					ChatEndpoint = "chat/completions",
+					EmbeddingsEndpoint = "embeddings",
+					ResponsesEndpoint = "responses",
 					Capabilities = new GatewayProviderCapabilitySettings
 					{
 						SupportsChat = true,
@@ -621,12 +661,84 @@ internal sealed class ProxyConfigManager
 		settings.Routes ??= [];
 		settings.RequestResponseLogging ??= new LocalApiRequestResponseLoggingSettings();
 
+		EnsurePresetProviders(settings);
+
 		foreach (var provider in settings.Providers)
 		{
 			provider.Capabilities ??= new GatewayProviderCapabilitySettings();
 			provider.AdditionalHeaders ??= [];
 			if (string.IsNullOrWhiteSpace(provider.Id))
 				provider.Id = BuildProviderId(provider.Name, provider.Protocol);
+		}
+	}
+
+	private static void EnsurePresetProviders(OllamaGatewaySettings settings)
+	{
+		var presets = new[]
+		{
+			new GatewayProviderSettings
+			{
+				Id = "openai",
+				Enabled = true,
+				Protocol = "OpenAICompatible",
+				Name = "OpenAI",
+				BaseUrl = "https://api.openai.com/v1/",
+				Capabilities = new GatewayProviderCapabilitySettings
+				{
+					SupportsChat = true,
+					SupportsEmbeddings = true,
+					SupportsResponses = true,
+					SupportsStreaming = true
+				}
+			},
+			new GatewayProviderSettings
+			{
+				Id = "anthropic",
+				Enabled = true,
+				Protocol = "Anthropic",
+				Name = "Anthropic",
+				BaseUrl = "https://api.anthropic.com/v1/",
+				AuthType = "Header",
+				AuthHeaderName = "x-api-key",
+				ChatEndpoint = "messages",
+				EmbeddingsEndpoint = string.Empty,
+				ResponsesEndpoint = "responses",
+				Capabilities = new GatewayProviderCapabilitySettings
+				{
+					SupportsChat = true,
+					SupportsEmbeddings = false,
+					SupportsResponses = true,
+					SupportsStreaming = true
+				}
+			},
+			new GatewayProviderSettings
+			{
+				Id = "google",
+				Enabled = true,
+				Protocol = "OpenAICompatible",
+				Name = "Google Gemini",
+				BaseUrl = "https://generativelanguage.googleapis.com/v1beta/openai/",
+				AuthType = "Bearer",
+				AuthHeaderName = "Authorization",
+				ChatEndpoint = "chat/completions",
+				EmbeddingsEndpoint = "embeddings",
+				ResponsesEndpoint = "responses",
+				Capabilities = new GatewayProviderCapabilitySettings
+				{
+					SupportsChat = true,
+					SupportsEmbeddings = true,
+					SupportsResponses = true,
+					SupportsStreaming = true
+				}
+			}
+		};
+
+		foreach (var preset in presets)
+		{
+			if (settings.Providers.Any(provider => string.Equals(provider.Id, preset.Id, StringComparison.OrdinalIgnoreCase)))
+				continue;
+
+			settings.Providers.Add(preset);
 		}
 	}
 

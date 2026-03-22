@@ -63,6 +63,8 @@
 
 > 本轮补充：`Overview` 中的 provider 列表现在支持双击后直接跳转到对应 provider 页签；同时 `Providers` 页签区右侧的删除操作也改成更直白的 `Delete` 按钮，便于理解当前是在删除正在查看的 provider。
 
+> 本轮继续优化：`Overview` 中的 provider 列表现已支持单击时同步选中对应 provider、双击时直接跳转到 `Providers` 页面；另外在 provider 页签工具区新增了 `Duplicate` 按钮，可快速复制当前 provider 配置与其对应 routes。
+
 ## 主要功能
 
 - **进程流量重定向**：支持按进程名（含通配符匹配）进行筛选，将相关网络请求通过指定代理服务器转发到目标网络。
@@ -96,24 +98,32 @@
 5. 点击 `Save Config` 保存当前配置，或使用 `Save As` 保存为新的配置文件
 6. 点击 `Start Proxy` 启动代理服务
 
-**使用本地 LLM 接口转发（可选）：**
+**使用 Ollama Gateway（可选）：**
 
-1. 切换到 `Local API` 选项卡
-2. 勾选 `Enable local Ollama / Foundry forwarding`
-3. 配置本地监听端口（默认 Ollama `11434`、Foundry / Agent `5273`）
-4. 选择上游 `Protocol`：
-   - `OpenAICompatible`：适配大多数 OpenAI 风格供应商
-   - `Anthropic`：将本地请求转换为 Anthropic Messages API
-5. 填写 `Provider Name`、`Provider Base URL`、`Default Model`，如需 embeddings 可额外填写 `Embedding Model`
-6. 按供应商要求设置 `Auth Type` 与 `Header / Query Name`
-   - `Bearer`：标准 `Authorization: Bearer <token>`
-   - `Header`：如 `x-api-key: <token>`
-   - `Query`：如 `?key=<token>`
-7. 如需给上游透传智能体上下文，可在 `Extra Headers` 中按 `Header=Value` 逐行填写
-8. 在 `Model Mappings` 中按 `本地模型名=远程模型名` 逐行填写映射关系
-9. 可按需开启 `Enable request/response logging`、`Include bodies` 和 `Include error diagnostics in responses`
-10. 输入供应商 API Key（会保存到 Windows Credential Manager，不会写入 JSON 配置）
-11. 保存配置后启动 TrafficPilot，本机其他应用即可继续访问 `http://127.0.0.1:<端口>/...`
+1. 切换到 `Ollama Gateway` 选项卡，并勾选启用本地转发
+2. 在 `Overview` 页面确认本地监听端口（默认 Ollama `11434`、Foundry / Agent `5273`）
+3. 切换到 `Providers` 页面；当前内置固定三家 provider：
+  - `OpenAI`
+  - `Anthropic`
+  - `Google Gemini`
+4. 直接切换对应页签，填写最少必需项：
+  - `Display Name`
+  - `Base URL`
+  - `API Key`
+5. 如暂时不用某家，可直接点 `Disable`；恢复时点 `Enable`
+6. 点击 `Test / Detect Defaults` 自动探测协议、默认鉴权方式、端点模板以及可用模型
+7. 如需手动指定，直接在基础区选择：
+  - `Chat Model`
+  - `Embedding`
+8. 如需查看探测结果，可在右侧模型预览区选择模型，并查看 `Raw Summary`
+9. 如需覆盖默认行为，再勾选 `Show Advanced`，按需修改：
+  - `Auth`
+  - `Endpoints`
+  - `Capabilities`
+  - 基础区里直接修改的 `Base URL` 会实时同步到当前 provider 配置，不需要先切换页签或手动保存才能在高级区/后续切换中生效
+10. 切换到 `Routes` 页面，为当前 provider 按 `本地模型=上游模型` 逐行填写映射
+11. 如需排错，可在 `Diagnostics` 页面开启请求/响应日志、body 记录和错误诊断回传
+12. 保存配置后启动 TrafficPilot，本机其他应用即可继续访问 `http://127.0.0.1:<端口>/...`
 
 **当前已兼容的本地接口：**
 

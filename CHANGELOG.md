@@ -56,6 +56,17 @@
 - `Overview` 中的 provider 列表现会显示 provider 协议、启用状态，以及默认 chat / embedding 模型摘要。
 - `Overview` 中的 provider 列表现支持双击后直接跳转到对应的 provider 页签。
 - `Providers` 页签区右侧的删除按钮已改为更明确的 `Delete` 文案，表示删除当前正在查看的 provider。
+- `Overview` 中的 provider 列表现支持单击同步选中 provider，双击则直接切换到 `Providers` 页签并定位到对应 provider。
+- `Providers` 页签工具区新增 `Duplicate` 按钮，可快速复制当前 provider 的配置、缓存模型和关联 routes。
+- `Routes` 页面已调整为“上方编辑、下方预览”的固定布局，避免路由编辑区被只读预览覆盖。
+- `Providers` 页签工具区的 `+ / Duplicate / Delete` 按钮区域已扩宽，避免按钮在常规窗口宽度下被裁切。
+- Providers 基础区与高级区高度已重新整理，模型元信息与 `Copy Raw Summary` 按钮恢复可见可用。
+- `Overview` 的 provider 列表补充手型光标与只读窗口样式，降低“看得见但点不动”的误解。
+- README 的快速开始已更新为当前 `Ollama Gateway -> Overview / Providers / Routes / Diagnostics` 实际操作流程。
+- Providers 基础区的 `Base URL` 现在会实时同步到当前 provider 配置，避免高级区或切换后回退为旧地址。
+- Providers 管理已调整为固定内置三家：`OpenAI`、`Anthropic`、`Google Gemini`，减少新增/复制/删除导致的切换复杂度。
+- Providers 页签现保留禁用项并显示 `(disabled)`，避免因过滤隐藏而造成“切不过去/像是丢了”的错觉。
+- Providers 工具按钮现改为 `Preset / Enable / Disable` 语义，匹配当前固定 provider 模式。
 
 ### 兼容性
 - 保留 `localApiForwarder` 字段，避免旧配置立即失效。

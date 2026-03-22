@@ -219,6 +219,7 @@ partial class MainForm
     private TabControl? _gatewayProviderTabs;
     private FlowLayoutPanel? _gatewayProviderButtonsPanel;
     private Button? _btnAddGatewayProvider;
+    private Button? _btnDuplicateGatewayProvider;
     private Button? _btnRemoveGatewayProvider;
     private Label? _lblGatewayProviderDetails;
     private TableLayoutPanel? _gatewayProviderDetailsPanel;
@@ -335,6 +336,7 @@ partial class MainForm
         _gatewayProviderTabs = new TabControl();
         _gatewayProviderButtonsPanel = new FlowLayoutPanel();
         _btnAddGatewayProvider = new Button();
+        _btnDuplicateGatewayProvider = new Button();
         _btnRemoveGatewayProvider = new Button();
         _grpGatewayProviderBasic = new GroupBox();
         _gatewayProviderBasicPanel = new TableLayoutPanel();
@@ -1248,15 +1250,19 @@ partial class MainForm
         // 
         // _txtGatewayOverviewProviders
         // 
+        _txtGatewayOverviewProviders.BackColor = SystemColors.Window;
+        _txtGatewayOverviewProviders.Cursor = Cursors.Hand;
         _txtGatewayOverviewProviders.Dock = DockStyle.Fill;
         _txtGatewayOverviewProviders.Location = new Point(153, 45);
         _txtGatewayOverviewProviders.Multiline = true;
         _txtGatewayOverviewProviders.Name = "_txtGatewayOverviewProviders";
         _txtGatewayOverviewProviders.ReadOnly = true;
         _txtGatewayOverviewProviders.ScrollBars = ScrollBars.Vertical;
+        _txtGatewayOverviewProviders.ShortcutsEnabled = false;
         _txtGatewayOverviewProviders.Size = new Size(563, 441);
         _txtGatewayOverviewProviders.TabIndex = 3;
         _txtGatewayOverviewProviders.WordWrap = false;
+        _txtGatewayOverviewProviders.Click += TxtGatewayOverviewProviders_Click;
         _txtGatewayOverviewProviders.DoubleClick += TxtGatewayOverviewProviders_DoubleClick;
         // 
         // _lblOllamaPort
@@ -1306,12 +1312,11 @@ partial class MainForm
         // _lblGatewayOverviewSummary
         // 
         _lblGatewayOverviewSummary.AutoSize = true;
-        _gatewayOverviewPanel.SetColumnSpan(_lblGatewayOverviewSummary, 2);
         _lblGatewayOverviewSummary.Dock = DockStyle.Fill;
         _lblGatewayOverviewSummary.Location = new Point(3, 42);
         _lblGatewayOverviewSummary.Name = "_lblGatewayOverviewSummary";
         _lblGatewayOverviewSummary.Padding = new Padding(0, 8, 0, 0);
-        _lblGatewayOverviewSummary.Size = new Size(713, 447);
+        _lblGatewayOverviewSummary.Size = new Size(144, 447);
         _lblGatewayOverviewSummary.TabIndex = 2;
         _lblGatewayOverviewSummary.Text = "Overview 只保留全局项。\r\n在 Providers 里先填写提供者地址和 API Key；协议、鉴权和端点默认自动判断。\r\n只有在需要覆盖默认行为时，再展开高级设置。";
         // 
@@ -1356,7 +1361,7 @@ partial class MainForm
         _lblGatewayProviderSelection.Name = "_lblGatewayProviderSelection";
         _lblGatewayProviderSelection.Size = new Size(114, 23);
         _lblGatewayProviderSelection.TabIndex = 0;
-        _lblGatewayProviderSelection.Text = "Provider View:";
+        _lblGatewayProviderSelection.Text = "Provider Tabs:";
         _lblGatewayProviderSelection.TextAlign = ContentAlignment.MiddleRight;
         // 
         // _gatewayProviderTabs
@@ -1372,12 +1377,14 @@ partial class MainForm
         // _gatewayProviderButtonsPanel
         // 
         _gatewayProviderButtonsPanel.AutoSize = true;
+        _gatewayProviderButtonsPanel.AutoSizeMode = AutoSizeMode.GrowAndShrink;
         _gatewayProviderButtonsPanel.Controls.Add(_btnAddGatewayProvider);
+        _gatewayProviderButtonsPanel.Controls.Add(_btnDuplicateGatewayProvider);
         _gatewayProviderButtonsPanel.Controls.Add(_btnRemoveGatewayProvider);
-        _gatewayProviderButtonsPanel.Dock = DockStyle.Fill;
+        _gatewayProviderButtonsPanel.Dock = DockStyle.Right;
         _gatewayProviderButtonsPanel.Location = new Point(626, 3);
         _gatewayProviderButtonsPanel.Name = "_gatewayProviderButtonsPanel";
-        _gatewayProviderButtonsPanel.Size = new Size(90, 27);
+        _gatewayProviderButtonsPanel.Size = new Size(215, 27);
         _gatewayProviderButtonsPanel.TabIndex = 2;
         _gatewayProviderButtonsPanel.WrapContents = false;
         // 
@@ -1393,14 +1400,26 @@ partial class MainForm
         _btnAddGatewayProvider.UseVisualStyleBackColor = true;
         _btnAddGatewayProvider.Click += BtnAddGatewayProvider_Click;
         // 
+        // _btnDuplicateGatewayProvider
+        // 
+        _btnDuplicateGatewayProvider.AutoSize = true;
+        _btnDuplicateGatewayProvider.Location = new Point(48, 0);
+        _btnDuplicateGatewayProvider.Margin = new Padding(0, 0, 6, 0);
+        _btnDuplicateGatewayProvider.Name = "_btnDuplicateGatewayProvider";
+        _btnDuplicateGatewayProvider.Size = new Size(77, 27);
+        _btnDuplicateGatewayProvider.TabIndex = 1;
+        _btnDuplicateGatewayProvider.Text = "Duplicate";
+        _btnDuplicateGatewayProvider.UseVisualStyleBackColor = true;
+        _btnDuplicateGatewayProvider.Click += BtnDuplicateGatewayProvider_Click;
+        // 
         // _btnRemoveGatewayProvider
         // 
         _btnRemoveGatewayProvider.AutoSize = true;
-        _btnRemoveGatewayProvider.Location = new Point(48, 0);
+        _btnRemoveGatewayProvider.Location = new Point(131, 0);
         _btnRemoveGatewayProvider.Margin = new Padding(0);
         _btnRemoveGatewayProvider.Name = "_btnRemoveGatewayProvider";
         _btnRemoveGatewayProvider.Size = new Size(84, 27);
-        _btnRemoveGatewayProvider.TabIndex = 1;
+        _btnRemoveGatewayProvider.TabIndex = 2;
         _btnRemoveGatewayProvider.Text = "Delete";
         _btnRemoveGatewayProvider.UseVisualStyleBackColor = true;
         _btnRemoveGatewayProvider.Click += BtnRemoveGatewayProvider_Click;
@@ -1412,7 +1431,7 @@ partial class MainForm
         _grpGatewayProviderBasic.Dock = DockStyle.Top;
         _grpGatewayProviderBasic.Location = new Point(3, 36);
         _grpGatewayProviderBasic.Name = "_grpGatewayProviderBasic";
-        _grpGatewayProviderBasic.Size = new Size(713, 345);
+        _grpGatewayProviderBasic.Size = new Size(713, 375);
         _grpGatewayProviderBasic.TabIndex = 3;
         _grpGatewayProviderBasic.TabStop = false;
         _grpGatewayProviderBasic.Text = "Basic Settings";
@@ -1667,15 +1686,15 @@ partial class MainForm
         _txtGatewayProviderModelMetadata.Name = "_txtGatewayProviderModelMetadata";
         _txtGatewayProviderModelMetadata.ReadOnly = true;
         _txtGatewayProviderModelMetadata.ScrollBars = ScrollBars.Vertical;
-        _txtGatewayProviderModelMetadata.Size = new Size(551, 14);
+        _txtGatewayProviderModelMetadata.Size = new Size(551, 74);
         _txtGatewayProviderModelMetadata.TabIndex = 11;
         // 
         // _btnGatewayCopyModelMetadata
         // 
         _btnGatewayCopyModelMetadata.AutoSize = true;
-        _btnGatewayCopyModelMetadata.Location = new Point(153, 306);
+        _btnGatewayCopyModelMetadata.Location = new Point(153, 366);
         _btnGatewayCopyModelMetadata.Name = "_btnGatewayCopyModelMetadata";
-        _btnGatewayCopyModelMetadata.Size = new Size(134, 14);
+        _btnGatewayCopyModelMetadata.Size = new Size(134, 27);
         _btnGatewayCopyModelMetadata.TabIndex = 12;
         _btnGatewayCopyModelMetadata.Text = "Copy Raw Summary";
         _btnGatewayCopyModelMetadata.UseVisualStyleBackColor = true;
@@ -1685,7 +1704,7 @@ partial class MainForm
         // 
         _chkGatewayProviderShowAdvanced.AutoSize = true;
         _gatewayProviderEditorPanel.SetColumnSpan(_chkGatewayProviderShowAdvanced, 3);
-        _chkGatewayProviderShowAdvanced.Location = new Point(3, 387);
+        _chkGatewayProviderShowAdvanced.Location = new Point(3, 417);
         _chkGatewayProviderShowAdvanced.Name = "_chkGatewayProviderShowAdvanced";
         _chkGatewayProviderShowAdvanced.Size = new Size(119, 21);
         _chkGatewayProviderShowAdvanced.TabIndex = 4;
@@ -1698,9 +1717,9 @@ partial class MainForm
         _gatewayProviderEditorPanel.SetColumnSpan(_grpGatewayProviderAdvanced, 3);
         _grpGatewayProviderAdvanced.Controls.Add(_gatewayProviderAdvancedLayout);
         _grpGatewayProviderAdvanced.Dock = DockStyle.Fill;
-        _grpGatewayProviderAdvanced.Location = new Point(3, 414);
+        _grpGatewayProviderAdvanced.Location = new Point(3, 444);
         _grpGatewayProviderAdvanced.Name = "_grpGatewayProviderAdvanced";
-        _grpGatewayProviderAdvanced.Size = new Size(713, 72);
+        _grpGatewayProviderAdvanced.Size = new Size(713, 420);
         _grpGatewayProviderAdvanced.TabIndex = 5;
         _grpGatewayProviderAdvanced.TabStop = false;
         _grpGatewayProviderAdvanced.Text = "Advanced Settings";
@@ -1721,7 +1740,7 @@ partial class MainForm
         _gatewayProviderAdvancedLayout.RowStyles.Add(new RowStyle());
         _gatewayProviderAdvancedLayout.RowStyles.Add(new RowStyle());
         _gatewayProviderAdvancedLayout.RowStyles.Add(new RowStyle());
-        _gatewayProviderAdvancedLayout.Size = new Size(707, 50);
+        _gatewayProviderAdvancedLayout.Size = new Size(707, 398);
         _gatewayProviderAdvancedLayout.TabIndex = 0;
         // 
         // _gatewayProviderDetailsPanel
@@ -1821,6 +1840,7 @@ partial class MainForm
         _txtGatewayProviderBaseUrl2.Name = "_txtGatewayProviderBaseUrl2";
         _txtGatewayProviderBaseUrl2.Size = new Size(245, 23);
         _txtGatewayProviderBaseUrl2.TabIndex = 7;
+        _txtGatewayProviderBaseUrl2.TextChanged += TxtGatewayProviderBaseUrl2_TextChanged;
         // 
         // _lblGatewayProviderDefaultModel2
         // 
@@ -2141,7 +2161,7 @@ partial class MainForm
         _lblGatewayRouteProvider.Name = "_lblGatewayRouteProvider";
         _lblGatewayRouteProvider.Size = new Size(114, 23);
         _lblGatewayRouteProvider.TabIndex = 0;
-        _lblGatewayRouteProvider.Text = "Provider View:";
+        _lblGatewayRouteProvider.Text = "Provider:";
         _lblGatewayRouteProvider.TextAlign = ContentAlignment.MiddleRight;
         // 
         // _cmbGatewayRouteProvider
@@ -2195,21 +2215,21 @@ partial class MainForm
         // 
         _txtGatewayRoutesPreview.AcceptsReturn = true;
         _txtGatewayRoutesPreview.Dock = DockStyle.Fill;
-        _txtGatewayRoutesPreview.Location = new Point(8, 8);
+        _txtGatewayRoutesPreview.Location = new Point(8, 220);
         _txtGatewayRoutesPreview.Margin = new Padding(0);
         _txtGatewayRoutesPreview.Multiline = true;
         _txtGatewayRoutesPreview.Name = "_txtGatewayRoutesPreview";
         _txtGatewayRoutesPreview.PlaceholderText = "Gateway routes preview (design-time visible, runtime generated):\r\ndefault -> gpt-4.1-mini\r\nanthropic -> claude-sonnet";
         _txtGatewayRoutesPreview.ReadOnly = true;
         _txtGatewayRoutesPreview.ScrollBars = ScrollBars.Vertical;
-        _txtGatewayRoutesPreview.Size = new Size(719, 489);
+        _txtGatewayRoutesPreview.Size = new Size(719, 277);
         _txtGatewayRoutesPreview.TabIndex = 24;
         _txtGatewayRoutesPreview.WordWrap = false;
         // 
         // _lblGatewayRoutesPreview
         // 
         _lblGatewayRoutesPreview.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
-        _lblGatewayRoutesPreview.Location = new Point(16, 194);
+        _lblGatewayRoutesPreview.Location = new Point(16, 190);
         _lblGatewayRoutesPreview.Name = "_lblGatewayRoutesPreview";
         _lblGatewayRoutesPreview.Size = new Size(653, 23);
         _lblGatewayRoutesPreview.TabIndex = 23;

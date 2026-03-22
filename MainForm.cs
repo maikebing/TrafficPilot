@@ -32,6 +32,8 @@ internal partial class MainForm : Form
 
 	private bool _localProxySubscribed;
 	private CancellationTokenSource? _networkChangeCts;
+	private bool _isLoadingGatewayProviderFields;
+	private bool _isRebuildingGatewayProviderTabs;
 
 	private Dictionary<string, string> _localApiModelNameMap = new(StringComparer.OrdinalIgnoreCase);
 	private CancellationTokenSource? _statusHintCts;
@@ -669,6 +671,9 @@ internal partial class MainForm : Form
 
 	private void GatewayProviderTabs_SelectedIndexChanged(object? sender, EventArgs e)
 	{
+		if (_isRebuildingGatewayProviderTabs)
+			return;
+
 		ApplyGatewayProviderEditorChanges(_currentConfig.OllamaGateway);
 		LoadGatewayRouteEditor(_currentConfig.OllamaGateway);
 		UpdateGatewayRoutesPreview(_currentConfig.OllamaGateway);
@@ -677,7 +682,20 @@ internal partial class MainForm : Form
 
 	private void CmbGatewayProviderProtocol2_SelectedIndexChanged(object? sender, EventArgs e)
 	{
+		if (_isLoadingGatewayProviderFields)
+			return;
+
 		ApplyGatewayProviderProtocolTemplate();
+	}
+
+	private void TxtGatewayProviderBaseUrl2_TextChanged(object? sender, EventArgs e)
+	{
+		if (_isLoadingGatewayProviderFields)
+			return;
+
+		ApplyGatewayProviderEditorChanges(_currentConfig.OllamaGateway);
+		UpdateGatewayRoutesPreview(_currentConfig.OllamaGateway);
+		UpdateGatewayOverviewProviderList(_currentConfig.OllamaGateway);
 	}
 
 	private void ChkGatewaySupportsEmbeddings_CheckedChanged(object? sender, EventArgs e)
@@ -728,82 +746,17 @@ internal partial class MainForm : Form
 
 	private void BtnAddGatewayProvider_Click(object? sender, EventArgs e)
 	{
-		var gatewaySettings = _currentConfig.OllamaGateway ?? BuildOllamaGatewaySettings();
-		if (gatewaySettings is null)
-			return;
-
-		ApplyGatewayProviderEditorChanges(gatewaySettings);
-		ApplyGatewayRouteEditorChanges(gatewaySettings);
-
-		var providerId = BuildNextGatewayProviderId(gatewaySettings);
-		var protocol = _cmbGatewayProviderProtocol2?.SelectedItem?.ToString() ?? "OpenAICompatible";
-		gatewaySettings.Providers.Add(new GatewayProviderSettings
-		{
-			Id = providerId,
-			Enabled = true,
-			Protocol = protocol,
-			Name = $"Provider {gatewaySettings.Providers.Count + 1}",
-			BaseUrl = protocol.Equals("Anthropic", StringComparison.OrdinalIgnoreCase)
-				? "https://api.anthropic.com/v1/"
-				: "https://api.openai.com/v1/",
-			AuthType = protocol.Equals("Anthropic", StringComparison.OrdinalIgnoreCase) ? "Header" : "Bearer",
-			AuthHeaderName = protocol.Equals("Anthropic", StringComparison.OrdinalIgnoreCase) ? "x-api-key" : "Authorization",
-			ChatEndpoint = protocol.Equals("Anthropic", StringComparison.OrdinalIgnoreCase) ? "messages" : "chat/completions",
-			EmbeddingsEndpoint = "embeddings",
-			ResponsesEndpoint = "responses",
-			Capabilities = new GatewayProviderCapabilitySettings
-			{
-				SupportsChat = true,
-				SupportsEmbeddings = !protocol.Equals("Anthropic", StringComparison.OrdinalIgnoreCase),
-				SupportsResponses = true,
-				SupportsStreaming = true
-			}
-		});
-
-		_currentConfig.OllamaGateway = gatewaySettings;
-		LoadGatewayProviderEditor(gatewaySettings);
-		SelectGatewayProviderTab(providerId);
-		LoadGatewayRouteEditor(gatewaySettings);
-		UpdateGatewayRoutesPreview(gatewaySettings);
-		UpdateGatewayOverviewProviderList(gatewaySettings);
+		MessageBox.Show("当前已改为固定内置提供商：OpenAI、Anthropic、Google Gemini。请直接切换页签并使用启用/停用。", "Providers", MessageBoxButtons.OK, MessageBoxIcon.Information);
 	}
 
 	private void BtnRemoveGatewayProvider_Click(object? sender, EventArgs e)
 	{
-		var gatewaySettings = _currentConfig.OllamaGateway ?? BuildOllamaGatewaySettings();
-		if (gatewaySettings is null || _gatewayProviderTabs is null)
-			return;
+		ToggleCurrentGatewayProviderEnabled(false);
+	}
 
-		var selectedProviderId = GetSelectedGatewayProviderId();
-		if (string.IsNullOrWhiteSpace(selectedProviderId))
-			return;
-
-		if (gatewaySettings.Providers.Count <= 1)
-		{
-			MessageBox.Show("At least one provider must remain.", "Remove Provider", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-			return;
-		}
-
-		var result = MessageBox.Show(
-			$"Remove provider '{selectedProviderId}' and its routes?",
-			"Remove Provider",
-			MessageBoxButtons.YesNo,
-			MessageBoxIcon.Warning);
-		if (result != DialogResult.Yes)
-			return;
-
-		gatewaySettings.Providers = gatewaySettings.Providers
-			.Where(provider => !string.Equals(string.IsNullOrWhiteSpace(provider.Id) ? "default" : provider.Id.Trim(), selectedProviderId, StringComparison.OrdinalIgnoreCase))
-			.ToList();
-		gatewaySettings.Routes = gatewaySettings.Routes
-			.Where(route => !string.Equals(route.ProviderId, selectedProviderId, StringComparison.OrdinalIgnoreCase))
-			.ToList();
-
-		_currentConfig.OllamaGateway = gatewaySettings;
-		LoadGatewayProviderEditor(gatewaySettings);
-		LoadGatewayRouteEditor(gatewaySettings);
-		UpdateGatewayRoutesPreview(gatewaySettings);
-		UpdateGatewayOverviewProviderList(gatewaySettings);
+	private void BtnDuplicateGatewayProvider_Click(object? sender, EventArgs e)
+	{
+		ToggleCurrentGatewayProviderEnabled(true);
 	}
 
 	private void LoadGatewayProviderEditor(OllamaGatewaySettings? gatewaySettings)
@@ -815,12 +768,15 @@ internal partial class MainForm : Form
 		var providers = gatewaySettings?.Providers ?? [];
 		var selectedProviderId = GetSelectedGatewayProviderId();
 
+		_isRebuildingGatewayProviderTabs = true;
 		_gatewayProviderTabs.SelectedIndexChanged -= GatewayProviderTabs_SelectedIndexChanged;
 		_gatewayProviderTabs.TabPages.Clear();
-		foreach (var provider in providers.Where(static provider => provider.Enabled))
+		foreach (var provider in providers)
 		{
 			var providerId = string.IsNullOrWhiteSpace(provider.Id) ? "default" : provider.Id.Trim();
 			var title = string.IsNullOrWhiteSpace(provider.Name) ? providerId : provider.Name.Trim();
+			if (!provider.Enabled)
+				title += " (disabled)";
 			var tabPage = new TabPage(title) { Tag = providerId };
 			_gatewayProviderTabs.TabPages.Add(tabPage);
 		}
@@ -840,6 +796,7 @@ internal partial class MainForm : Form
 		}
 
 		_gatewayProviderTabs.SelectedIndexChanged += GatewayProviderTabs_SelectedIndexChanged;
+		_isRebuildingGatewayProviderTabs = false;
 		UpdateGatewayProviderEditorFields(gatewaySettings, GetSelectedGatewayProviderId());
 		LoadGatewayProviderApiKey(gatewaySettings, GetSelectedGatewayProviderId());
 		UpdateGatewayProviderModelPreview(gatewaySettings, GetSelectedGatewayProviderId());
@@ -875,7 +832,7 @@ internal partial class MainForm : Form
 
 		gatewaySettings ??= BuildOllamaGatewaySettings();
 		var lines = new List<string>();
-		foreach (var provider in gatewaySettings?.Providers.Where(static p => p.Enabled) ?? [])
+		foreach (var provider in gatewaySettings?.Providers ?? [])
 		{
 			var providerId = string.IsNullOrWhiteSpace(provider.Id) ? "default" : provider.Id.Trim();
 			var name = string.IsNullOrWhiteSpace(provider.Name) ? providerId : provider.Name.Trim();
@@ -912,6 +869,16 @@ internal partial class MainForm : Form
 
 	private void TxtGatewayOverviewProviders_DoubleClick(object? sender, EventArgs e)
 	{
+		JumpToProviderFromOverview(switchToProvidersTab: true);
+	}
+
+	private void TxtGatewayOverviewProviders_Click(object? sender, EventArgs e)
+	{
+		JumpToProviderFromOverview(switchToProvidersTab: false);
+	}
+
+	private void JumpToProviderFromOverview(bool switchToProvidersTab)
+	{
 		if (_txtGatewayOverviewProviders is null || _gatewayTabControl is null)
 			return;
 
@@ -932,7 +899,8 @@ internal partial class MainForm : Form
 		if (string.IsNullOrWhiteSpace(providerId))
 			return;
 
-		_gatewayTabControl.SelectedTab = _gatewayProviderTab;
+		if (switchToProvidersTab)
+			_gatewayTabControl.SelectedTab = _gatewayProviderTab;
 		SelectGatewayProviderTab(providerId);
 	}
 
@@ -965,6 +933,7 @@ internal partial class MainForm : Form
 
 		if (provider is null)
 		{
+			_isLoadingGatewayProviderFields = true;
 			_txtGatewayProviderId.Text = string.Empty;
 			_txtGatewayDetectedProtocol.Text = string.Empty;
 			_cmbGatewayProviderProtocol2.SelectedItem = null;
@@ -982,9 +951,11 @@ internal partial class MainForm : Form
 			_chkGatewaySupportsEmbeddings.Checked = false;
 			_chkGatewaySupportsResponses.Checked = false;
 			_chkGatewaySupportsStreaming.Checked = false;
+			_isLoadingGatewayProviderFields = false;
 			return;
 		}
 
+		_isLoadingGatewayProviderFields = true;
 		_txtGatewayProviderId.Text = provider.Id ?? string.Empty;
 		_txtGatewayDetectedProtocol.Text = provider.Protocol ?? string.Empty;
 		_cmbGatewayProviderProtocol2.SelectedItem = _cmbGatewayProviderProtocol2.Items.Contains(provider.Protocol)
@@ -1014,6 +985,7 @@ internal partial class MainForm : Form
 		_chkGatewaySupportsEmbeddings.Checked = provider.Capabilities?.SupportsEmbeddings ?? true;
 		_chkGatewaySupportsResponses.Checked = provider.Capabilities?.SupportsResponses ?? true;
 		_chkGatewaySupportsStreaming.Checked = provider.Capabilities?.SupportsStreaming ?? true;
+		_isLoadingGatewayProviderFields = false;
 		ApplyGatewayProviderCapabilityUiState();
 	}
 
@@ -1029,13 +1001,58 @@ internal partial class MainForm : Form
 	{
 		if (_txtGatewayDetectedProtocol is null
 			|| _txtGatewayProviderName2 is null
-			|| _lblGatewayProviderDisplayName is null)
+			|| _lblGatewayProviderDisplayName is null
+			|| _txtGatewayProviderId is null
+			|| _cmbGatewayProviderProtocol2 is null
+			|| _chkGatewaySupportsChat is null
+			|| _chkGatewaySupportsEmbeddings is null
+			|| _chkGatewaySupportsResponses is null
+			|| _chkGatewaySupportsStreaming is null
+			|| _btnAddGatewayProvider is null
+			|| _btnDuplicateGatewayProvider is null
+			|| _btnRemoveGatewayProvider is null)
 		{
 			return;
 		}
 
 		_txtGatewayDetectedProtocol.ReadOnly = true;
-		_lblGatewayProviderDisplayName.Text = "Display Name (optional):";
+		_txtGatewayProviderId.ReadOnly = true;
+		_cmbGatewayProviderProtocol2.Enabled = false;
+		_chkGatewaySupportsChat.Enabled = false;
+		_chkGatewaySupportsEmbeddings.Enabled = false;
+		_chkGatewaySupportsResponses.Enabled = false;
+		_chkGatewaySupportsStreaming.Enabled = false;
+		_btnAddGatewayProvider.Text = "Preset";
+		_btnDuplicateGatewayProvider.Text = "Enable";
+		_btnRemoveGatewayProvider.Text = "Disable";
+		_lblGatewayProviderDisplayName.Text = "Display Name:";
+	}
+
+	private void ToggleCurrentGatewayProviderEnabled(bool enabled)
+	{
+		var gatewaySettings = _currentConfig.OllamaGateway ?? BuildOllamaGatewaySettings();
+		if (gatewaySettings is null)
+			return;
+
+		var selectedProviderId = GetSelectedGatewayProviderId();
+		if (string.IsNullOrWhiteSpace(selectedProviderId))
+			return;
+
+		ApplyGatewayProviderEditorChanges(gatewaySettings);
+		ApplyGatewayRouteEditorChanges(gatewaySettings);
+
+		var provider = gatewaySettings.Providers.FirstOrDefault(p =>
+			string.Equals(string.IsNullOrWhiteSpace(p.Id) ? "default" : p.Id.Trim(), selectedProviderId, StringComparison.OrdinalIgnoreCase));
+		if (provider is null)
+			return;
+
+		provider.Enabled = enabled;
+		_currentConfig.OllamaGateway = gatewaySettings;
+		LoadGatewayProviderEditor(gatewaySettings);
+		SelectGatewayProviderTab(selectedProviderId);
+		LoadGatewayRouteEditor(gatewaySettings);
+		UpdateGatewayRoutesPreview(gatewaySettings);
+		UpdateGatewayOverviewProviderList(gatewaySettings);
 	}
 
 	private void ApplyGatewayProviderProtocolTemplate()
