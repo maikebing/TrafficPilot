@@ -7,6 +7,32 @@
 
 由人类指导 AI 编写的 TrafficPilot 是一款 Windows 平台的网络流量代理转发工具，能够将指定进程的网络流量重定向到代理服务器以及进行 DNS 覆写。该工具提供图形化配置界面、系统托盘驻留和实时日志统计功能，特别适合为无法直接设置代理的软件转发网络请求。在多网络环境下，该工具可以让不同的软件使用不同的网络出口，非常实用。
 
+> 说明：本轮已开始将原有单 provider 的 `Local API` 转发能力重构为统一的 `Ollama Gateway`。当前 UI 仍沿用现有编辑方式，但配置文件已支持新的 `ollamaGateway` 结构，并兼容旧的 `localApiForwarder` 字段。
+
+> 当前进度：运行时已建立多 provider 的基础路由上下文，模型目录与模型到上游的映射开始基于 `providers + routes` 工作；后续将继续补齐真正的单端口多上游分发与 Anthropic 流式支持。
+
+> 本轮补充：OpenAI / Ollama 的关键请求链路已开始根据本地模型名选择目标 provider，并使用对应 provider 的认证、端点与上游地址发起请求；这为后续单端口统一路由打下基础。
+
+> 进一步进展：模型详情、模型列表与上游模型目录拉取也已开始按 provider 上下文运行，运行时对“默认 provider”假设已进一步收敛。
+
+> Anthropic 流式进展：已建立 Anthropic Messages SSE 到本地 OpenAI / Responses / Ollama 流式输出的基础骨架。目前优先支持文本增量流式与结束事件，工具调用的完整流式对齐将在后续继续完善。
+
+> 工具调用流式补充：Anthropic `tool_use` / `input_json_delta` 事件已开始映射到本地 OpenAI / Responses / Ollama 的函数调用流式结构，但当前仍属于基础兼容阶段。
+
+> UI 进展：已开始第一阶段的 Gateway 配置页改造，并优先保证 WinForms 设计器可见。当前页面已升级为 `Ollama Gateway` 语义，同时新增 Gateway 路由只读预览，后续将继续演进到完整的 provider / route 编辑体验。
+
+> UI 第二阶段：已补充设计器友好的基础 route 编辑区，可按 provider 视图查看对应 route 文本；当前仍属于过渡形态，后续会继续完善为完整的 Gateway provider / route 编辑界面。
+
+> UI 第二阶段补充：当前 route 编辑区在切换 provider 与保存配置时，已开始将编辑内容回写到 `ollamaGateway.routes`，从“仅查看”进入基础可编辑状态。
+
+> UI 第三阶段起步：已新增设计器可见的基础 provider 编辑区，可按 provider 视图查看并修改 `id / protocol / name / baseUrl / defaultModel / defaultEmbeddingModel`，保存配置时会同步回写到 `ollamaGateway.providers`。
+
+> UI 第三阶段补充：provider 编辑区现已支持基础新增/删除，并已暴露高级字段：`authType / authHeaderName / chatEndpoint / embeddingsEndpoint / responsesEndpoint / additionalHeaders / capabilities`，可直接回写到 `ollamaGateway.providers`。
+
+> 交互增强：切换 provider `protocol` 时，UI 会自动套用对应的默认 `baseUrl / auth / endpoint / capability` 模板；同时 embeddings 能力关闭时，相关模型与端点输入框会自动禁用并清空。
+
+> Route 编辑增强：Gateway route 文本区已增加实时格式校验、重复 `local model` 提示，以及错误高亮反馈；格式错误时不会将当前 route 文本写回配置。
+
 ## 主要功能
 
 - **进程流量重定向**：支持按进程名（含通配符匹配）进行筛选，将相关网络请求通过指定代理服务器转发到目标网络。

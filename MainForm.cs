@@ -373,6 +373,10 @@ internal partial class MainForm : Form
 
 	private ProxyConfigModel BuildConfigModel()
 	{
+		var gatewaySettings = BuildOllamaGatewaySettings();
+		ApplyGatewayProviderEditorChanges(gatewaySettings);
+		ApplyGatewayRouteEditorChanges(gatewaySettings);
+
 		return new ProxyConfigModel
 		{
 			ConfigName = _txtConfigName!.Text.Trim(),
@@ -399,6 +403,7 @@ internal partial class MainForm : Form
 			StartOnBoot = _chkStartOnBoot!.Checked,
 			AutoStartProxy = _chkAutoStartProxy!.Checked,
 			ConfigSync = BuildConfigSyncSettings(),
+			OllamaGateway = gatewaySettings,
 			LocalApiForwarder = BuildLocalApiForwarderSettings()
 		};
 	}
@@ -427,6 +432,9 @@ internal partial class MainForm : Form
 		bool hostsEnabled = _chkDNSRedirectEnabled?.Checked ?? 
 			(_rdoDnsInterception?.Checked == true || _rdoHostsFile?.Checked == true);
 		string hostsMode = _rdoHostsFile?.Checked == true ? "HostsFile" : "DnsInterception";
+		var gatewaySettings = BuildOllamaGatewaySettings();
+		ApplyGatewayProviderEditorChanges(gatewaySettings);
+		ApplyGatewayRouteEditorChanges(gatewaySettings);
 
 		return new ProxyOptions(
 			GetProcessNamesFromUi(),
@@ -438,6 +446,7 @@ internal partial class MainForm : Form
 			hostsEnabled,
 			_txtHostsUrl!.Text.Trim(),
 			hostsMode,
+			gatewaySettings,
 			BuildLocalApiForwarderSettings()
 		);
 	}
@@ -461,6 +470,9 @@ internal partial class MainForm : Form
 		_chkAutoStartProxy!.Checked = _currentConfig.AutoStartProxy;
 		_txtConfigName!.Text = _currentConfig.ConfigName;
 		LoadLocalApiForwarderToUi(_currentConfig.LocalApiForwarder);
+		LoadGatewayProviderEditor(_currentConfig.OllamaGateway);
+		UpdateGatewayRoutesPreview(_currentConfig.OllamaGateway);
+		LoadGatewayRouteEditor(_currentConfig.OllamaGateway);
 
 		// Load sync settings
 		string syncProvider = _currentConfig.ConfigSync?.Provider ?? "GitHub";
@@ -587,11 +599,13 @@ internal partial class MainForm : Form
 	{
 		AppendLog($"[{DateTime.Now:HH:mm:ss.fff}] [Config] Active config: {_activeConfigPath}");
 
-		var localApi = config.LocalApiForwarder;
+		var localApi = config.OllamaGateway ?? ProxyConfigManager.BuildGatewaySettingsFromLegacy(config.LocalApiForwarder);
 		if (localApi?.Enabled != true)
 			return;
 
-		var provider = localApi.Provider ?? new LocalApiProviderSettings();
+		var provider = localApi.GetDefaultProvider();
+		if (provider is null)
+			return;
 		var defaultModel = string.IsNullOrWhiteSpace(provider.DefaultModel)
 			? "<empty>"
 			: provider.DefaultModel;
@@ -600,6 +614,575 @@ internal partial class MainForm : Form
 			: provider.DefaultEmbeddingModel;
 		AppendLog(
 			$"[{DateTime.Now:HH:mm:ss.fff}] [Config] Local API provider='{provider.Name}', protocol={provider.Protocol}, baseUrl={provider.BaseUrl}, defaultModel={defaultModel}, embeddingModel={embeddingModel}");
+	}
+
+	private OllamaGatewaySettings? BuildOllamaGatewaySettings()
+	{
+		var legacy = BuildLocalApiForwarderSettings();
+		return ProxyConfigManager.BuildGatewaySettingsFromLegacy(legacy);
+	}
+
+	private void UpdateGatewayRoutesPreview(OllamaGatewaySettings? gatewaySettings)
+	{
+		if (_txtGatewayRoutesPreview is null)
+			return;
+
+		gatewaySettings ??= BuildOllamaGatewaySettings();
+		if (gatewaySettings is null)
+		{
+			_txtGatewayRoutesPreview.Text = string.Empty;
+			return;
+		}
+
+		var lines = new List<string>();
+		foreach (var provider in gatewaySettings.Providers.Where(static provider => provider.Enabled))
+		{
+			var providerId = string.IsNullOrWhiteSpace(provider.Id) ? "default" : provider.Id.Trim();
+			var providerName = string.IsNullOrWhiteSpace(provider.Name) ? providerId : provider.Name.Trim();
+			lines.Add($"[{providerId}] {providerName} ({provider.Protocol})");
+
+			var providerRoutes = gatewaySettings.Routes
+				.Where(route => string.Equals(route.ProviderId, providerId, StringComparison.OrdinalIgnoreCase))
+				.Where(static route => !string.IsNullOrWhiteSpace(route.LocalModel) || !string.IsNullOrWhiteSpace(route.UpstreamModel))
+				.ToList();
+
+			if (providerRoutes.Count == 0)
+			{
+				lines.Add("  (no explicit routes)");
+			}
+			else
+			{
+				foreach (var route in providerRoutes)
+					lines.Add($"  {route.LocalModel} -> {route.UpstreamModel}");
+			}
+
+			if (!string.IsNullOrWhiteSpace(provider.DefaultModel))
+				lines.Add($"  default chat: {provider.DefaultModel}");
+			if (!string.IsNullOrWhiteSpace(provider.DefaultEmbeddingModel))
+				lines.Add($"  default embedding: {provider.DefaultEmbeddingModel}");
+			lines.Add(string.Empty);
+		}
+
+		_txtGatewayRoutesPreview.Lines = lines.Count == 0 ? [] : lines.ToArray();
+	}
+
+	private void CmbGatewayProviderSelection_SelectedIndexChanged(object? sender, EventArgs e)
+	{
+		ApplyGatewayProviderEditorChanges(_currentConfig.OllamaGateway);
+		LoadGatewayRouteEditor(_currentConfig.OllamaGateway);
+		UpdateGatewayRoutesPreview(_currentConfig.OllamaGateway);
+		UpdateGatewayProviderEditorFields(_currentConfig.OllamaGateway, _cmbGatewayProviderSelection?.SelectedItem?.ToString());
+	}
+
+	private void CmbGatewayProviderProtocol2_SelectedIndexChanged(object? sender, EventArgs e)
+	{
+		ApplyGatewayProviderProtocolTemplate();
+	}
+
+	private void ChkGatewaySupportsEmbeddings_CheckedChanged(object? sender, EventArgs e)
+	{
+		ApplyGatewayProviderCapabilityUiState();
+	}
+
+	private void BtnAddGatewayProvider_Click(object? sender, EventArgs e)
+	{
+		var gatewaySettings = _currentConfig.OllamaGateway ?? BuildOllamaGatewaySettings();
+		if (gatewaySettings is null)
+			return;
+
+		ApplyGatewayProviderEditorChanges(gatewaySettings);
+		ApplyGatewayRouteEditorChanges(gatewaySettings);
+
+		var providerId = BuildNextGatewayProviderId(gatewaySettings);
+		var protocol = _cmbGatewayProviderProtocol2?.SelectedItem?.ToString() ?? "OpenAICompatible";
+		gatewaySettings.Providers.Add(new GatewayProviderSettings
+		{
+			Id = providerId,
+			Enabled = true,
+			Protocol = protocol,
+			Name = $"Provider {gatewaySettings.Providers.Count + 1}",
+			BaseUrl = protocol.Equals("Anthropic", StringComparison.OrdinalIgnoreCase)
+				? "https://api.anthropic.com/v1/"
+				: "https://api.openai.com/v1/",
+			AuthType = protocol.Equals("Anthropic", StringComparison.OrdinalIgnoreCase) ? "Header" : "Bearer",
+			AuthHeaderName = protocol.Equals("Anthropic", StringComparison.OrdinalIgnoreCase) ? "x-api-key" : "Authorization",
+			ChatEndpoint = protocol.Equals("Anthropic", StringComparison.OrdinalIgnoreCase) ? "messages" : "chat/completions",
+			EmbeddingsEndpoint = "embeddings",
+			ResponsesEndpoint = "responses",
+			Capabilities = new GatewayProviderCapabilitySettings
+			{
+				SupportsChat = true,
+				SupportsEmbeddings = !protocol.Equals("Anthropic", StringComparison.OrdinalIgnoreCase),
+				SupportsResponses = true,
+				SupportsStreaming = true
+			}
+		});
+
+		_currentConfig.OllamaGateway = gatewaySettings;
+		LoadGatewayProviderEditor(gatewaySettings);
+		_cmbGatewayProviderSelection!.SelectedItem = providerId;
+		LoadGatewayRouteEditor(gatewaySettings);
+		UpdateGatewayRoutesPreview(gatewaySettings);
+	}
+
+	private void BtnRemoveGatewayProvider_Click(object? sender, EventArgs e)
+	{
+		var gatewaySettings = _currentConfig.OllamaGateway ?? BuildOllamaGatewaySettings();
+		if (gatewaySettings is null || _cmbGatewayProviderSelection is null)
+			return;
+
+		var selectedProviderId = _cmbGatewayProviderSelection.SelectedItem?.ToString();
+		if (string.IsNullOrWhiteSpace(selectedProviderId))
+			return;
+
+		if (gatewaySettings.Providers.Count <= 1)
+		{
+			MessageBox.Show("At least one provider must remain.", "Remove Provider", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+			return;
+		}
+
+		var result = MessageBox.Show(
+			$"Remove provider '{selectedProviderId}' and its routes?",
+			"Remove Provider",
+			MessageBoxButtons.YesNo,
+			MessageBoxIcon.Warning);
+		if (result != DialogResult.Yes)
+			return;
+
+		gatewaySettings.Providers = gatewaySettings.Providers
+			.Where(provider => !string.Equals(string.IsNullOrWhiteSpace(provider.Id) ? "default" : provider.Id.Trim(), selectedProviderId, StringComparison.OrdinalIgnoreCase))
+			.ToList();
+		gatewaySettings.Routes = gatewaySettings.Routes
+			.Where(route => !string.Equals(route.ProviderId, selectedProviderId, StringComparison.OrdinalIgnoreCase))
+			.ToList();
+
+		_currentConfig.OllamaGateway = gatewaySettings;
+		LoadGatewayProviderEditor(gatewaySettings);
+		LoadGatewayRouteEditor(gatewaySettings);
+		UpdateGatewayRoutesPreview(gatewaySettings);
+	}
+
+	private void LoadGatewayProviderEditor(OllamaGatewaySettings? gatewaySettings)
+	{
+		if (_cmbGatewayProviderSelection is null)
+			return;
+
+		gatewaySettings ??= BuildOllamaGatewaySettings();
+		var providers = gatewaySettings?.Providers ?? [];
+		var selectedProviderId = _cmbGatewayProviderSelection.SelectedItem?.ToString();
+
+		_cmbGatewayProviderSelection.SelectedIndexChanged -= CmbGatewayProviderSelection_SelectedIndexChanged;
+		_cmbGatewayProviderSelection.Items.Clear();
+		foreach (var provider in providers.Where(static provider => provider.Enabled))
+		{
+			var providerId = string.IsNullOrWhiteSpace(provider.Id) ? "default" : provider.Id.Trim();
+			_cmbGatewayProviderSelection.Items.Add(providerId);
+			if (string.Equals(providerId, selectedProviderId, StringComparison.OrdinalIgnoreCase))
+				_cmbGatewayProviderSelection.SelectedItem = providerId;
+		}
+
+		if (_cmbGatewayProviderSelection.SelectedItem is null && _cmbGatewayProviderSelection.Items.Count > 0)
+			_cmbGatewayProviderSelection.SelectedIndex = 0;
+
+		_cmbGatewayProviderSelection.SelectedIndexChanged += CmbGatewayProviderSelection_SelectedIndexChanged;
+		UpdateGatewayProviderEditorFields(gatewaySettings, _cmbGatewayProviderSelection.SelectedItem?.ToString());
+	}
+
+	private void UpdateGatewayProviderEditorFields(OllamaGatewaySettings? gatewaySettings, string? providerId)
+	{
+		if (_txtGatewayProviderId is null
+			|| _cmbGatewayProviderProtocol2 is null
+			|| _cmbGatewayProviderAuthType is null
+			|| _txtGatewayProviderName2 is null
+			|| _txtGatewayProviderBaseUrl2 is null
+			|| _txtGatewayProviderDefaultModel2 is null
+			|| _txtGatewayProviderEmbeddingModel2 is null
+			|| _txtGatewayProviderAuthHeader is null
+			|| _txtGatewayProviderChatEndpoint is null
+			|| _txtGatewayProviderEmbeddingsEndpoint is null
+			|| _txtGatewayProviderResponsesEndpoint is null
+			|| _txtGatewayProviderAdditionalHeaders is null
+			|| _chkGatewaySupportsChat is null
+			|| _chkGatewaySupportsEmbeddings is null
+			|| _chkGatewaySupportsResponses is null
+			|| _chkGatewaySupportsStreaming is null)
+		{
+			return;
+		}
+
+		gatewaySettings ??= BuildOllamaGatewaySettings();
+		var provider = gatewaySettings?.Providers.FirstOrDefault(p =>
+			string.Equals(string.IsNullOrWhiteSpace(p.Id) ? "default" : p.Id.Trim(), providerId, StringComparison.OrdinalIgnoreCase));
+
+		if (provider is null)
+		{
+			_txtGatewayProviderId.Text = string.Empty;
+			_cmbGatewayProviderProtocol2.SelectedItem = null;
+			_txtGatewayProviderName2.Text = string.Empty;
+			_txtGatewayProviderBaseUrl2.Text = string.Empty;
+			_txtGatewayProviderDefaultModel2.Text = string.Empty;
+			_txtGatewayProviderEmbeddingModel2.Text = string.Empty;
+			_cmbGatewayProviderAuthType.SelectedItem = null;
+			_txtGatewayProviderAuthHeader.Text = string.Empty;
+			_txtGatewayProviderChatEndpoint.Text = string.Empty;
+			_txtGatewayProviderEmbeddingsEndpoint.Text = string.Empty;
+			_txtGatewayProviderResponsesEndpoint.Text = string.Empty;
+			_txtGatewayProviderAdditionalHeaders.Lines = [];
+			_chkGatewaySupportsChat.Checked = false;
+			_chkGatewaySupportsEmbeddings.Checked = false;
+			_chkGatewaySupportsResponses.Checked = false;
+			_chkGatewaySupportsStreaming.Checked = false;
+			return;
+		}
+
+		_txtGatewayProviderId.Text = provider.Id ?? string.Empty;
+		_cmbGatewayProviderProtocol2.SelectedItem = _cmbGatewayProviderProtocol2.Items.Contains(provider.Protocol)
+			? provider.Protocol
+			: "OpenAICompatible";
+		_txtGatewayProviderName2.Text = provider.Name ?? string.Empty;
+		_txtGatewayProviderBaseUrl2.Text = provider.BaseUrl ?? string.Empty;
+		_txtGatewayProviderDefaultModel2.Text = provider.DefaultModel ?? string.Empty;
+		_txtGatewayProviderEmbeddingModel2.Text = provider.DefaultEmbeddingModel ?? string.Empty;
+		_cmbGatewayProviderAuthType.SelectedItem = _cmbGatewayProviderAuthType.Items.Contains(provider.AuthType)
+			? provider.AuthType
+			: "Bearer";
+		_txtGatewayProviderAuthHeader.Text = provider.AuthHeaderName ?? string.Empty;
+		_txtGatewayProviderChatEndpoint.Text = provider.ChatEndpoint ?? string.Empty;
+		_txtGatewayProviderEmbeddingsEndpoint.Text = provider.EmbeddingsEndpoint ?? string.Empty;
+		_txtGatewayProviderResponsesEndpoint.Text = provider.ResponsesEndpoint ?? string.Empty;
+		_txtGatewayProviderAdditionalHeaders.Lines = provider.AdditionalHeaders?.Count > 0
+			? provider.AdditionalHeaders
+				.Where(static header => !string.IsNullOrWhiteSpace(header.Name))
+				.Select(static header => $"{header.Name.Trim()}={header.Value}")
+				.ToArray()
+			: [];
+		_chkGatewaySupportsChat.Checked = provider.Capabilities?.SupportsChat ?? true;
+		_chkGatewaySupportsEmbeddings.Checked = provider.Capabilities?.SupportsEmbeddings ?? true;
+		_chkGatewaySupportsResponses.Checked = provider.Capabilities?.SupportsResponses ?? true;
+		_chkGatewaySupportsStreaming.Checked = provider.Capabilities?.SupportsStreaming ?? true;
+	}
+
+	private void ApplyGatewayProviderProtocolTemplate()
+	{
+		if (_cmbGatewayProviderProtocol2 is null
+			|| _cmbGatewayProviderAuthType is null
+			|| _txtGatewayProviderBaseUrl2 is null
+			|| _txtGatewayProviderAuthHeader is null
+			|| _txtGatewayProviderChatEndpoint is null
+			|| _txtGatewayProviderEmbeddingsEndpoint is null
+			|| _txtGatewayProviderResponsesEndpoint is null
+			|| _chkGatewaySupportsChat is null
+			|| _chkGatewaySupportsEmbeddings is null
+			|| _chkGatewaySupportsResponses is null
+			|| _chkGatewaySupportsStreaming is null)
+		{
+			return;
+		}
+
+		var protocol = _cmbGatewayProviderProtocol2.SelectedItem?.ToString() ?? "OpenAICompatible";
+		var isAnthropic = protocol.Equals("Anthropic", StringComparison.OrdinalIgnoreCase);
+
+		if (string.IsNullOrWhiteSpace(_txtGatewayProviderBaseUrl2.Text)
+			|| _txtGatewayProviderBaseUrl2.Text.Contains("api.openai.com", StringComparison.OrdinalIgnoreCase)
+			|| _txtGatewayProviderBaseUrl2.Text.Contains("api.anthropic.com", StringComparison.OrdinalIgnoreCase))
+		{
+			_txtGatewayProviderBaseUrl2.Text = isAnthropic
+				? "https://api.anthropic.com/v1/"
+				: "https://api.openai.com/v1/";
+		}
+
+		_cmbGatewayProviderAuthType.SelectedItem = isAnthropic ? "Header" : "Bearer";
+		_txtGatewayProviderAuthHeader.Text = isAnthropic ? "x-api-key" : "Authorization";
+		_txtGatewayProviderChatEndpoint.Text = isAnthropic ? "messages" : "chat/completions";
+		_txtGatewayProviderEmbeddingsEndpoint.Text = isAnthropic ? string.Empty : "embeddings";
+		_txtGatewayProviderResponsesEndpoint.Text = "responses";
+		_chkGatewaySupportsChat.Checked = true;
+		_chkGatewaySupportsEmbeddings.Checked = !isAnthropic;
+		_chkGatewaySupportsResponses.Checked = true;
+		_chkGatewaySupportsStreaming.Checked = true;
+		ApplyGatewayProviderCapabilityUiState();
+	}
+
+	private void ApplyGatewayProviderCapabilityUiState()
+	{
+		if (_chkGatewaySupportsEmbeddings is null
+			|| _txtGatewayProviderEmbeddingModel2 is null
+			|| _txtGatewayProviderEmbeddingsEndpoint is null)
+		{
+			return;
+		}
+
+		var supportsEmbeddings = _chkGatewaySupportsEmbeddings.Checked;
+		_txtGatewayProviderEmbeddingModel2.Enabled = supportsEmbeddings;
+		_txtGatewayProviderEmbeddingsEndpoint.Enabled = supportsEmbeddings;
+		if (!supportsEmbeddings)
+		{
+			_txtGatewayProviderEmbeddingModel2.Text = string.Empty;
+			_txtGatewayProviderEmbeddingsEndpoint.Text = string.Empty;
+		}
+	}
+
+	private void ApplyGatewayProviderEditorChanges(OllamaGatewaySettings? gatewaySettings)
+	{
+		if (gatewaySettings is null
+			|| _cmbGatewayProviderSelection is null
+			|| _txtGatewayProviderId is null
+			|| _cmbGatewayProviderProtocol2 is null
+			|| _cmbGatewayProviderAuthType is null
+			|| _txtGatewayProviderName2 is null
+			|| _txtGatewayProviderBaseUrl2 is null
+			|| _txtGatewayProviderDefaultModel2 is null
+			|| _txtGatewayProviderEmbeddingModel2 is null
+			|| _txtGatewayProviderAuthHeader is null
+			|| _txtGatewayProviderChatEndpoint is null
+			|| _txtGatewayProviderEmbeddingsEndpoint is null
+			|| _txtGatewayProviderResponsesEndpoint is null
+			|| _txtGatewayProviderAdditionalHeaders is null
+			|| _chkGatewaySupportsChat is null
+			|| _chkGatewaySupportsEmbeddings is null
+			|| _chkGatewaySupportsResponses is null
+			|| _chkGatewaySupportsStreaming is null)
+		{
+			return;
+		}
+
+		var selectedProviderId = _cmbGatewayProviderSelection.SelectedItem?.ToString();
+		if (string.IsNullOrWhiteSpace(selectedProviderId))
+			return;
+
+		var provider = gatewaySettings.Providers.FirstOrDefault(p =>
+			string.Equals(string.IsNullOrWhiteSpace(p.Id) ? "default" : p.Id.Trim(), selectedProviderId, StringComparison.OrdinalIgnoreCase));
+		if (provider is null)
+			return;
+
+		provider.Id = string.IsNullOrWhiteSpace(_txtGatewayProviderId.Text) ? selectedProviderId.Trim() : _txtGatewayProviderId.Text.Trim();
+		provider.Protocol = _cmbGatewayProviderProtocol2.SelectedItem?.ToString() ?? "OpenAICompatible";
+		provider.Name = _txtGatewayProviderName2.Text.Trim();
+		provider.BaseUrl = _txtGatewayProviderBaseUrl2.Text.Trim();
+		provider.DefaultModel = _txtGatewayProviderDefaultModel2.Text.Trim();
+		provider.DefaultEmbeddingModel = _txtGatewayProviderEmbeddingModel2.Text.Trim();
+		provider.AuthType = _cmbGatewayProviderAuthType.SelectedItem?.ToString() ?? "Bearer";
+		provider.AuthHeaderName = _txtGatewayProviderAuthHeader.Text.Trim();
+		provider.ChatEndpoint = _txtGatewayProviderChatEndpoint.Text.Trim();
+		provider.EmbeddingsEndpoint = _txtGatewayProviderEmbeddingsEndpoint.Text.Trim();
+		provider.ResponsesEndpoint = _txtGatewayProviderResponsesEndpoint.Text.Trim();
+		provider.AdditionalHeaders = ParseLocalApiHeaders(_txtGatewayProviderAdditionalHeaders.Lines);
+		provider.Capabilities = new GatewayProviderCapabilitySettings
+		{
+			SupportsChat = _chkGatewaySupportsChat.Checked,
+			SupportsEmbeddings = _chkGatewaySupportsEmbeddings.Checked,
+			SupportsResponses = _chkGatewaySupportsResponses.Checked,
+			SupportsStreaming = _chkGatewaySupportsStreaming.Checked
+		};
+
+		gatewaySettings.Routes = gatewaySettings.Routes
+			.Select(route => string.Equals(route.ProviderId, selectedProviderId, StringComparison.OrdinalIgnoreCase)
+				? new GatewayRouteSettings
+				{
+					ProviderId = provider.Id,
+					LocalModel = route.LocalModel,
+					UpstreamModel = route.UpstreamModel
+				}
+				: route)
+			.ToList();
+
+		LoadGatewayProviderEditor(gatewaySettings);
+		LoadGatewayRouteEditor(gatewaySettings);
+	}
+
+	private static string BuildNextGatewayProviderId(OllamaGatewaySettings gatewaySettings)
+	{
+		var existing = gatewaySettings.Providers
+			.Select(static provider => string.IsNullOrWhiteSpace(provider.Id) ? "default" : provider.Id.Trim())
+			.ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+		for (var index = 1; index <= 999; index++)
+		{
+			var candidate = $"provider-{index}";
+			if (!existing.Contains(candidate))
+				return candidate;
+		}
+
+		return $"provider-{Guid.NewGuid():N}";
+	}
+
+	private void CmbGatewayRouteProvider_SelectedIndexChanged(object? sender, EventArgs e)
+	{
+		ApplyGatewayRouteEditorChanges(_currentConfig.OllamaGateway);
+		UpdateGatewayRoutesPreview(_currentConfig.OllamaGateway);
+		UpdateGatewayRouteEditorText(_currentConfig.OllamaGateway, _cmbGatewayRouteProvider?.SelectedItem?.ToString());
+	}
+
+	private void TxtGatewayRouteMappings_TextChanged(object? sender, EventArgs e)
+	{
+		UpdateGatewayRouteValidationState();
+	}
+
+	private void LoadGatewayRouteEditor(OllamaGatewaySettings? gatewaySettings)
+	{
+		if (_cmbGatewayRouteProvider is null || _txtGatewayRouteMappings is null)
+			return;
+
+		gatewaySettings ??= BuildOllamaGatewaySettings();
+		var providers = gatewaySettings?.Providers ?? [];
+
+		var selectedProviderId = _cmbGatewayRouteProvider.SelectedItem?.ToString();
+		_cmbGatewayRouteProvider.SelectedIndexChanged -= CmbGatewayRouteProvider_SelectedIndexChanged;
+		_cmbGatewayRouteProvider.Items.Clear();
+		foreach (var provider in providers.Where(static provider => provider.Enabled))
+		{
+			var providerId = string.IsNullOrWhiteSpace(provider.Id) ? "default" : provider.Id.Trim();
+			_cmbGatewayRouteProvider.Items.Add(providerId);
+			if (string.Equals(providerId, selectedProviderId, StringComparison.OrdinalIgnoreCase))
+				_cmbGatewayRouteProvider.SelectedItem = providerId;
+		}
+
+		if (_cmbGatewayRouteProvider.SelectedItem is null && _cmbGatewayRouteProvider.Items.Count > 0)
+			_cmbGatewayRouteProvider.SelectedIndex = 0;
+		_cmbGatewayRouteProvider.SelectedIndexChanged += CmbGatewayRouteProvider_SelectedIndexChanged;
+
+		UpdateGatewayRouteEditorText(gatewaySettings, _cmbGatewayRouteProvider.SelectedItem?.ToString());
+	}
+
+	private void UpdateGatewayRouteEditorText(OllamaGatewaySettings? gatewaySettings, string? providerId)
+	{
+		if (_txtGatewayRouteMappings is null)
+			return;
+
+		gatewaySettings ??= BuildOllamaGatewaySettings();
+		if (gatewaySettings is null || string.IsNullOrWhiteSpace(providerId))
+		{
+			_txtGatewayRouteMappings.Lines = [];
+			return;
+		}
+
+		var lines = gatewaySettings.Routes
+			.Where(route => string.Equals(route.ProviderId, providerId, StringComparison.OrdinalIgnoreCase))
+			.Where(static route => !string.IsNullOrWhiteSpace(route.LocalModel) || !string.IsNullOrWhiteSpace(route.UpstreamModel))
+			.Select(static route => $"{route.LocalModel}={route.UpstreamModel}")
+			.ToArray();
+
+		_txtGatewayRouteMappings.Lines = lines;
+		UpdateGatewayRouteValidationState();
+	}
+
+	private void ApplyGatewayRouteEditorChanges(OllamaGatewaySettings? gatewaySettings)
+	{
+		if (gatewaySettings is null
+			|| _cmbGatewayRouteProvider is null
+			|| _txtGatewayRouteMappings is null)
+		{
+			return;
+		}
+
+		var providerId = _cmbGatewayRouteProvider.SelectedItem?.ToString();
+		if (string.IsNullOrWhiteSpace(providerId))
+			return;
+
+		if (!TryValidateGatewayRouteMappings(_txtGatewayRouteMappings.Lines, out _, out _, out _))
+			return;
+
+		var parsedRoutes = ParseGatewayRouteMappings(_txtGatewayRouteMappings.Lines, providerId);
+		gatewaySettings.Routes = gatewaySettings.Routes
+			.Where(route => !string.Equals(route.ProviderId, providerId, StringComparison.OrdinalIgnoreCase))
+			.Concat(parsedRoutes)
+			.GroupBy(static route => $"{route.ProviderId}\n{route.LocalModel}", StringComparer.OrdinalIgnoreCase)
+			.Select(static group => group.Last())
+			.ToList();
+	}
+
+	private void UpdateGatewayRouteValidationState()
+	{
+		if (_txtGatewayRouteMappings is null || _lblGatewayRouteValidation is null)
+			return;
+
+		if (TryValidateGatewayRouteMappings(_txtGatewayRouteMappings.Lines, out var total, out var invalidLines, out var duplicateKeys))
+		{
+			_txtGatewayRouteMappings.BackColor = SystemColors.Window;
+			_lblGatewayRouteValidation.ForeColor = duplicateKeys.Count > 0 ? Color.DarkOrange : SystemColors.GrayText;
+			_lblGatewayRouteValidation.Text = duplicateKeys.Count > 0
+				? $"{total} routes, duplicate local models: {string.Join(", ", duplicateKeys)} (last one wins)"
+				: $"{total} routes valid. Format: local=upstream";
+			return;
+		}
+
+		_txtGatewayRouteMappings.BackColor = Color.MistyRose;
+		_lblGatewayRouteValidation.ForeColor = Color.Firebrick;
+		_lblGatewayRouteValidation.Text = $"Invalid route lines: {string.Join(", ", invalidLines)}. Use local=upstream.";
+	}
+
+	private static bool TryValidateGatewayRouteMappings(
+		IEnumerable<string> lines,
+		out int totalRoutes,
+		out List<int> invalidLines,
+		out List<string> duplicateKeys)
+	{
+		totalRoutes = 0;
+		invalidLines = [];
+		duplicateKeys = [];
+		var seenKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+		var duplicateSet = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+		var lineNumber = 0;
+
+		foreach (var rawLine in lines)
+		{
+			lineNumber++;
+			var line = rawLine.Trim();
+			if (line.Length == 0 || line.StartsWith('#'))
+				continue;
+
+			var separatorIndex = line.IndexOf('=');
+			if (separatorIndex <= 0 || separatorIndex == line.Length - 1)
+			{
+				invalidLines.Add(lineNumber);
+				continue;
+			}
+
+			var localModel = line[..separatorIndex].Trim();
+			var upstreamModel = line[(separatorIndex + 1)..].Trim();
+			if (localModel.Length == 0 || upstreamModel.Length == 0)
+			{
+				invalidLines.Add(lineNumber);
+				continue;
+			}
+
+			totalRoutes++;
+			if (!seenKeys.Add(localModel))
+				duplicateSet.Add(localModel);
+		}
+
+		duplicateKeys = duplicateSet.OrderBy(static value => value, StringComparer.OrdinalIgnoreCase).ToList();
+		return invalidLines.Count == 0;
+	}
+
+	private static List<GatewayRouteSettings> ParseGatewayRouteMappings(IEnumerable<string> lines, string providerId)
+	{
+		var routes = new List<GatewayRouteSettings>();
+
+		foreach (var rawLine in lines)
+		{
+			var line = rawLine.Trim();
+			if (line.Length == 0 || line.StartsWith('#'))
+				continue;
+
+			var separatorIndex = line.IndexOf('=');
+			if (separatorIndex <= 0 || separatorIndex == line.Length - 1)
+				continue;
+
+			var localModel = line[..separatorIndex].Trim();
+			var upstreamModel = line[(separatorIndex + 1)..].Trim();
+			if (localModel.Length == 0 || upstreamModel.Length == 0)
+				continue;
+
+			routes.Add(new GatewayRouteSettings
+			{
+				ProviderId = providerId.Trim(),
+				LocalModel = localModel,
+				UpstreamModel = upstreamModel
+			});
+		}
+
+		return routes;
 	}
 
 	private void RefreshConfigShortcutButtons()

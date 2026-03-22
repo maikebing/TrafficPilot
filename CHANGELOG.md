@@ -1,5 +1,38 @@
 # Changelog
 
+## [Unreleased]
+
+### 新增
+- 引入新的 `ollamaGateway` 配置模型，作为统一 Ollama Gateway 的基础结构。
+- 新增多 provider / 多 route 配置能力，为后续接入原生 Ollama、OpenAI Compatible、Anthropic 及更多服务商协议打基础。
+- 新增 provider capability 配置模型，用于描述 chat / embeddings / responses / streaming 支持能力。
+
+### 改进
+- 运行时启动逻辑已优先识别 `ollamaGateway`，并在当前阶段兼容回落到旧的 `localApiForwarder` 结构。
+- 当前 UI 仍使用现有 `Local API` 单 provider 编辑方式，但保存配置时会同步生成新的 `ollamaGateway` 结构。
+- 配置加载时会自动将旧版 `localApiForwarder` 迁移映射为新的 Gateway 结构。
+- `LocalApiForwarder` 已建立多 provider 运行时上下文与基础模型路由能力，可根据本地模型名解析目标 provider。
+- 模型目录构建逻辑已开始基于 provider / route 生成，为后续单端口多上游路由做准备。
+- OpenAI / Ollama 关键请求链路已开始按模型解析目标 provider，并使用对应 provider 的 endpoint、认证与 base URL 发起上游请求。
+- 诊断信息中的 provider 元数据已开始随模型路由动态切换。
+- 模型详情、OpenAI 模型列表、Foundry 本地模型目录及上游 catalog 拉取流程，已进一步减少默认 provider 假设并开始按 provider 上下文工作。
+- 已为 Anthropic 流式适配建立基础骨架：Anthropic Messages 流式响应现在可以进入本地 OpenAI / Responses / Ollama 流式转换通路。
+- 当前 Anthropic 流式基础优先支持文本增量与结束事件，复杂工具调用流式仍需后续继续补齐。
+- Anthropic 流式工具调用已开始支持基础累积：可识别 `tool_use` 与 `input_json_delta`，并向 OpenAI / Responses / Ollama 流式输出映射基础的函数调用结构。
+- 当前 Anthropic 工具流仍属于基础对齐阶段，后续还需继续完善更细粒度事件、usage 与结束状态一致性。
+- 开始进行 Gateway UI 第一阶段改造，并明确保持 WinForms 设计器可见与可加载。
+- 当前 `Local API` 页面已开始过渡为 `Ollama Gateway` 语义，并新增只读的 Gateway 路由预览区域，作为后续 provider / route 编辑界面的过渡步骤。
+- UI 第二阶段已增加设计器友好的基础路由编辑区：新增 provider 视图下拉与对应 route 文本编辑框，用于向真正的 Gateway route 编辑体验过渡。
+- 当前 Gateway route 编辑区已支持在切换 provider 与保存配置时回写 `ollamaGateway.routes`，基础编辑闭环已打通。
+- 新增设计器可见的基础 Gateway provider 编辑区，并已支持在保存配置时将 provider 详情回写到 `ollamaGateway.providers`。
+- Gateway provider 编辑区现已支持基础新增/删除，并补充高级字段编辑：鉴权、端点、附加头与能力开关均可保存到 `ollamaGateway.providers`。
+- 新增 provider protocol 模板联动：切换 `OpenAICompatible / Anthropic` 时，默认鉴权、端点、baseUrl 与能力开关会自动同步更新；embeddings 关闭时相关输入框自动禁用。
+- Gateway route 编辑区新增实时校验与交互反馈：无效行会高亮提示，重复 `localModel` 会提示“last one wins”，并阻止错误 route 写回配置。
+
+### 兼容性
+- 保留 `localApiForwarder` 字段，避免旧配置立即失效。
+- 当前运行时仍通过兼容层桥接旧的单 provider forwarder 实现，后续将继续演进为真正的多 provider Gateway。
+
 ## [1.1.0.0] - 2026-03-18
 
 ### 概述

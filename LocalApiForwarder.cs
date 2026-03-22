@@ -19,6 +19,7 @@ internal sealed class LocalApiForwarder : IDisposable
 	private const long DefaultMaxOutputTokens = 8_192;
 
 	private readonly LocalApiForwarderSettings _settings;
+	private readonly OllamaGatewaySettings _gatewaySettings;
 	private readonly string _apiKey;
 	private readonly HttpClient _httpClient;
 	private readonly CancellationTokenSource _cts = new();
@@ -32,8 +33,15 @@ internal sealed class LocalApiForwarder : IDisposable
 	private DateTimeOffset _modelCatalogExpiresAt = DateTimeOffset.MinValue;
 	private long _requestCounter;
 	private string? _providerModelAlias;
+	private readonly Dictionary<string, GatewayProviderRuntimeContext> _providerContexts;
 
 	public event Action<string>? OnLog;
+
+	private sealed record GatewayProviderRuntimeContext(
+		GatewayProviderSettings Provider,
+		string ApiKey,
+		string ProviderAlias,
+		IReadOnlyDictionary<string, string> ModelRouteMap);
 
 	private sealed record ModelCatalogEntry(
 		string LocalName,
@@ -63,11 +71,13 @@ internal sealed class LocalApiForwarder : IDisposable
 	public LocalApiForwarder(LocalApiForwarderSettings settings, string? apiKey)
 	{
 		_settings = settings ?? throw new ArgumentNullException(nameof(settings));
+		_gatewaySettings = ProxyConfigManager.BuildGatewaySettingsFromLegacy(settings);
 		_apiKey = apiKey?.Trim() ?? string.Empty;
 		_httpClient = new HttpClient
 		{
 			Timeout = Timeout.InfiniteTimeSpan
 		};
+		_providerContexts = BuildProviderContexts(_gatewaySettings, _apiKey);
 
 		foreach (var modelName in GetConfiguredLocalModelNames())
 			_loadedModels.Add(modelName);
@@ -116,11 +126,72 @@ internal sealed class LocalApiForwarder : IDisposable
 
 	private void LogStartupConfiguration()
 	{
-		var provider = _settings.Provider ?? new LocalApiProviderSettings();
+		var provider = GetDefaultProviderContext().Provider;
 		LogInfo(
 			$"startup config: provider='{provider.Name}', protocol={provider.Protocol}, baseUrl={provider.BaseUrl}, defaultModel={FormatSettingValue(provider.DefaultModel)}, embeddingModel={FormatSettingValue(provider.DefaultEmbeddingModel)}");
 		LogInfo(
-			$"startup ports: ollama={_settings.OllamaPort}, foundry={_settings.FoundryPort}, modelMappings={_settings.ModelMappings.Count}");
+			$"startup ports: ollama={_settings.OllamaPort}, foundry={_settings.FoundryPort}, providers={_providerContexts.Count}, modelMappings={_gatewaySettings.Routes.Count}");
+	}
+
+	private static Dictionary<string, GatewayProviderRuntimeContext> BuildProviderContexts(OllamaGatewaySettings gatewaySettings, string fallbackApiKey)
+	{
+		var providers = gatewaySettings.Providers ?? [];
+		var routes = gatewaySettings.Routes ?? [];
+		var contexts = new Dictionary<string, GatewayProviderRuntimeContext>(StringComparer.OrdinalIgnoreCase);
+
+		foreach (var provider in providers)
+		{
+			if (string.IsNullOrWhiteSpace(provider.Id))
+				continue;
+
+			var providerApiKey = CredentialManager.LoadToken(CredentialManager.GetLocalApiTargetName(provider.Name)) ?? fallbackApiKey;
+			var routeMap = routes
+				.Where(route => string.Equals(route.ProviderId, provider.Id, StringComparison.OrdinalIgnoreCase))
+				.Where(static route => !string.IsNullOrWhiteSpace(route.LocalModel) && !string.IsNullOrWhiteSpace(route.UpstreamModel))
+				.GroupBy(static route => route.LocalModel.Trim(), StringComparer.OrdinalIgnoreCase)
+				.ToDictionary(
+					static group => group.Key,
+					static group => group.First().UpstreamModel.Trim(),
+					StringComparer.OrdinalIgnoreCase);
+
+			contexts[provider.Id] = new GatewayProviderRuntimeContext(
+				provider,
+				providerApiKey,
+				BuildProviderModelAlias(provider.Name, provider.BaseUrl),
+				routeMap);
+		}
+
+		if (contexts.Count == 0)
+		{
+			var provider = gatewaySettings.GetDefaultProvider() ?? new GatewayProviderSettings();
+			contexts[provider.Id] = new GatewayProviderRuntimeContext(
+				provider,
+				fallbackApiKey,
+				BuildProviderModelAlias(provider.Name, provider.BaseUrl),
+				new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase));
+		}
+
+		return contexts;
+	}
+
+	private GatewayProviderRuntimeContext GetDefaultProviderContext()
+	{
+		return _providerContexts.Values.FirstOrDefault(static context => context.Provider.Enabled)
+			?? _providerContexts.Values.First();
+	}
+
+	private GatewayProviderRuntimeContext ResolveProviderContextForModel(string? localModel)
+	{
+		if (!string.IsNullOrWhiteSpace(localModel))
+		{
+			foreach (var context in _providerContexts.Values)
+			{
+				if (context.ModelRouteMap.ContainsKey(localModel.Trim()))
+					return context;
+			}
+		}
+
+		return GetDefaultProviderContext();
 	}
 
 	public async Task StopAsync()
@@ -418,19 +489,22 @@ internal sealed class LocalApiForwarder : IDisposable
 		var requestedModel = requestJson["model"]?.GetValue<string>() ?? string.Empty;
 		var stream = requestJson["stream"]?.GetValue<bool>() ?? false;
 		LogRequestIfEnabled("openai.chat", requestJson);
+		var providerContext = ResolveProviderContextForModel(requestedModel);
 
-		if (IsAnthropicProvider)
+		if (IsAnthropicProtocol(providerContext))
 		{
 			if (stream)
 			{
-				await WriteErrorAsync(context.Response, "/v1/chat/completions", HttpStatusCode.BadRequest,
-					"Streaming passthrough is not supported in the Anthropic adapter yet.",
-					"openai", null, null, null);
+				var anthropicStreamingRequest = BuildAnthropicMessagesRequestFromOpenAi(requestJson);
+				anthropicStreamingRequest["stream"] = true;
+				using var streamingRequest = CreateUpstreamRequest(providerContext.Provider.ChatEndpoint, anthropicStreamingRequest, providerContext);
+				using var streamingResponse = await _httpClient.SendAsync(streamingRequest, HttpCompletionOption.ResponseHeadersRead, ct);
+				await WriteAnthropicChatCompletionsStreamAsync(context.Response, streamingResponse, requestedModel, ct);
 				return;
 			}
 
 			var anthropicRequest = BuildAnthropicMessagesRequestFromOpenAi(requestJson);
-			using var upstreamRequest = CreateUpstreamRequest(_settings.Provider.ChatEndpoint, anthropicRequest);
+			using var upstreamRequest = CreateUpstreamRequest(providerContext.Provider.ChatEndpoint, anthropicRequest, providerContext);
 			using var upstreamResponse = await _httpClient.SendAsync(upstreamRequest, HttpCompletionOption.ResponseHeadersRead, ct);
 			var body = await upstreamResponse.Content.ReadAsStringAsync(ct);
 			LogResponseIfEnabled("openai.chat", upstreamResponse.StatusCode, body);
@@ -449,13 +523,13 @@ internal sealed class LocalApiForwarder : IDisposable
 			return;
 		}
 
-		requestJson["model"] = ResolveUpstreamChatModel(requestedModel);
-		using var request = CreateUpstreamRequest(_settings.Provider.ChatEndpoint, requestJson);
+		requestJson["model"] = ResolveUpstreamChatModelCore(requestedModel, providerContext);
+		using var request = CreateUpstreamRequest(providerContext.Provider.ChatEndpoint, requestJson, providerContext);
 		using var response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
 
 		if (stream)
 		{
-			LogInfo($"Forwarded OpenAI-compatible streaming chat request '{requestedModel}' to {_settings.Provider.BaseUrl}");
+			LogInfo($"Forwarded OpenAI-compatible streaming chat request '{requestedModel}' to {providerContext.Provider.BaseUrl}");
 			await CopyUpstreamResponseAsync(context.Response, response, passthroughStreaming: true, ct);
 			return;
 		}
@@ -478,8 +552,9 @@ internal sealed class LocalApiForwarder : IDisposable
 		var requestJson = await ReadRequestJsonAsync(context.Request, ct);
 		LogRequestIfEnabled("openai.embeddings", requestJson);
 		var requestedModel = requestJson["model"]?.GetValue<string>() ?? string.Empty;
+		var providerContext = ResolveProviderContextForModel(requestedModel);
 
-		if (IsAnthropicProvider)
+		if (IsAnthropicProtocol(providerContext))
 		{
 			await WriteErrorAsync(context.Response, "/v1/embeddings", HttpStatusCode.BadRequest,
 				"The Anthropic adapter does not provide an embeddings endpoint.",
@@ -487,8 +562,8 @@ internal sealed class LocalApiForwarder : IDisposable
 			return;
 		}
 
-		requestJson["model"] = ResolveUpstreamEmbeddingsModel(requestedModel);
-		using var request = CreateUpstreamRequest(_settings.Provider.EmbeddingsEndpoint, requestJson);
+		requestJson["model"] = ResolveUpstreamEmbeddingsModelCore(requestedModel, providerContext);
+		using var request = CreateUpstreamRequest(providerContext.Provider.EmbeddingsEndpoint, requestJson, providerContext);
 		using var response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
 		var responseBody = await response.Content.ReadAsStringAsync(ct);
 		LogResponseIfEnabled("openai.embeddings", response.StatusCode, responseBody);
@@ -510,19 +585,22 @@ internal sealed class LocalApiForwarder : IDisposable
 		LogRequestIfEnabled("openai.responses", requestJson);
 		var requestedModel = requestJson["model"]?.GetValue<string>() ?? string.Empty;
 		var stream = requestJson["stream"]?.GetValue<bool>() ?? false;
+		var providerContext = ResolveProviderContextForModel(requestedModel);
 
-		if (IsAnthropicProvider)
+		if (IsAnthropicProtocol(providerContext))
 		{
 			if (stream)
 			{
-				await WriteErrorAsync(context.Response, "/v1/responses", HttpStatusCode.BadRequest,
-					"Streaming responses are not supported in the Anthropic adapter yet.",
-					"openai", null, null, null);
+				var anthropicStreamingRequest = BuildAnthropicMessagesRequestFromResponses(requestJson);
+				anthropicStreamingRequest["stream"] = true;
+				using var streamingRequest = CreateUpstreamRequest(providerContext.Provider.ChatEndpoint, anthropicStreamingRequest, providerContext);
+				using var streamingResponse = await _httpClient.SendAsync(streamingRequest, HttpCompletionOption.ResponseHeadersRead, ct);
+				await WriteAnthropicResponsesStreamAsync(context.Response, streamingResponse, requestedModel, ct);
 				return;
 			}
 
 			var anthropicRequest = BuildAnthropicMessagesRequestFromResponses(requestJson);
-			using var upstreamRequest = CreateUpstreamRequest(_settings.Provider.ChatEndpoint, anthropicRequest);
+			using var upstreamRequest = CreateUpstreamRequest(providerContext.Provider.ChatEndpoint, anthropicRequest, providerContext);
 			using var upstreamResponse = await _httpClient.SendAsync(upstreamRequest, HttpCompletionOption.ResponseHeadersRead, ct);
 			var body = await upstreamResponse.Content.ReadAsStringAsync(ct);
 			LogResponseIfEnabled("openai.responses", upstreamResponse.StatusCode, body);
@@ -542,13 +620,13 @@ internal sealed class LocalApiForwarder : IDisposable
 		}
 
 		// For OpenAI-compatible providers, passthrough directly to the upstream Responses API.
-		requestJson["model"] = ResolveUpstreamChatModel(requestedModel);
-		using var request = CreateUpstreamRequest(_settings.Provider.ResponsesEndpoint, requestJson);
+		requestJson["model"] = ResolveUpstreamChatModelCore(requestedModel, providerContext);
+		using var request = CreateUpstreamRequest(providerContext.Provider.ResponsesEndpoint, requestJson, providerContext);
 		using var response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
 
 		if (stream)
 		{
-			LogInfo($"Forwarded Responses API streaming request '{requestedModel}' to {_settings.Provider.BaseUrl}");
+			LogInfo($"Forwarded Responses API streaming request '{requestedModel}' to {providerContext.Provider.BaseUrl}");
 			await CopyUpstreamResponseAsync(context.Response, response, passthroughStreaming: true, ct);
 			return;
 		}
@@ -573,19 +651,22 @@ internal sealed class LocalApiForwarder : IDisposable
 		var localModel = requestJson["model"]?.GetValue<string>() ?? string.Empty;
 		var stream = requestJson["stream"]?.GetValue<bool>() ?? false;
 		LogRequestIfEnabled("ollama.generate", requestJson);
+		var providerContext = ResolveProviderContextForModel(localModel);
 
-		if (IsAnthropicProvider)
+		if (IsAnthropicProtocol(providerContext))
 		{
 			if (stream)
 			{
-				await WriteErrorAsync(context.Response, "/api/generate", HttpStatusCode.BadRequest,
-					"Streaming passthrough is not supported in the Anthropic adapter yet.",
-					"ollama", null, null, localModel);
+				var anthropicStreamingRequest = BuildAnthropicMessagesRequestFromGenerate(requestJson);
+				anthropicStreamingRequest["stream"] = true;
+				using var streamingRequest = CreateUpstreamRequest(providerContext.Provider.ChatEndpoint, anthropicStreamingRequest, providerContext);
+				using var streamingResponse = await _httpClient.SendAsync(streamingRequest, HttpCompletionOption.ResponseHeadersRead, ct);
+				await WriteAnthropicOllamaStreamAsync(context.Response, streamingResponse, localModel, isChat: false, ct);
 				return;
 			}
 
 			var anthropicRequest = BuildAnthropicMessagesRequestFromGenerate(requestJson);
-			using var upstreamRequest = CreateUpstreamRequest(_settings.Provider.ChatEndpoint, anthropicRequest);
+			using var upstreamRequest = CreateUpstreamRequest(providerContext.Provider.ChatEndpoint, anthropicRequest, providerContext);
 			using var upstreamResponse = await _httpClient.SendAsync(upstreamRequest, HttpCompletionOption.ResponseHeadersRead, ct);
 			var body = await upstreamResponse.Content.ReadAsStringAsync(ct);
 			LogResponseIfEnabled("ollama.generate", upstreamResponse.StatusCode, body);
@@ -605,10 +686,10 @@ internal sealed class LocalApiForwarder : IDisposable
 		}
 
 		var upstreamRequestJson = BuildUpstreamChatRequestFromGenerate(requestJson);
-		using var upstreamRequest2 = CreateUpstreamRequest(_settings.Provider.ChatEndpoint, upstreamRequestJson);
+		using var upstreamRequest2 = CreateUpstreamRequest(providerContext.Provider.ChatEndpoint, upstreamRequestJson, providerContext);
 		using var upstreamResponse2 = await _httpClient.SendAsync(upstreamRequest2, HttpCompletionOption.ResponseHeadersRead, ct);
 
-		LogInfo($"Forwarded Ollama generate request '{localModel}' to {_settings.Provider.BaseUrl}");
+		LogInfo($"Forwarded Ollama generate request '{localModel}' to {providerContext.Provider.BaseUrl}");
 		if (stream)
 		{
 			await WriteOllamaStreamingResponseAsync(
@@ -644,19 +725,22 @@ internal sealed class LocalApiForwarder : IDisposable
 		var localModel = requestJson["model"]?.GetValue<string>() ?? string.Empty;
 		var stream = requestJson["stream"]?.GetValue<bool>() ?? false;
 		LogRequestIfEnabled("ollama.chat", requestJson);
+		var providerContext = ResolveProviderContextForModel(localModel);
 
-		if (IsAnthropicProvider)
+		if (IsAnthropicProtocol(providerContext))
 		{
 			if (stream)
 			{
-				await WriteErrorAsync(context.Response, "/api/chat", HttpStatusCode.BadRequest,
-					"Streaming passthrough is not supported in the Anthropic adapter yet.",
-					"ollama", null, null, localModel);
+				var anthropicStreamingRequest = BuildAnthropicMessagesRequestFromOllamaChat(requestJson);
+				anthropicStreamingRequest["stream"] = true;
+				using var streamingRequest = CreateUpstreamRequest(providerContext.Provider.ChatEndpoint, anthropicStreamingRequest, providerContext);
+				using var streamingResponse = await _httpClient.SendAsync(streamingRequest, HttpCompletionOption.ResponseHeadersRead, ct);
+				await WriteAnthropicOllamaStreamAsync(context.Response, streamingResponse, localModel, isChat: true, ct);
 				return;
 			}
 
 			var anthropicRequest = BuildAnthropicMessagesRequestFromOllamaChat(requestJson);
-			using var upstreamRequest = CreateUpstreamRequest(_settings.Provider.ChatEndpoint, anthropicRequest);
+			using var upstreamRequest = CreateUpstreamRequest(providerContext.Provider.ChatEndpoint, anthropicRequest, providerContext);
 			using var upstreamResponse = await _httpClient.SendAsync(upstreamRequest, HttpCompletionOption.ResponseHeadersRead, ct);
 			var body = await upstreamResponse.Content.ReadAsStringAsync(ct);
 			LogResponseIfEnabled("ollama.chat", upstreamResponse.StatusCode, body);
@@ -676,10 +760,10 @@ internal sealed class LocalApiForwarder : IDisposable
 		}
 
 		var upstreamRequestJson = BuildUpstreamChatRequestFromChat(requestJson);
-		using var upstreamRequest2 = CreateUpstreamRequest(_settings.Provider.ChatEndpoint, upstreamRequestJson);
+		using var upstreamRequest2 = CreateUpstreamRequest(providerContext.Provider.ChatEndpoint, upstreamRequestJson, providerContext);
 		using var upstreamResponse2 = await _httpClient.SendAsync(upstreamRequest2, HttpCompletionOption.ResponseHeadersRead, ct);
 
-		LogInfo($"Forwarded Ollama chat request '{localModel}' to {_settings.Provider.BaseUrl}");
+		LogInfo($"Forwarded Ollama chat request '{localModel}' to {providerContext.Provider.BaseUrl}");
 		if (stream)
 		{
 			await WriteOllamaStreamingResponseAsync(
@@ -714,8 +798,9 @@ internal sealed class LocalApiForwarder : IDisposable
 		var requestJson = await ReadRequestJsonAsync(context.Request, ct);
 		var localModel = requestJson["model"]?.GetValue<string>() ?? string.Empty;
 		LogRequestIfEnabled("ollama.embeddings", requestJson);
+		var providerContext = ResolveProviderContextForModel(localModel);
 
-		if (IsAnthropicProvider)
+		if (IsAnthropicProtocol(providerContext))
 		{
 			await WriteErrorAsync(context.Response, path, HttpStatusCode.BadRequest,
 				"The Anthropic adapter does not provide an embeddings endpoint.",
@@ -724,7 +809,7 @@ internal sealed class LocalApiForwarder : IDisposable
 		}
 
 		var upstreamRequestJson = BuildUpstreamEmbeddingsRequestFromOllama(requestJson);
-		using var request = CreateUpstreamRequest(_settings.Provider.EmbeddingsEndpoint, upstreamRequestJson);
+		using var request = CreateUpstreamRequest(providerContext.Provider.EmbeddingsEndpoint, upstreamRequestJson, providerContext);
 		using var response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
 		var responseBody = await response.Content.ReadAsStringAsync(ct);
 		LogResponseIfEnabled("ollama.embeddings", response.StatusCode, responseBody);
@@ -770,7 +855,12 @@ internal sealed class LocalApiForwarder : IDisposable
 
 	private HttpRequestMessage CreateUpstreamRequest(string relativePath, JsonNode payload)
 	{
-		var requestUri = BuildUpstreamUri(relativePath);
+		return CreateUpstreamRequest(relativePath, payload, GetDefaultProviderContext());
+	}
+
+	private HttpRequestMessage CreateUpstreamRequest(string relativePath, JsonNode payload, GatewayProviderRuntimeContext providerContext)
+	{
+		var requestUri = BuildUpstreamUri(relativePath, providerContext);
 		var requestBytes = Encoding.UTF8.GetBytes(payload.ToJsonString(JsonOptions));
 		var content = new ByteArrayContent(requestBytes);
 		content.Headers.ContentType = MediaTypeHeaderValue.Parse("application/json");
@@ -781,8 +871,8 @@ internal sealed class LocalApiForwarder : IDisposable
 
 		request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
 		LogInfo($"upstream POST {requestUri} | content-type=application/json | bytes={requestBytes.Length}");
-		ApplyAuthentication(request);
-		foreach (var header in _settings.Provider.AdditionalHeaders)
+		ApplyAuthentication(request, providerContext);
+		foreach (var header in providerContext.Provider.AdditionalHeaders)
 		{
 			if (string.IsNullOrWhiteSpace(header.Name))
 				continue;
@@ -795,17 +885,22 @@ internal sealed class LocalApiForwarder : IDisposable
 
 	private HttpRequestMessage CreateUpstreamGetRequest(string relativePath)
 	{
-		var requestUri = BuildUpstreamUri(relativePath);
-		return CreateUpstreamGetRequest(requestUri);
+		var requestUri = BuildUpstreamUri(relativePath, GetDefaultProviderContext());
+		return CreateUpstreamGetRequest(requestUri, GetDefaultProviderContext());
 	}
 
 	private HttpRequestMessage CreateUpstreamGetRequest(Uri requestUri)
 	{
+		return CreateUpstreamGetRequest(requestUri, GetDefaultProviderContext());
+	}
+
+	private HttpRequestMessage CreateUpstreamGetRequest(Uri requestUri, GatewayProviderRuntimeContext providerContext)
+	{
 		var request = new HttpRequestMessage(HttpMethod.Get, requestUri);
 		request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
 		LogInfo($"upstream GET {requestUri} | accept=application/json");
-		ApplyAuthentication(request);
-		foreach (var header in _settings.Provider.AdditionalHeaders)
+		ApplyAuthentication(request, providerContext);
+		foreach (var header in providerContext.Provider.AdditionalHeaders)
 		{
 			if (string.IsNullOrWhiteSpace(header.Name))
 				continue;
@@ -818,57 +913,68 @@ internal sealed class LocalApiForwarder : IDisposable
 
 	private Uri BuildUpstreamUri(string relativePath)
 	{
-		var baseUri = NormalizeBaseUri(_settings.Provider.BaseUrl);
+		return BuildUpstreamUri(relativePath, GetDefaultProviderContext());
+	}
+
+	private Uri BuildUpstreamUri(string relativePath, GatewayProviderRuntimeContext providerContext)
+	{
+		var baseUri = NormalizeBaseUri(providerContext.Provider.BaseUrl);
 		var relative = (relativePath ?? string.Empty).TrimStart('/');
 		var uri = new Uri(baseUri, relative);
-		return AppendQueryAuthIfNeeded(uri);
+		return AppendQueryAuthIfNeeded(uri, providerContext);
 	}
 
 	private Uri BuildUpstreamRootUri(string relativePath)
 	{
-		var baseUri = NormalizeBaseUri(_settings.Provider.BaseUrl);
+		return BuildUpstreamRootUri(relativePath, GetDefaultProviderContext());
+	}
+
+	private Uri BuildUpstreamRootUri(string relativePath, GatewayProviderRuntimeContext providerContext)
+	{
+		var baseUri = NormalizeBaseUri(providerContext.Provider.BaseUrl);
 		var rootUri = new Uri(baseUri.GetLeftPart(UriPartial.Authority) + "/", UriKind.Absolute);
 		var relative = (relativePath ?? string.Empty).TrimStart('/');
 		var uri = new Uri(rootUri, relative);
-		return AppendQueryAuthIfNeeded(uri);
+		return AppendQueryAuthIfNeeded(uri, providerContext);
 	}
 
-	private Uri AppendQueryAuthIfNeeded(Uri uri)
+	private Uri AppendQueryAuthIfNeeded(Uri uri, GatewayProviderRuntimeContext providerContext)
 	{
 
-		if ((_settings.Provider.AuthType ?? "Bearer").Equals("Query", StringComparison.OrdinalIgnoreCase)
-			&& !string.IsNullOrWhiteSpace(_apiKey))
+		if ((providerContext.Provider.AuthType ?? "Bearer").Equals("Query", StringComparison.OrdinalIgnoreCase)
+			&& !string.IsNullOrWhiteSpace(providerContext.ApiKey))
 		{
-			var keyName = string.IsNullOrWhiteSpace(_settings.Provider.AuthHeaderName)
+			var keyName = string.IsNullOrWhiteSpace(providerContext.Provider.AuthHeaderName)
 				? "key"
-				: _settings.Provider.AuthHeaderName.Trim();
+				: providerContext.Provider.AuthHeaderName.Trim();
 			var separator = string.IsNullOrEmpty(uri.Query) ? "?" : "&";
-			return new Uri($"{uri}{separator}{Uri.EscapeDataString(keyName)}={Uri.EscapeDataString(_apiKey)}", UriKind.Absolute);
+			return new Uri($"{uri}{separator}{Uri.EscapeDataString(keyName)}={Uri.EscapeDataString(providerContext.ApiKey)}", UriKind.Absolute);
 		}
 
 		return uri;
 	}
 
-	private void ApplyAuthentication(HttpRequestMessage request)
+	private void ApplyAuthentication(HttpRequestMessage request, GatewayProviderRuntimeContext providerContext)
 	{
-		if (string.IsNullOrWhiteSpace(_apiKey))
+		if (string.IsNullOrWhiteSpace(providerContext.ApiKey))
 			return;
 
-		var authType = (_settings.Provider.AuthType ?? "Bearer").Trim();
+		var authType = (providerContext.Provider.AuthType ?? "Bearer").Trim();
 		if (authType.Equals("Bearer", StringComparison.OrdinalIgnoreCase))
 		{
-			request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _apiKey);
+			request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", providerContext.ApiKey);
 			return;
 		}
 
 		if (authType.Equals("Header", StringComparison.OrdinalIgnoreCase))
 		{
-			var headerName = string.IsNullOrWhiteSpace(_settings.Provider.AuthHeaderName)
+			var headerName = string.IsNullOrWhiteSpace(providerContext.Provider.AuthHeaderName)
 				? "x-api-key"
-				: _settings.Provider.AuthHeaderName.Trim();
-			request.Headers.TryAddWithoutValidation(headerName, _apiKey);
+				: providerContext.Provider.AuthHeaderName.Trim();
+			request.Headers.TryAddWithoutValidation(headerName, providerContext.ApiKey);
 		}
 	}
+
 
 	private static Uri NormalizeBaseUri(string baseUrl)
 	{
@@ -879,60 +985,72 @@ internal sealed class LocalApiForwarder : IDisposable
 	}
 
 	private bool IsAnthropicProvider =>
-		(_settings.Provider.Protocol ?? "OpenAICompatible").Equals("Anthropic", StringComparison.OrdinalIgnoreCase);
+		(GetDefaultProviderContext().Provider.Protocol ?? "OpenAICompatible").Equals("Anthropic", StringComparison.OrdinalIgnoreCase);
+
+	private static bool IsAnthropicProtocol(GatewayProviderRuntimeContext providerContext) =>
+		(providerContext.Provider.Protocol ?? "OpenAICompatible").Equals("Anthropic", StringComparison.OrdinalIgnoreCase);
 
 	private string ProviderModelAlias =>
-		_providerModelAlias ??= BuildProviderModelAlias(_settings.Provider.Name, _settings.Provider.BaseUrl);
+		_providerModelAlias ??= GetDefaultProviderContext().ProviderAlias;
 
 	private string ResolveUpstreamChatModel(string? localModel)
 	{
+		return ResolveUpstreamChatModelCore(localModel, ResolveProviderContextForModel(localModel));
+	}
+
+	private string ResolveUpstreamChatModelCore(string? localModel, GatewayProviderRuntimeContext providerContext)
+	{
 		if (!string.IsNullOrWhiteSpace(localModel))
 		{
-			var mapping = _settings.ModelMappings.FirstOrDefault(m =>
-				m.LocalModel.Equals(localModel, StringComparison.OrdinalIgnoreCase)
-				&& !string.IsNullOrWhiteSpace(m.UpstreamModel));
-			if (mapping is not null)
-				return mapping.UpstreamModel.Trim();
+			if (providerContext.ModelRouteMap.TryGetValue(localModel.Trim(), out var routedUpstreamModel))
+				return routedUpstreamModel;
 
-			return ResolveGeneratedUpstreamModelAliasOrSelf(localModel);
+			return ResolveGeneratedUpstreamModelAliasOrSelf(localModel, providerContext);
 		}
 
-		if (!string.IsNullOrWhiteSpace(_settings.Provider.DefaultModel))
-			return ResolveGeneratedUpstreamModelAliasOrSelf(_settings.Provider.DefaultModel);
+		if (!string.IsNullOrWhiteSpace(providerContext.Provider.DefaultModel))
+			return ResolveGeneratedUpstreamModelAliasOrSelf(providerContext.Provider.DefaultModel, providerContext);
 
 		return string.Empty;
 	}
 
 	private string ResolveUpstreamEmbeddingsModel(string? localModel)
 	{
+		return ResolveUpstreamEmbeddingsModelCore(localModel, ResolveProviderContextForModel(localModel));
+	}
+
+	private string ResolveUpstreamEmbeddingsModelCore(string? localModel, GatewayProviderRuntimeContext providerContext)
+	{
 		if (!string.IsNullOrWhiteSpace(localModel))
 		{
-			var mapping = _settings.ModelMappings.FirstOrDefault(m =>
-				m.LocalModel.Equals(localModel, StringComparison.OrdinalIgnoreCase)
-				&& !string.IsNullOrWhiteSpace(m.UpstreamModel));
-			if (mapping is not null)
-				return mapping.UpstreamModel.Trim();
+			if (providerContext.ModelRouteMap.TryGetValue(localModel.Trim(), out var routedUpstreamModel))
+				return routedUpstreamModel;
 
-			return ResolveGeneratedUpstreamModelAliasOrSelf(localModel);
+			return ResolveGeneratedUpstreamModelAliasOrSelf(localModel, providerContext);
 		}
 
-		if (!string.IsNullOrWhiteSpace(_settings.Provider.DefaultEmbeddingModel))
-			return ResolveGeneratedUpstreamModelAliasOrSelf(_settings.Provider.DefaultEmbeddingModel);
+		if (!string.IsNullOrWhiteSpace(providerContext.Provider.DefaultEmbeddingModel))
+			return ResolveGeneratedUpstreamModelAliasOrSelf(providerContext.Provider.DefaultEmbeddingModel, providerContext);
 
-		return ResolveUpstreamChatModel(string.Empty);
+		return ResolveUpstreamChatModelCore(string.Empty, providerContext);
 	}
 
 	private string ResolveGeneratedUpstreamModelAliasOrSelf(string? modelName)
+	{
+		return ResolveGeneratedUpstreamModelAliasOrSelf(modelName, GetDefaultProviderContext());
+	}
+
+	private string ResolveGeneratedUpstreamModelAliasOrSelf(string? modelName, GatewayProviderRuntimeContext providerContext)
 	{
 		if (string.IsNullOrWhiteSpace(modelName))
 			return string.Empty;
 
 		var normalizedModel = modelName.Trim();
-		var catalogMatch = TryResolveCatalogMappedUpstreamModel(normalizedModel);
+		var catalogMatch = TryResolveCatalogMappedUpstreamModel(normalizedModel, providerContext);
 		if (!string.IsNullOrWhiteSpace(catalogMatch))
 			return catalogMatch;
 
-		foreach (var alias in GetProviderModelAliasCandidates(_settings.Provider.Name, _settings.Provider.BaseUrl))
+		foreach (var alias in GetProviderModelAliasCandidates(providerContext.Provider.Name, providerContext.Provider.BaseUrl))
 		{
 			var aliasSuffix = $"@{alias}";
 			if (!normalizedModel.EndsWith(aliasSuffix, StringComparison.OrdinalIgnoreCase))
@@ -953,7 +1071,12 @@ internal sealed class LocalApiForwarder : IDisposable
 
 	private string BuildAdvertisedUpstreamLocalName(string upstreamModel, string? displayName)
 	{
-		var normalizedModel = ResolveGeneratedUpstreamModelAliasOrSelf(upstreamModel);
+		return BuildAdvertisedUpstreamLocalName(upstreamModel, displayName, GetDefaultProviderContext());
+	}
+
+	private string BuildAdvertisedUpstreamLocalName(string upstreamModel, string? displayName, GatewayProviderRuntimeContext providerContext)
+	{
+		var normalizedModel = ResolveGeneratedUpstreamModelAliasOrSelf(upstreamModel, providerContext);
 		if (string.IsNullOrWhiteSpace(normalizedModel))
 			return string.Empty;
 
@@ -961,7 +1084,7 @@ internal sealed class LocalApiForwarder : IDisposable
 			? normalizedModel
 			: displayName.Trim();
 
-		return $"{preferredName}@{ProviderModelAlias}";
+		return $"{preferredName}@{providerContext.ProviderAlias}";
 	}
 
 	private JsonObject BuildUpstreamChatRequestFromGenerate(JsonObject source)
@@ -2487,6 +2610,467 @@ internal sealed class LocalApiForwarder : IDisposable
 		};
 	}
 
+	private async Task WriteAnthropicOllamaStreamAsync(
+		HttpListenerResponse response,
+		HttpResponseMessage upstreamResponse,
+		string localModel,
+		bool isChat,
+		CancellationToken ct)
+	{
+		if (!upstreamResponse.IsSuccessStatusCode)
+		{
+			var errorBody = await upstreamResponse.Content.ReadAsStringAsync(ct);
+			await WriteErrorAsync(response, isChat ? "/api/chat" : "/api/generate", upstreamResponse.StatusCode,
+				await ExtractUpstreamErrorAsync(upstreamResponse.StatusCode, errorBody),
+				"ollama", upstreamResponse.StatusCode, errorBody, localModel);
+			return;
+		}
+
+		response.StatusCode = (int)HttpStatusCode.OK;
+		response.ContentType = "application/x-ndjson";
+		response.SendChunked = true;
+
+		var output = response.OutputStream;
+		await using var upstreamStream = await upstreamResponse.Content.ReadAsStreamAsync(ct);
+		using var reader = new StreamReader(upstreamStream);
+		using var writer = new StreamWriter(output, new UTF8Encoding(false)) { AutoFlush = true };
+
+		var createdAt = DateTimeOffset.UtcNow.ToString("O");
+        var effectiveModel = string.IsNullOrWhiteSpace(localModel) ? ResolveUpstreamChatModel(string.Empty) : localModel;
+		var textAccumulator = new StringBuilder();
+		var streamedToolCalls = new Dictionary<int, StreamingToolCallAccumulator>();
+
+		while (!ct.IsCancellationRequested)
+		{
+			var line = await reader.ReadLineAsync(ct);
+			if (line is null)
+				break;
+
+			if (string.IsNullOrWhiteSpace(line) || !line.StartsWith("data:", StringComparison.OrdinalIgnoreCase))
+				continue;
+
+			var payload = line[5..].Trim();
+			if (payload.Length == 0 || payload.Equals("[DONE]", StringComparison.Ordinal))
+				continue;
+
+			var eventJson = JsonNode.Parse(payload)?.AsObject();
+			if (eventJson is null)
+				continue;
+
+			var eventType = TryReadString(eventJson["type"]);
+			if (string.IsNullOrWhiteSpace(eventType) || eventType.Equals("ping", StringComparison.OrdinalIgnoreCase))
+				continue;
+
+			AccumulateAnthropicStreamingToolCalls(eventJson, streamedToolCalls);
+			var deltaText = ExtractAnthropicStreamingTextDelta(eventJson);
+			if (!string.IsNullOrEmpty(deltaText))
+			{
+				textAccumulator.Append(deltaText);
+				await writer.WriteLineAsync(BuildOllamaStreamChunk(effectiveModel, createdAt, isChat, deltaText, false, null).ToJsonString(JsonOptions));
+			}
+
+			if (eventType.Equals("message_stop", StringComparison.OrdinalIgnoreCase))
+			{
+				if (isChat && streamedToolCalls.Count > 0)
+				{
+					await writer.WriteLineAsync(BuildOllamaStreamChunk(
+						effectiveModel,
+						createdAt,
+						isChat,
+						string.Empty,
+						done: false,
+						doneReason: null,
+						toolCalls: BuildStreamedOllamaToolCalls(streamedToolCalls)).ToJsonString(JsonOptions));
+				}
+
+				await writer.WriteLineAsync(BuildOllamaStreamChunk(effectiveModel, createdAt, isChat, string.Empty, true, "stop").ToJsonString(JsonOptions));
+				break;
+			}
+		}
+
+		await output.FlushAsync(ct);
+		TryCloseResponse(response);
+	}
+
+	private async Task WriteAnthropicChatCompletionsStreamAsync(
+		HttpListenerResponse response,
+		HttpResponseMessage upstreamResponse,
+		string requestedModel,
+		CancellationToken ct)
+	{
+		if (!upstreamResponse.IsSuccessStatusCode)
+		{
+			var errorBody = await upstreamResponse.Content.ReadAsStringAsync(ct);
+			await WriteErrorAsync(response, "/v1/chat/completions", upstreamResponse.StatusCode,
+				await ExtractUpstreamErrorAsync(upstreamResponse.StatusCode, errorBody),
+				"openai", upstreamResponse.StatusCode, errorBody, null);
+			return;
+		}
+
+		response.StatusCode = (int)HttpStatusCode.OK;
+		response.ContentType = "text/event-stream";
+		response.SendChunked = true;
+		response.Headers["Cache-Control"] = "no-cache";
+		response.Headers["X-Accel-Buffering"] = "no";
+
+		var output = response.OutputStream;
+		using var writer = new StreamWriter(output, new UTF8Encoding(false)) { AutoFlush = true, NewLine = "\n" };
+		await using var upstreamStream = await upstreamResponse.Content.ReadAsStreamAsync(ct);
+		using var reader = new StreamReader(upstreamStream);
+
+		var completionId = $"chatcmpl-{Guid.NewGuid():N}";
+		var created = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+		var effectiveModel = string.IsNullOrWhiteSpace(requestedModel) ? ResolveUpstreamChatModel(string.Empty) : requestedModel;
+		var streamedToolCalls = new Dictionary<int, StreamingToolCallAccumulator>();
+
+		while (!ct.IsCancellationRequested)
+		{
+			var line = await reader.ReadLineAsync(ct);
+			if (line is null)
+				break;
+
+			if (string.IsNullOrWhiteSpace(line) || !line.StartsWith("data:", StringComparison.OrdinalIgnoreCase))
+				continue;
+
+			var payload = line[5..].Trim();
+			if (payload.Length == 0 || payload.Equals("[DONE]", StringComparison.Ordinal))
+				continue;
+
+			var eventJson = JsonNode.Parse(payload)?.AsObject();
+			if (eventJson is null)
+				continue;
+
+			var eventType = TryReadString(eventJson["type"]);
+			if (string.IsNullOrWhiteSpace(eventType) || eventType.Equals("ping", StringComparison.OrdinalIgnoreCase))
+				continue;
+
+			AccumulateAnthropicStreamingToolCalls(eventJson, streamedToolCalls);
+			var deltaText = ExtractAnthropicStreamingTextDelta(eventJson);
+			if (!string.IsNullOrEmpty(deltaText))
+			{
+				await writer.WriteAsync("data: ");
+				await writer.WriteLineAsync(new JsonObject
+				{
+					["id"] = completionId,
+					["object"] = "chat.completion.chunk",
+					["created"] = created,
+					["model"] = effectiveModel,
+					["choices"] = new JsonArray
+					{
+						new JsonObject
+						{
+							["index"] = 0,
+							["delta"] = new JsonObject
+							{
+								["content"] = deltaText
+							},
+							["finish_reason"] = null
+						}
+					}
+				}.ToJsonString(JsonOptions));
+				await writer.WriteLineAsync();
+			}
+
+			if (eventType.Equals("message_stop", StringComparison.OrdinalIgnoreCase))
+			{
+				if (streamedToolCalls.Count > 0)
+				{
+					await writer.WriteAsync("data: ");
+					await writer.WriteLineAsync(new JsonObject
+					{
+						["id"] = completionId,
+						["object"] = "chat.completion.chunk",
+						["created"] = created,
+						["model"] = effectiveModel,
+						["choices"] = new JsonArray
+						{
+							new JsonObject
+							{
+								["index"] = 0,
+								["delta"] = new JsonObject
+								{
+									["tool_calls"] = BuildOpenAiStreamingToolCalls(streamedToolCalls)
+								},
+								["finish_reason"] = null
+							}
+						}
+					}.ToJsonString(JsonOptions));
+					await writer.WriteLineAsync();
+				}
+
+				await writer.WriteAsync("data: ");
+				await writer.WriteLineAsync(new JsonObject
+				{
+					["id"] = completionId,
+					["object"] = "chat.completion.chunk",
+					["created"] = created,
+					["model"] = effectiveModel,
+					["choices"] = new JsonArray
+					{
+						new JsonObject
+						{
+							["index"] = 0,
+							["delta"] = new JsonObject(),
+							["finish_reason"] = "stop"
+						}
+					}
+				}.ToJsonString(JsonOptions));
+				await writer.WriteLineAsync();
+				await writer.WriteLineAsync("data: [DONE]");
+				await writer.WriteLineAsync();
+				break;
+			}
+		}
+
+		await output.FlushAsync(ct);
+		TryCloseResponse(response);
+	}
+
+	private async Task WriteAnthropicResponsesStreamAsync(
+		HttpListenerResponse response,
+		HttpResponseMessage upstreamResponse,
+		string requestedModel,
+		CancellationToken ct)
+	{
+		if (!upstreamResponse.IsSuccessStatusCode)
+		{
+			var errorBody = await upstreamResponse.Content.ReadAsStringAsync(ct);
+			await WriteErrorAsync(response, "/v1/responses", upstreamResponse.StatusCode,
+				await ExtractUpstreamErrorAsync(upstreamResponse.StatusCode, errorBody),
+				"openai", upstreamResponse.StatusCode, errorBody, null);
+			return;
+		}
+
+		response.StatusCode = (int)HttpStatusCode.OK;
+		response.ContentType = "text/event-stream";
+		response.SendChunked = true;
+		response.Headers["Cache-Control"] = "no-cache";
+		response.Headers["X-Accel-Buffering"] = "no";
+
+		var output = response.OutputStream;
+		using var writer = new StreamWriter(output, new UTF8Encoding(false)) { AutoFlush = true, NewLine = "\n" };
+		await using var upstreamStream = await upstreamResponse.Content.ReadAsStreamAsync(ct);
+		using var reader = new StreamReader(upstreamStream);
+
+		var responseId = $"resp_{Guid.NewGuid():N}";
+		var messageItemId = $"msg_{Guid.NewGuid():N}";
+		var createdAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+		var effectiveModel = string.IsNullOrWhiteSpace(requestedModel) ? ResolveUpstreamChatModel(string.Empty) : requestedModel;
+		var textAccumulator = new StringBuilder();
+		var messageStarted = false;
+		var streamedToolCalls = new Dictionary<int, StreamingToolCallAccumulator>();
+
+		await WriteSseEventAsync(writer, "response.created", new JsonObject
+		{
+			["type"] = "response.created",
+			["response"] = new JsonObject
+			{
+				["id"] = responseId,
+				["object"] = "response",
+				["created_at"] = createdAt,
+				["status"] = "in_progress",
+				["model"] = effectiveModel,
+				["output"] = new JsonArray()
+			}
+		});
+
+		while (!ct.IsCancellationRequested)
+		{
+			var line = await reader.ReadLineAsync(ct);
+			if (line is null)
+				break;
+
+			if (string.IsNullOrWhiteSpace(line) || !line.StartsWith("data:", StringComparison.OrdinalIgnoreCase))
+				continue;
+
+			var payload = line[5..].Trim();
+			if (payload.Length == 0 || payload.Equals("[DONE]", StringComparison.Ordinal))
+				continue;
+
+			var eventJson = JsonNode.Parse(payload)?.AsObject();
+			if (eventJson is null)
+				continue;
+
+			var eventType = TryReadString(eventJson["type"]);
+			if (string.IsNullOrWhiteSpace(eventType) || eventType.Equals("ping", StringComparison.OrdinalIgnoreCase))
+				continue;
+
+			AccumulateAnthropicStreamingToolCalls(eventJson, streamedToolCalls);
+			var deltaText = ExtractAnthropicStreamingTextDelta(eventJson);
+			if (!string.IsNullOrEmpty(deltaText))
+			{
+				if (!messageStarted)
+				{
+					await WriteSseEventAsync(writer, "response.output_item.added", new JsonObject
+					{
+						["type"] = "response.output_item.added",
+						["output_index"] = 0,
+						["item"] = new JsonObject
+						{
+							["type"] = "message",
+							["id"] = messageItemId,
+							["status"] = "in_progress",
+							["role"] = "assistant",
+							["content"] = new JsonArray()
+						}
+					});
+					messageStarted = true;
+				}
+
+				textAccumulator.Append(deltaText);
+				await WriteSseEventAsync(writer, "response.output_text.delta", new JsonObject
+				{
+					["type"] = "response.output_text.delta",
+					["item_id"] = messageItemId,
+					["output_index"] = 0,
+					["content_index"] = 0,
+					["delta"] = deltaText
+				});
+			}
+
+			if (eventType.Equals("message_stop", StringComparison.OrdinalIgnoreCase))
+			{
+				if (messageStarted)
+				{
+					await FinalizeResponsesMessageItemAsync(writer, messageItemId, 0, textAccumulator.ToString(), contentPartEmitted: true);
+				}
+
+				var outputItems = new JsonArray();
+				foreach (var item in BuildResponsesFunctionCallItems(streamedToolCalls))
+					outputItems.Add(item);
+
+				await WriteSseEventAsync(writer, "response.completed", new JsonObject
+				{
+					["type"] = "response.completed",
+					["response"] = new JsonObject
+					{
+						["id"] = responseId,
+						["object"] = "response",
+						["created_at"] = createdAt,
+						["status"] = "completed",
+						["model"] = effectiveModel,
+						["output"] = outputItems
+					}
+				});
+				break;
+			}
+		}
+
+		await output.FlushAsync(ct);
+		TryCloseResponse(response);
+	}
+
+	private static string ExtractAnthropicStreamingTextDelta(JsonObject eventJson)
+	{
+		var eventType = TryReadString(eventJson["type"]);
+		if (string.IsNullOrWhiteSpace(eventType))
+			return string.Empty;
+
+		if (eventType.Equals("content_block_delta", StringComparison.OrdinalIgnoreCase))
+			return TryReadString(eventJson["delta"]?["text"]) ?? string.Empty;
+
+		if (eventType.Equals("content_block_start", StringComparison.OrdinalIgnoreCase))
+		{
+			var blockType = TryReadString(eventJson["content_block"]?["type"]);
+			if (string.Equals(blockType, "text", StringComparison.OrdinalIgnoreCase))
+				return TryReadString(eventJson["content_block"]?["text"]) ?? string.Empty;
+		}
+
+		return string.Empty;
+	}
+
+	private static void AccumulateAnthropicStreamingToolCalls(
+		JsonObject eventJson,
+		IDictionary<int, StreamingToolCallAccumulator> streamedToolCalls)
+	{
+		var eventType = TryReadString(eventJson["type"]);
+		if (string.IsNullOrWhiteSpace(eventType))
+			return;
+
+		if (eventType.Equals("content_block_start", StringComparison.OrdinalIgnoreCase))
+		{
+			var contentBlock = eventJson["content_block"] as JsonObject;
+			if (!string.Equals(TryReadString(contentBlock?["type"]), "tool_use", StringComparison.OrdinalIgnoreCase))
+				return;
+
+			var index = (int)(TryReadInt64(eventJson["index"]) ?? streamedToolCalls.Count);
+			if (!streamedToolCalls.TryGetValue(index, out var accumulator))
+			{
+				accumulator = new StreamingToolCallAccumulator();
+				streamedToolCalls[index] = accumulator;
+			}
+
+			accumulator.Id = TryReadString(contentBlock?["id"]) ?? accumulator.Id;
+			accumulator.Name = TryReadString(contentBlock?["name"]) ?? accumulator.Name;
+			var input = contentBlock?["input"];
+			if (input is not null)
+			{
+				accumulator.Arguments.Clear();
+				accumulator.Arguments.Append(input.ToJsonString(JsonOptions));
+			}
+			return;
+		}
+
+		if (eventType.Equals("content_block_delta", StringComparison.OrdinalIgnoreCase))
+		{
+			var delta = eventJson["delta"] as JsonObject;
+			if (!string.Equals(TryReadString(delta?["type"]), "input_json_delta", StringComparison.OrdinalIgnoreCase))
+				return;
+
+			var index = (int)(TryReadInt64(eventJson["index"]) ?? 0);
+			if (!streamedToolCalls.TryGetValue(index, out var accumulator))
+			{
+				accumulator = new StreamingToolCallAccumulator();
+				streamedToolCalls[index] = accumulator;
+			}
+
+			var partialJson = TryReadString(delta?["partial_json"]);
+			if (!string.IsNullOrWhiteSpace(partialJson))
+				accumulator.Arguments.Append(partialJson);
+		}
+	}
+
+	private JsonArray BuildOpenAiStreamingToolCalls(IDictionary<int, StreamingToolCallAccumulator> streamedToolCalls)
+	{
+		var result = new JsonArray();
+		foreach (var pair in streamedToolCalls.OrderBy(static item => item.Key))
+		{
+			var accumulator = pair.Value;
+			result.Add(new JsonObject
+			{
+				["index"] = pair.Key,
+				["id"] = string.IsNullOrWhiteSpace(accumulator.Id) ? $"call_{pair.Key}_{BuildArchitectureKey(accumulator.Name)}" : accumulator.Id,
+				["type"] = "function",
+				["function"] = new JsonObject
+				{
+					["name"] = string.IsNullOrWhiteSpace(accumulator.Name) ? "tool" : accumulator.Name,
+					["arguments"] = accumulator.Arguments.ToString()
+				}
+			});
+		}
+
+		return result;
+	}
+
+	private JsonArray BuildResponsesFunctionCallItems(IDictionary<int, StreamingToolCallAccumulator> streamedToolCalls)
+	{
+		var result = new JsonArray();
+		foreach (var pair in streamedToolCalls.OrderBy(static item => item.Key))
+		{
+			var accumulator = pair.Value;
+			result.Add(new JsonObject
+			{
+				["type"] = "function_call",
+				["id"] = string.IsNullOrWhiteSpace(accumulator.Id) ? $"fc_{pair.Key}_{BuildArchitectureKey(accumulator.Name)}" : accumulator.Id,
+				["call_id"] = string.IsNullOrWhiteSpace(accumulator.Id) ? $"fc_{pair.Key}_{BuildArchitectureKey(accumulator.Name)}" : accumulator.Id,
+				["name"] = string.IsNullOrWhiteSpace(accumulator.Name) ? "tool" : accumulator.Name,
+				["arguments"] = accumulator.Arguments.ToString()
+			});
+		}
+
+		return result;
+	}
+
 	private static void AccumulateStreamingToolCalls(
 		JsonArray? deltaToolCalls,
 		IDictionary<int, StreamingToolCallAccumulator> streamedToolCalls)
@@ -2655,7 +3239,7 @@ internal sealed class LocalApiForwarder : IDisposable
 					["parameter_size"] = model.ParameterSize,
 					["quantization_level"] = model.QuantizationLevel
 				},
-				["model_info"] = BuildOllamaModelInfo(model),
+				["model_info"] = BuildOllamaModelInfo(model, ResolveProviderContextForModel(model.LocalName)),
 				["supports_tool_calling"] = model.SupportsToolCalling,
 				["supports_vision"] = model.SupportsVision
 			});
@@ -2742,21 +3326,23 @@ internal sealed class LocalApiForwarder : IDisposable
 
 	private async Task<JsonObject> BuildOllamaShowResponseAsync(string modelName, CancellationToken ct)
 	{
+		var providerContext = ResolveProviderContextForModel(modelName);
 		var model = await GetAdvertisedModelCatalogEntryAsync(modelName, ct)
 			?? CreateModelCatalogEntry(
 				modelName,
-				ResolveUpstreamChatModel(modelName),
-				_settings.Provider.Name,
+				ResolveUpstreamChatModelCore(modelName, providerContext),
+				providerContext.Provider.Name,
 				DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
 				isAlias: false,
-				metadataSource: null);
+				metadataSource: null,
+				providerContext);
 
 		return new JsonObject
 		{
 			["modelfile"] = $"FROM {model.UpstreamModel}",
 			["parameters"] = $"num_ctx {model.ContextLength}\nnum_predict {model.MaxOutputTokens}",
 			["template"] = "{{ .Prompt }}",
-			["license"] = $"Forwarded to {_settings.Provider.Name} via TrafficPilot.",
+			["license"] = $"Forwarded to {providerContext.Provider.Name} via TrafficPilot.",
 			["capabilities"] = BuildOllamaCapabilities(model),
 			["modified_at"] = DateTimeOffset.UtcNow.ToString("O"),
 			["multiplier"] = FormatMultiplier(model.Multiplier),
@@ -2771,7 +3357,7 @@ internal sealed class LocalApiForwarder : IDisposable
 				["parameter_size"] = model.ParameterSize,
 				["quantization_level"] = model.QuantizationLevel
 			},
-			["model_info"] = BuildOllamaModelInfo(model)
+			["model_info"] = BuildOllamaModelInfo(model, providerContext)
 		};
 	}
 
@@ -2815,6 +3401,7 @@ internal sealed class LocalApiForwarder : IDisposable
 		var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 		foreach (var model in await GetAdvertisedModelCatalogAsync(ct))
 		{
+			var providerContext = ResolveProviderContextForModel(model.LocalName);
 			seen.Add(model.LocalName);
 			var modelUri = BuildFoundryModelUri(model.LocalName);
 			models.Add(new JsonObject
@@ -2823,7 +3410,7 @@ internal sealed class LocalApiForwarder : IDisposable
 				["displayName"] = model.LocalName,
 				["providerType"] = "AzureFoundryLocal",
 				["uri"] = modelUri,
-				["publisher"] = _settings.Provider.Name,
+				["publisher"] = providerContext.Provider.Name,
 				["task"] = "chat completion",
 				["version"] = "1",
 				["modelType"] = "OpenAI",
@@ -2845,10 +3432,10 @@ internal sealed class LocalApiForwarder : IDisposable
 					["parameters"] = new JsonArray()
 				},
 				["alias"] = model.LocalName,
-				["description"] = $"Forwarded to {_settings.Provider.Name} via TrafficPilot.",
+				["description"] = $"Forwarded to {providerContext.Provider.Name} via TrafficPilot.",
 				["supportsToolCalling"] = true,
 				["license"] = "Remote",
-				["licenseDescription"] = $"Remote model forwarded to {_settings.Provider.Name} via TrafficPilot.",
+				["licenseDescription"] = $"Remote model forwarded to {providerContext.Provider.Name} via TrafficPilot.",
 				["parentModelUri"] = modelUri,
 				["maxOutputTokens"] = 8192,
 				["minFLVersion"] = "0.0.0",
@@ -2869,6 +3456,8 @@ internal sealed class LocalApiForwarder : IDisposable
 			if (seen.Contains(loadedModel))
 				continue;
 
+			var providerContext = ResolveProviderContextForModel(loadedModel);
+
 			var dynamicUri = BuildFoundryModelUri(loadedModel);
 			models.Add(new JsonObject
 			{
@@ -2876,7 +3465,7 @@ internal sealed class LocalApiForwarder : IDisposable
 				["displayName"] = loadedModel,
 				["providerType"] = "AzureFoundryLocal",
 				["uri"] = dynamicUri,
-				["publisher"] = _settings.Provider.Name,
+				["publisher"] = providerContext.Provider.Name,
 				["task"] = "chat completion",
 				["version"] = "1",
 				["modelType"] = "OpenAI",
@@ -2898,10 +3487,10 @@ internal sealed class LocalApiForwarder : IDisposable
 					["parameters"] = new JsonArray()
 				},
 				["alias"] = loadedModel,
-				["description"] = $"BYOM forwarded to {_settings.Provider.Name} via TrafficPilot.",
+				["description"] = $"BYOM forwarded to {providerContext.Provider.Name} via TrafficPilot.",
 				["supportsToolCalling"] = true,
 				["license"] = "Remote",
-				["licenseDescription"] = $"BYOM forwarded to {_settings.Provider.Name} via TrafficPilot.",
+				["licenseDescription"] = $"BYOM forwarded to {providerContext.Provider.Name} via TrafficPilot.",
 				["parentModelUri"] = dynamicUri,
 				["maxOutputTokens"] = 8192,
 				["minFLVersion"] = "0.0.0",
@@ -2934,13 +3523,14 @@ internal sealed class LocalApiForwarder : IDisposable
 		var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 		foreach (var model in await GetAdvertisedModelCatalogAsync(ct))
 		{
+			var providerContext = ResolveProviderContextForModel(model.LocalName);
 			seen.Add(model.LocalName);
 			var modelObj = new JsonObject
 			{
 				["id"] = model.LocalName,
 				["object"] = "model",
 				["created"] = model.CreatedUnixTime,
-				["owned_by"] = string.IsNullOrWhiteSpace(model.OwnedBy) ? _settings.Provider.Name : model.OwnedBy
+				["owned_by"] = string.IsNullOrWhiteSpace(model.OwnedBy) ? providerContext.Provider.Name : model.OwnedBy
 			};
 
 			var capabilities = new JsonObject();
@@ -2961,12 +3551,14 @@ internal sealed class LocalApiForwarder : IDisposable
 			if (seen.Contains(loadedModel))
 				continue;
 
+			var providerContext = ResolveProviderContextForModel(loadedModel);
+
 			data.Add(new JsonObject
 			{
 				["id"] = loadedModel,
 				["object"] = "model",
 				["created"] = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
-				["owned_by"] = _settings.Provider.Name,
+				["owned_by"] = providerContext.Provider.Name,
 				["capabilities"] = new JsonObject()
 			});
 		}
@@ -3023,31 +3615,34 @@ internal sealed class LocalApiForwarder : IDisposable
 	private async Task<IReadOnlyList<ModelCatalogEntry>> FetchUpstreamModelCatalogAsync(CancellationToken ct)
 	{
 		var attempts = new List<string>();
-		foreach (var candidate in EnumerateUpstreamModelCatalogRequests())
+		foreach (var providerContext in _providerContexts.Values.Where(static context => context.Provider.Enabled))
 		{
-			using var request = CreateUpstreamGetRequest(candidate.RequestUri);
-			using var response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
-			var responseBody = await response.Content.ReadAsStringAsync(ct);
-			LogResponseIfEnabled(candidate.LogOperation, response.StatusCode, responseBody);
-
-			if (!response.IsSuccessStatusCode)
+			foreach (var candidate in EnumerateUpstreamModelCatalogRequests(providerContext))
 			{
-				attempts.Add($"{candidate.RequestUri} -> {(int)response.StatusCode} {response.ReasonPhrase}");
-				continue;
+				using var request = CreateUpstreamGetRequest(candidate.RequestUri, providerContext);
+				using var response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
+				var responseBody = await response.Content.ReadAsStringAsync(ct);
+				LogResponseIfEnabled(candidate.LogOperation, response.StatusCode, responseBody);
+
+				if (!response.IsSuccessStatusCode)
+				{
+					attempts.Add($"{providerContext.Provider.Name}: {candidate.RequestUri} -> {(int)response.StatusCode} {response.ReasonPhrase}");
+					continue;
+				}
+
+				var catalog = ParseUpstreamModelCatalog(responseBody, providerContext);
+				if (catalog.Count > 0)
+					return catalog;
+
+				attempts.Add($"{providerContext.Provider.Name}: {candidate.RequestUri} -> empty catalog");
 			}
-
-			var catalog = ParseUpstreamModelCatalog(responseBody);
-			if (catalog.Count > 0)
-				return catalog;
-
-			attempts.Add($"{candidate.RequestUri} -> empty catalog");
 		}
 
 		throw new InvalidOperationException(
-			$"Unable to load an upstream model catalog from {_settings.Provider.BaseUrl}. Tried: {string.Join("; ", attempts)}");
+			$"Unable to load an upstream model catalog. Tried: {string.Join("; ", attempts)}");
 	}
 
-	private IEnumerable<(Uri RequestUri, string LogOperation)> EnumerateUpstreamModelCatalogRequests()
+	private IEnumerable<(Uri RequestUri, string LogOperation)> EnumerateUpstreamModelCatalogRequests(GatewayProviderRuntimeContext providerContext)
 	{
 		var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
@@ -3056,27 +3651,27 @@ internal sealed class LocalApiForwarder : IDisposable
 			return seen.Add(uri.AbsoluteUri);
 		}
 
-		var baseUri = NormalizeBaseUri(_settings.Provider.BaseUrl);
+		var baseUri = NormalizeBaseUri(providerContext.Provider.BaseUrl);
 		var basePath = baseUri.AbsolutePath.Trim('/');
 
-		var primaryModelsUri = BuildUpstreamUri("models");
+		var primaryModelsUri = BuildUpstreamUri("models", providerContext);
 		if (TryAdd(primaryModelsUri))
 			yield return (primaryModelsUri, "openai.models");
 
 		if (!basePath.EndsWith("/v1", StringComparison.OrdinalIgnoreCase)
 			&& !basePath.Equals("v1", StringComparison.OrdinalIgnoreCase))
 		{
-			var rootModelsUri = BuildUpstreamRootUri("v1/models");
+			var rootModelsUri = BuildUpstreamRootUri("v1/models", providerContext);
 			if (TryAdd(rootModelsUri))
 				yield return (rootModelsUri, "openai.models");
 		}
 
-		var ollamaTagsUri = BuildUpstreamRootUri("api/tags");
+		var ollamaTagsUri = BuildUpstreamRootUri("api/tags", providerContext);
 		if (TryAdd(ollamaTagsUri))
 			yield return (ollamaTagsUri, "ollama.tags");
 	}
 
-	private IReadOnlyList<ModelCatalogEntry> ParseUpstreamModelCatalog(string responseBody)
+	private IReadOnlyList<ModelCatalogEntry> ParseUpstreamModelCatalog(string responseBody, GatewayProviderRuntimeContext providerContext)
 	{
 		JsonNode? parsed;
 		try
@@ -3094,12 +3689,12 @@ internal sealed class LocalApiForwarder : IDisposable
 		var models = new Dictionary<string, ModelCatalogEntry>(StringComparer.OrdinalIgnoreCase);
 		if (parsed is JsonObject parsedObject)
 		{
-			AddModelCatalogEntries(models, parsedObject["data"] as JsonArray);
-			AddModelCatalogEntries(models, parsedObject["models"] as JsonArray);
+			AddModelCatalogEntries(models, parsedObject["data"] as JsonArray, providerContext);
+			AddModelCatalogEntries(models, parsedObject["models"] as JsonArray, providerContext);
 		}
 		else if (parsed is JsonArray parsedArray)
 		{
-			AddModelCatalogEntries(models, parsedArray);
+			AddModelCatalogEntries(models, parsedArray, providerContext);
 		}
 
 		if (models.Count == 0)
@@ -3112,7 +3707,8 @@ internal sealed class LocalApiForwarder : IDisposable
 
 	private void AddModelCatalogEntries(
 		IDictionary<string, ModelCatalogEntry> catalog,
-		JsonArray? source)
+		JsonArray? source,
+		GatewayProviderRuntimeContext providerContext)
 	{
 		if (source is null)
 			return;
@@ -3123,15 +3719,16 @@ internal sealed class LocalApiForwarder : IDisposable
 			if (string.IsNullOrWhiteSpace(modelId))
 				continue;
 
-			var normalizedId = ResolveGeneratedUpstreamModelAliasOrSelf(modelId);
-			var localName = BuildAdvertisedUpstreamLocalName(normalizedId, TryReadModelDisplayName(item, normalizedId));
+			var normalizedId = ResolveGeneratedUpstreamModelAliasOrSelf(modelId, providerContext);
+			var localName = BuildAdvertisedUpstreamLocalName(normalizedId, TryReadModelDisplayName(item, normalizedId), providerContext);
 			catalog[localName] = CreateModelCatalogEntry(
 				localName,
 				normalizedId,
-				TryReadModelOwner(item) ?? _settings.Provider.Name,
+				TryReadModelOwner(item) ?? providerContext.Provider.Name,
 				TryReadModelCreatedUnixTime(item) ?? DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
 				isAlias: !localName.Equals(normalizedId, StringComparison.OrdinalIgnoreCase),
-				item);
+				item,
+				providerContext);
 		}
 	}
 
@@ -3140,26 +3737,27 @@ internal sealed class LocalApiForwarder : IDisposable
 		var models = new Dictionary<string, ModelCatalogEntry>(StringComparer.OrdinalIgnoreCase);
 		var createdUnixTime = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
 
-		foreach (var mapping in _settings.ModelMappings)
+		foreach (var providerContext in _providerContexts.Values)
 		{
-			if (string.IsNullOrWhiteSpace(mapping.LocalModel))
-				continue;
+			foreach (var mapping in providerContext.ModelRouteMap)
+			{
+				var localModel = mapping.Key.Trim();
+				var upstreamModel = string.IsNullOrWhiteSpace(mapping.Value)
+					? localModel
+					: mapping.Value.Trim();
+				models[localModel] = CreateModelCatalogEntry(
+					localModel,
+					upstreamModel,
+					providerContext.Provider.Name,
+					createdUnixTime,
+					isAlias: !localModel.Equals(upstreamModel, StringComparison.OrdinalIgnoreCase),
+					metadataSource: null,
+					providerContext);
+			}
 
-			var localModel = mapping.LocalModel.Trim();
-			var upstreamModel = string.IsNullOrWhiteSpace(mapping.UpstreamModel)
-				? localModel
-				: mapping.UpstreamModel.Trim();
-			models[localModel] = CreateModelCatalogEntry(
-				localModel,
-				upstreamModel,
-				_settings.Provider.Name,
-				createdUnixTime,
-				isAlias: !localModel.Equals(upstreamModel, StringComparison.OrdinalIgnoreCase),
-				metadataSource: null);
+			AddConfiguredModelCatalogEntry(models, providerContext.Provider.DefaultModel, createdUnixTime, providerContext);
+			AddConfiguredModelCatalogEntry(models, providerContext.Provider.DefaultEmbeddingModel, createdUnixTime, providerContext);
 		}
-
-		AddConfiguredModelCatalogEntry(models, _settings.Provider.DefaultModel, createdUnixTime);
-		AddConfiguredModelCatalogEntry(models, _settings.Provider.DefaultEmbeddingModel, createdUnixTime);
 
 		return models.Values
 			.OrderBy(static model => model.LocalName, StringComparer.OrdinalIgnoreCase)
@@ -3169,21 +3767,23 @@ internal sealed class LocalApiForwarder : IDisposable
 	private void AddConfiguredModelCatalogEntry(
 		IDictionary<string, ModelCatalogEntry> catalog,
 		string? modelName,
-		long createdUnixTime)
+		long createdUnixTime,
+		GatewayProviderRuntimeContext providerContext)
 	{
 		if (string.IsNullOrWhiteSpace(modelName))
 			return;
 
 		var normalizedModel = modelName.Trim();
-		var upstreamModel = ResolveGeneratedUpstreamModelAliasOrSelf(normalizedModel);
-		var localName = BuildAdvertisedUpstreamLocalName(upstreamModel);
+		var upstreamModel = ResolveGeneratedUpstreamModelAliasOrSelf(normalizedModel, providerContext);
+		var localName = BuildAdvertisedUpstreamLocalName(upstreamModel, null, providerContext);
 		catalog[localName] = CreateModelCatalogEntry(
 			localName,
 			upstreamModel,
-			_settings.Provider.Name,
+			providerContext.Provider.Name,
 			createdUnixTime,
 			isAlias: !localName.Equals(upstreamModel, StringComparison.OrdinalIgnoreCase),
-			metadataSource: null);
+			metadataSource: null,
+			providerContext);
 	}
 
 	private IReadOnlyList<string> GetConfiguredLocalModelNames() =>
@@ -3242,15 +3842,17 @@ internal sealed class LocalApiForwarder : IDisposable
 		string ownedBy,
 		long createdUnixTime,
 		bool isAlias,
-		JsonNode? metadataSource)
+		JsonNode? metadataSource,
+		GatewayProviderRuntimeContext? providerContext = null)
 	{
+		providerContext ??= GetDefaultProviderContext();
 		var inferenceModelName = string.IsNullOrWhiteSpace(upstreamModel) ? localName : upstreamModel;
 		var supportsEmbeddings = InferEmbeddingSupport(inferenceModelName, metadataSource);
 		var supportsToolCalling = !supportsEmbeddings
-			&& !IsAnthropicProvider
+			&& !(providerContext.Provider.Protocol ?? "OpenAICompatible").Equals("Anthropic", StringComparison.OrdinalIgnoreCase)
 			&& InferToolSupport(inferenceModelName, metadataSource);
 		var supportsVision = !supportsEmbeddings
-			&& !IsAnthropicProvider
+			&& !(providerContext.Provider.Protocol ?? "OpenAICompatible").Equals("Anthropic", StringComparison.OrdinalIgnoreCase)
 			&& InferVisionSupport(inferenceModelName, metadataSource);
 		var multiplier = TryReadDoubleFromAny(metadataSource,
 			"multiplier",
@@ -3322,7 +3924,7 @@ internal sealed class LocalApiForwarder : IDisposable
 			.ToArray());
 	}
 
-	private JsonObject BuildOllamaModelInfo(ModelCatalogEntry model)
+	private JsonObject BuildOllamaModelInfo(ModelCatalogEntry model, GatewayProviderRuntimeContext providerContext)
 	{
 		var modelInfo = new JsonObject
 		{
@@ -3330,8 +3932,8 @@ internal sealed class LocalApiForwarder : IDisposable
 			[$"{model.Architecture}.context_length"] = model.ContextLength,
 			["trafficpilot.context_length"] = model.ContextLength,
 			["trafficpilot.max_output_tokens"] = model.MaxOutputTokens,
-			["trafficpilot.provider_name"] = _settings.Provider.Name,
-			["trafficpilot.provider_base_url"] = _settings.Provider.BaseUrl,
+			["trafficpilot.provider_name"] = providerContext.Provider.Name,
+			["trafficpilot.provider_base_url"] = providerContext.Provider.BaseUrl,
 			["trafficpilot.upstream_model"] = model.UpstreamModel,
 			["trafficpilot.supports_tool_calling"] = model.SupportsToolCalling,
 			["trafficpilot.supports_vision"] = model.SupportsVision
@@ -3597,7 +4199,7 @@ internal sealed class LocalApiForwarder : IDisposable
 		}
 	}
 
-	private string? TryResolveCatalogMappedUpstreamModel(string localModel)
+	private string? TryResolveCatalogMappedUpstreamModel(string localModel, GatewayProviderRuntimeContext providerContext)
 	{
 		if (string.IsNullOrWhiteSpace(localModel))
 			return null;
@@ -3608,13 +4210,10 @@ internal sealed class LocalApiForwarder : IDisposable
 			return cachedMatch.UpstreamModel;
 
 		// Check model mappings directly instead of calling BuildConfiguredModelCatalog(),
-		// which would cause infinite recursion via AddConfiguredModelCatalogEntry â†’
-		// ResolveGeneratedUpstreamModelAliasOrSelf â†’ TryResolveCatalogMappedUpstreamModel.
-		var mappingMatch = _settings.ModelMappings.FirstOrDefault(m =>
-			m.LocalModel.Equals(localModel, StringComparison.OrdinalIgnoreCase)
-			&& !string.IsNullOrWhiteSpace(m.UpstreamModel));
-		if (mappingMatch is not null)
-			return mappingMatch.UpstreamModel.Trim();
+		// which would cause infinite recursion via AddConfiguredModelCatalogEntry â†?
+		// ResolveGeneratedUpstreamModelAliasOrSelf â†? TryResolveCatalogMappedUpstreamModel.
+		if (providerContext.ModelRouteMap.TryGetValue(localModel, out var routeUpstreamModel))
+			return routeUpstreamModel.Trim();
 
 		return null;
 	}
@@ -4055,14 +4654,15 @@ internal sealed class LocalApiForwarder : IDisposable
 
 	private JsonObject BuildDiagnostics(string localPath, HttpStatusCode? upstreamStatus, string? upstreamBody, string? localModel)
 	{
+		var providerContext = ResolveProviderContextForModel(localModel);
 		var diagnostics = new JsonObject
 		{
 			["local_path"] = localPath,
-			["provider_protocol"] = _settings.Provider.Protocol,
-			["provider_name"] = _settings.Provider.Name,
-			["provider_base_url"] = _settings.Provider.BaseUrl,
-			["chat_endpoint"] = _settings.Provider.ChatEndpoint,
-			["embeddings_endpoint"] = _settings.Provider.EmbeddingsEndpoint
+			["provider_protocol"] = providerContext.Provider.Protocol,
+			["provider_name"] = providerContext.Provider.Name,
+			["provider_base_url"] = providerContext.Provider.BaseUrl,
+			["chat_endpoint"] = providerContext.Provider.ChatEndpoint,
+			["embeddings_endpoint"] = providerContext.Provider.EmbeddingsEndpoint
 		};
 
 		if (!string.IsNullOrWhiteSpace(localModel))

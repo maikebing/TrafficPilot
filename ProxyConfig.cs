@@ -31,6 +31,9 @@ internal class ProxyConfigModel
 	[JsonPropertyName("configSync")]
 	public ConfigSyncSettings? ConfigSync { get; set; }
 
+	[JsonPropertyName("ollamaGateway")]
+	public OllamaGatewaySettings? OllamaGateway { get; set; }
+
 	[JsonPropertyName("localApiForwarder")]
 	public LocalApiForwarderSettings? LocalApiForwarder { get; set; }
 
@@ -56,6 +59,7 @@ internal class ProxyConfigModel
 			Enabled = opts.HostsRedirectEnabled,
 			HostsUrl = opts.HostsRedirectUrl
 		};
+		OllamaGateway = opts.OllamaGateway;
 		LocalApiForwarder = opts.LocalApiForwarder;
 	}
 }
@@ -134,6 +138,108 @@ internal class LocalApiForwarderSettings
 
 	[JsonPropertyName("includeErrorDiagnostics")]
 	public bool IncludeErrorDiagnostics { get; set; } = true;
+}
+
+internal class OllamaGatewaySettings
+{
+	[JsonPropertyName("enabled")]
+	public bool Enabled { get; set; } = true;
+
+	[JsonPropertyName("ollamaPort")]
+	public ushort OllamaPort { get; set; } = 11434;
+
+	[JsonPropertyName("openAiPort")]
+	public ushort OpenAiPort { get; set; } = 5273;
+
+	[JsonPropertyName("providers")]
+	public List<GatewayProviderSettings> Providers { get; set; } = [];
+
+	[JsonPropertyName("routes")]
+	public List<GatewayRouteSettings> Routes { get; set; } = [];
+
+	[JsonPropertyName("requestResponseLogging")]
+	public LocalApiRequestResponseLoggingSettings RequestResponseLogging { get; set; } = new();
+
+	[JsonPropertyName("includeErrorDiagnostics")]
+	public bool IncludeErrorDiagnostics { get; set; } = true;
+
+	public GatewayProviderSettings? GetDefaultProvider()
+	{
+		return Providers.FirstOrDefault(static provider => provider.Enabled)
+			?? Providers.FirstOrDefault();
+	}
+}
+
+internal class GatewayProviderSettings
+{
+	[JsonPropertyName("id")]
+	public string Id { get; set; } = "default";
+
+	[JsonPropertyName("enabled")]
+	public bool Enabled { get; set; } = true;
+
+	[JsonPropertyName("protocol")]
+	public string Protocol { get; set; } = "OpenAICompatible";
+
+	[JsonPropertyName("name")]
+	public string Name { get; set; } = "Default Provider";
+
+	[JsonPropertyName("baseUrl")]
+	public string BaseUrl { get; set; } = "https://api.openai.com/v1/";
+
+	[JsonPropertyName("defaultModel")]
+	public string DefaultModel { get; set; } = string.Empty;
+
+	[JsonPropertyName("defaultEmbeddingModel")]
+	public string DefaultEmbeddingModel { get; set; } = string.Empty;
+
+	[JsonPropertyName("authType")]
+	public string AuthType { get; set; } = "Bearer";
+
+	[JsonPropertyName("authHeaderName")]
+	public string AuthHeaderName { get; set; } = "Authorization";
+
+	[JsonPropertyName("chatEndpoint")]
+	public string ChatEndpoint { get; set; } = "chat/completions";
+
+	[JsonPropertyName("embeddingsEndpoint")]
+	public string EmbeddingsEndpoint { get; set; } = "embeddings";
+
+	[JsonPropertyName("responsesEndpoint")]
+	public string ResponsesEndpoint { get; set; } = "responses";
+
+	[JsonPropertyName("additionalHeaders")]
+	public List<LocalApiHeaderSetting> AdditionalHeaders { get; set; } = [];
+
+	[JsonPropertyName("capabilities")]
+	public GatewayProviderCapabilitySettings Capabilities { get; set; } = new();
+}
+
+internal class GatewayProviderCapabilitySettings
+{
+	[JsonPropertyName("supportsChat")]
+	public bool SupportsChat { get; set; } = true;
+
+	[JsonPropertyName("supportsEmbeddings")]
+	public bool SupportsEmbeddings { get; set; } = true;
+
+	[JsonPropertyName("supportsResponses")]
+	public bool SupportsResponses { get; set; } = true;
+
+	[JsonPropertyName("supportsStreaming")]
+	public bool SupportsStreaming { get; set; } = true;
+}
+
+internal class GatewayRouteSettings
+{
+	[JsonPropertyName("localModel")]
+	public string LocalModel { get; set; } = string.Empty;
+
+	[JsonPropertyName("providerId")]
+	public string ProviderId { get; set; } = "default";
+
+	[JsonPropertyName("upstreamModel")]
+	public string UpstreamModel { get; set; } = string.Empty;
 }
 
 internal class LocalApiProviderSettings
@@ -359,7 +465,33 @@ internal sealed class ProxyConfigManager
             {
                 RefreshDomains = [.. ProxyOptions.DefaultRefreshDomains]
 			},
+			OllamaGateway = CreateDefaultGatewaySettings(),
 			LocalApiForwarder = new LocalApiForwarderSettings()
+		};
+	}
+
+	private static OllamaGatewaySettings CreateDefaultGatewaySettings()
+	{
+		return new OllamaGatewaySettings
+		{
+			Providers =
+			[
+				new GatewayProviderSettings
+				{
+					Id = "default",
+					Enabled = true,
+					Protocol = "OpenAICompatible",
+					Name = "OpenAI Compatible",
+					BaseUrl = "https://api.openai.com/v1/",
+					Capabilities = new GatewayProviderCapabilitySettings
+					{
+						SupportsChat = true,
+						SupportsEmbeddings = true,
+						SupportsResponses = true,
+						SupportsStreaming = true
+					}
+				}
+			]
 		};
 	}
 
@@ -370,6 +502,13 @@ internal sealed class ProxyConfigManager
 		var changed = false;
 		using var document = JsonDocument.Parse(json);
 		var root = document.RootElement;
+
+		config.OllamaGateway ??= BuildGatewaySettingsFromLegacy(config.LocalApiForwarder);
+		if (config.OllamaGateway is not null)
+		{
+			NormalizeGatewaySettings(config.OllamaGateway);
+			changed = true;
+		}
 
 		if (!root.TryGetProperty("localApiForwarder", out var localApiElement))
 		{
@@ -401,6 +540,89 @@ internal sealed class ProxyConfigManager
 		}
 
 		return changed;
+	}
+
+	internal static OllamaGatewaySettings BuildGatewaySettingsFromLegacy(LocalApiForwarderSettings? legacy)
+	{
+		legacy ??= new LocalApiForwarderSettings();
+
+		var providerId = "default";
+		var provider = legacy.Provider ?? new LocalApiProviderSettings();
+		var capabilities = new GatewayProviderCapabilitySettings
+		{
+			SupportsChat = true,
+			SupportsResponses = true,
+			SupportsStreaming = !string.Equals(provider.Protocol, "Anthropic", StringComparison.OrdinalIgnoreCase),
+			SupportsEmbeddings = !string.Equals(provider.Protocol, "Anthropic", StringComparison.OrdinalIgnoreCase)
+		};
+
+		return new OllamaGatewaySettings
+		{
+			Enabled = legacy.Enabled,
+			OllamaPort = legacy.OllamaPort,
+			OpenAiPort = legacy.FoundryPort,
+			RequestResponseLogging = legacy.RequestResponseLogging ?? new LocalApiRequestResponseLoggingSettings(),
+			IncludeErrorDiagnostics = legacy.IncludeErrorDiagnostics,
+			Providers =
+			[
+				new GatewayProviderSettings
+				{
+					Id = providerId,
+					Enabled = legacy.Enabled,
+					Protocol = provider.Protocol,
+					Name = provider.Name,
+					BaseUrl = provider.BaseUrl,
+					DefaultModel = provider.DefaultModel,
+					DefaultEmbeddingModel = provider.DefaultEmbeddingModel,
+					AuthType = provider.AuthType,
+					AuthHeaderName = provider.AuthHeaderName,
+					ChatEndpoint = provider.ChatEndpoint,
+					EmbeddingsEndpoint = provider.EmbeddingsEndpoint,
+					ResponsesEndpoint = provider.ResponsesEndpoint,
+					AdditionalHeaders = provider.AdditionalHeaders ?? [],
+					Capabilities = capabilities
+				}
+			],
+			Routes = legacy.ModelMappings
+				.Select(mapping => new GatewayRouteSettings
+				{
+					LocalModel = mapping.LocalModel,
+					ProviderId = providerId,
+					UpstreamModel = mapping.UpstreamModel
+				})
+				.ToList()
+		};
+	}
+
+	private static void NormalizeGatewaySettings(OllamaGatewaySettings settings)
+	{
+		settings.Providers ??= [];
+		settings.Routes ??= [];
+		settings.RequestResponseLogging ??= new LocalApiRequestResponseLoggingSettings();
+
+		foreach (var provider in settings.Providers)
+		{
+			provider.Capabilities ??= new GatewayProviderCapabilitySettings();
+			provider.AdditionalHeaders ??= [];
+			if (string.IsNullOrWhiteSpace(provider.Id))
+				provider.Id = BuildProviderId(provider.Name, provider.Protocol);
+		}
+	}
+
+	private static string BuildProviderId(string? name, string? protocol)
+	{
+		var source = string.IsNullOrWhiteSpace(name) ? protocol : name;
+		if (string.IsNullOrWhiteSpace(source))
+			return "default";
+
+		var normalized = new string(source
+			.Trim()
+			.ToLowerInvariant()
+			.Select(static ch => char.IsLetterOrDigit(ch) ? ch : '-')
+			.ToArray())
+			.Trim('-');
+
+		return string.IsNullOrWhiteSpace(normalized) ? "default" : normalized;
 	}
 
 	private static bool LooksLikeLegacyLocalApiConfig(LocalApiForwarderSettings settings)

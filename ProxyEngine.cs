@@ -47,14 +47,17 @@ internal sealed class ProxyEngine : IDisposable
 	{
 		if (_isRunning) return;
 
-		if (!_options.ProxyEnabled && !_options.HostsRedirectEnabled && _options.LocalApiForwarder?.Enabled != true)
+		var gatewaySettings = _options.OllamaGateway ?? ProxyConfigManager.BuildGatewaySettingsFromLegacy(_options.LocalApiForwarder);
+
+		if (!_options.ProxyEnabled && !_options.HostsRedirectEnabled && gatewaySettings?.Enabled != true)
 			throw new InvalidOperationException("Proxy, hosts redirect, and local API forwarding are all disabled.");
 
-		if (_options.LocalApiForwarder?.Enabled == true)
+		if (gatewaySettings?.Enabled == true)
 		{
-			var providerName = _options.LocalApiForwarder.Provider?.Name ?? "Default";
+			var legacySettings = _options.LocalApiForwarder ?? BuildLegacyLocalApiForwarderSettings(gatewaySettings);
+			var providerName = legacySettings.Provider?.Name ?? "Default";
 			var apiKey = CredentialManager.LoadToken(CredentialManager.GetLocalApiTargetName(providerName));
-			_localApiForwarder = new LocalApiForwarder(_options.LocalApiForwarder, apiKey);
+			_localApiForwarder = new LocalApiForwarder(legacySettings, apiKey);
 			_localApiForwarder.OnLog += LogInfo;
 			await _localApiForwarder.StartAsync();
 		}
@@ -173,7 +176,8 @@ internal sealed class ProxyEngine : IDisposable
 
 	public async Task<IReadOnlyList<string>> RefreshLocalApiModelCatalogAsync(CancellationToken ct = default)
 	{
-		if (_options.LocalApiForwarder?.Enabled != true || _localApiForwarder is null)
+		var gatewaySettings = _options.OllamaGateway ?? ProxyConfigManager.BuildGatewaySettingsFromLegacy(_options.LocalApiForwarder);
+		if (gatewaySettings?.Enabled != true || _localApiForwarder is null)
 			throw new InvalidOperationException("Local API forwarder is not running.");
 
 		return await _localApiForwarder.RefreshModelCatalogAsync(ct);
@@ -181,7 +185,8 @@ internal sealed class ProxyEngine : IDisposable
 
 	public async Task<IReadOnlyList<LocalApiAdvertisedModel>> RefreshLocalApiModelCatalogEntriesAsync(CancellationToken ct = default)
 	{
-		if (_options.LocalApiForwarder?.Enabled != true || _localApiForwarder is null)
+		var gatewaySettings = _options.OllamaGateway ?? ProxyConfigManager.BuildGatewaySettingsFromLegacy(_options.LocalApiForwarder);
+		if (gatewaySettings?.Enabled != true || _localApiForwarder is null)
 			throw new InvalidOperationException("Local API forwarder is not running.");
 
 		return await _localApiForwarder.RefreshModelCatalogEntriesAsync(ct);
@@ -223,6 +228,41 @@ internal sealed class ProxyEngine : IDisposable
 		_localApiForwarder?.Dispose();
 		if (_winDivertHandle != IntPtr.Zero && _winDivertHandle != new IntPtr(-1))
 			WinDivertNative.WinDivertClose(_winDivertHandle);
+	}
+
+	private static LocalApiForwarderSettings BuildLegacyLocalApiForwarderSettings(OllamaGatewaySettings gatewaySettings)
+	{
+		var provider = gatewaySettings.GetDefaultProvider() ?? new GatewayProviderSettings();
+		return new LocalApiForwarderSettings
+		{
+			Enabled = gatewaySettings.Enabled,
+			OllamaPort = gatewaySettings.OllamaPort,
+			FoundryPort = gatewaySettings.OpenAiPort,
+			Provider = new LocalApiProviderSettings
+			{
+				Protocol = provider.Protocol,
+				Name = provider.Name,
+				BaseUrl = provider.BaseUrl,
+				DefaultModel = provider.DefaultModel,
+				DefaultEmbeddingModel = provider.DefaultEmbeddingModel,
+				AuthType = provider.AuthType,
+				AuthHeaderName = provider.AuthHeaderName,
+				ChatEndpoint = provider.ChatEndpoint,
+				EmbeddingsEndpoint = provider.EmbeddingsEndpoint,
+				ResponsesEndpoint = provider.ResponsesEndpoint,
+				AdditionalHeaders = provider.AdditionalHeaders ?? []
+			},
+			ModelMappings = gatewaySettings.Routes
+				.Where(route => string.Equals(route.ProviderId, provider.Id, StringComparison.OrdinalIgnoreCase))
+				.Select(static route => new LocalApiModelMapping
+				{
+					LocalModel = route.LocalModel,
+					UpstreamModel = route.UpstreamModel
+				})
+				.ToList(),
+			RequestResponseLogging = gatewaySettings.RequestResponseLogging,
+			IncludeErrorDiagnostics = gatewaySettings.IncludeErrorDiagnostics
+		};
 	}
 
 	private async Task PacketProcessingLoopAsync(CancellationToken ct)

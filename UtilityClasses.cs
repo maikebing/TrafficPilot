@@ -369,6 +369,7 @@ internal sealed record ProxyOptions(
 	bool HostsRedirectEnabled = false,
 	string HostsRedirectUrl = GitHub520HostsProvider.DefaultUrl,
 	string HostsRedirectMode = "DnsInterception",
+	OllamaGatewaySettings? OllamaGateway = null,
 	LocalApiForwarderSettings? LocalApiForwarder = null) // "DnsInterception" or "HostsFile"
 {
     internal static readonly string[] DefaultProcessNames =
