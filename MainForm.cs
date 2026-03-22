@@ -34,6 +34,7 @@ internal partial class MainForm : Form
 	private CancellationTokenSource? _networkChangeCts;
 
 	private Dictionary<string, string> _localApiModelNameMap = new(StringComparer.OrdinalIgnoreCase);
+	private CancellationTokenSource? _statusHintCts;
 
 	public MainForm(bool startMinimized = false)
 	{
@@ -666,12 +667,12 @@ internal partial class MainForm : Form
 		_txtGatewayRoutesPreview.Lines = lines.Count == 0 ? [] : lines.ToArray();
 	}
 
-	private void CmbGatewayProviderSelection_SelectedIndexChanged(object? sender, EventArgs e)
+	private void GatewayProviderTabs_SelectedIndexChanged(object? sender, EventArgs e)
 	{
 		ApplyGatewayProviderEditorChanges(_currentConfig.OllamaGateway);
 		LoadGatewayRouteEditor(_currentConfig.OllamaGateway);
 		UpdateGatewayRoutesPreview(_currentConfig.OllamaGateway);
-		UpdateGatewayProviderEditorFields(_currentConfig.OllamaGateway, _cmbGatewayProviderSelection?.SelectedItem?.ToString());
+		UpdateGatewayProviderEditorFields(_currentConfig.OllamaGateway, GetSelectedGatewayProviderId());
 	}
 
 	private void CmbGatewayProviderProtocol2_SelectedIndexChanged(object? sender, EventArgs e)
@@ -691,7 +692,7 @@ internal partial class MainForm : Form
 
 	private async void BtnGatewayDetectProvider_Click(object? sender, EventArgs e)
 	{
-		if (_txtGatewayProviderBaseUrl2 is null || _cmbGatewayProviderSelection is null)
+		if (_txtGatewayProviderBaseUrl2 is null || _gatewayProviderTabs is null)
 			return;
 
 		var baseUrl = _txtGatewayProviderBaseUrl2.Text.Trim();
@@ -709,7 +710,7 @@ internal partial class MainForm : Form
 		{
 			ApplyDetectedProviderDefaults(baseUrl);
 			await TryProbeProviderAsync(baseUrl);
-			await TryPopulateGatewayProviderModelsAsync(baseUrl);
+			await TryPopulateGatewayProviderModelsAsync(baseUrl, autoApplySuggestedDefaults: false, showPrompt: true);
 			ApplyGatewayProviderBasicFieldPolicy();
 			ApplyGatewayProviderAdvancedVisibility();
 			MessageBox.Show("Provider defaults detected and filled. Review them if needed.", "Detect Provider", MessageBoxButtons.OK, MessageBoxIcon.Information);
@@ -761,18 +762,19 @@ internal partial class MainForm : Form
 
 		_currentConfig.OllamaGateway = gatewaySettings;
 		LoadGatewayProviderEditor(gatewaySettings);
-		_cmbGatewayProviderSelection!.SelectedItem = providerId;
+		SelectGatewayProviderTab(providerId);
 		LoadGatewayRouteEditor(gatewaySettings);
 		UpdateGatewayRoutesPreview(gatewaySettings);
+		UpdateGatewayOverviewProviderList(gatewaySettings);
 	}
 
 	private void BtnRemoveGatewayProvider_Click(object? sender, EventArgs e)
 	{
 		var gatewaySettings = _currentConfig.OllamaGateway ?? BuildOllamaGatewaySettings();
-		if (gatewaySettings is null || _cmbGatewayProviderSelection is null)
+		if (gatewaySettings is null || _gatewayProviderTabs is null)
 			return;
 
-		var selectedProviderId = _cmbGatewayProviderSelection.SelectedItem?.ToString();
+		var selectedProviderId = GetSelectedGatewayProviderId();
 		if (string.IsNullOrWhiteSpace(selectedProviderId))
 			return;
 
@@ -801,35 +803,137 @@ internal partial class MainForm : Form
 		LoadGatewayProviderEditor(gatewaySettings);
 		LoadGatewayRouteEditor(gatewaySettings);
 		UpdateGatewayRoutesPreview(gatewaySettings);
+		UpdateGatewayOverviewProviderList(gatewaySettings);
 	}
 
 	private void LoadGatewayProviderEditor(OllamaGatewaySettings? gatewaySettings)
 	{
-		if (_cmbGatewayProviderSelection is null)
+		if (_gatewayProviderTabs is null)
 			return;
 
 		gatewaySettings ??= BuildOllamaGatewaySettings();
 		var providers = gatewaySettings?.Providers ?? [];
-		var selectedProviderId = _cmbGatewayProviderSelection.SelectedItem?.ToString();
+		var selectedProviderId = GetSelectedGatewayProviderId();
 
-		_cmbGatewayProviderSelection.SelectedIndexChanged -= CmbGatewayProviderSelection_SelectedIndexChanged;
-		_cmbGatewayProviderSelection.Items.Clear();
+		_gatewayProviderTabs.SelectedIndexChanged -= GatewayProviderTabs_SelectedIndexChanged;
+		_gatewayProviderTabs.TabPages.Clear();
 		foreach (var provider in providers.Where(static provider => provider.Enabled))
 		{
 			var providerId = string.IsNullOrWhiteSpace(provider.Id) ? "default" : provider.Id.Trim();
-			_cmbGatewayProviderSelection.Items.Add(providerId);
-			if (string.Equals(providerId, selectedProviderId, StringComparison.OrdinalIgnoreCase))
-				_cmbGatewayProviderSelection.SelectedItem = providerId;
+			var title = string.IsNullOrWhiteSpace(provider.Name) ? providerId : provider.Name.Trim();
+			var tabPage = new TabPage(title) { Tag = providerId };
+			_gatewayProviderTabs.TabPages.Add(tabPage);
 		}
 
-		if (_cmbGatewayProviderSelection.SelectedItem is null && _cmbGatewayProviderSelection.Items.Count > 0)
-			_cmbGatewayProviderSelection.SelectedIndex = 0;
+		if (_gatewayProviderTabs.TabPages.Count > 0)
+		{
+			var selectedIndex = 0;
+			for (var i = 0; i < _gatewayProviderTabs.TabPages.Count; i++)
+			{
+				if (string.Equals(_gatewayProviderTabs.TabPages[i].Tag?.ToString(), selectedProviderId, StringComparison.OrdinalIgnoreCase))
+				{
+					selectedIndex = i;
+					break;
+				}
+			}
+			_gatewayProviderTabs.SelectedIndex = selectedIndex;
+		}
 
-		_cmbGatewayProviderSelection.SelectedIndexChanged += CmbGatewayProviderSelection_SelectedIndexChanged;
-		UpdateGatewayProviderEditorFields(gatewaySettings, _cmbGatewayProviderSelection.SelectedItem?.ToString());
-		LoadGatewayProviderApiKey(gatewaySettings, _cmbGatewayProviderSelection.SelectedItem?.ToString());
+		_gatewayProviderTabs.SelectedIndexChanged += GatewayProviderTabs_SelectedIndexChanged;
+		UpdateGatewayProviderEditorFields(gatewaySettings, GetSelectedGatewayProviderId());
+		LoadGatewayProviderApiKey(gatewaySettings, GetSelectedGatewayProviderId());
+		UpdateGatewayProviderModelPreview(gatewaySettings, GetSelectedGatewayProviderId());
+		UpdateGatewayOverviewProviderList(gatewaySettings);
 		ApplyGatewayProviderBasicFieldPolicy();
 		ApplyGatewayProviderAdvancedVisibility();
+	}
+
+	private string? GetSelectedGatewayProviderId()
+	{
+		return _gatewayProviderTabs?.SelectedTab?.Tag?.ToString();
+	}
+
+	private void SelectGatewayProviderTab(string providerId)
+	{
+		if (_gatewayProviderTabs is null)
+			return;
+
+		for (var index = 0; index < _gatewayProviderTabs.TabPages.Count; index++)
+		{
+			if (string.Equals(_gatewayProviderTabs.TabPages[index].Tag?.ToString(), providerId, StringComparison.OrdinalIgnoreCase))
+			{
+				_gatewayProviderTabs.SelectedIndex = index;
+				break;
+			}
+		}
+	}
+
+	private void UpdateGatewayOverviewProviderList(OllamaGatewaySettings? gatewaySettings)
+	{
+		if (_txtGatewayOverviewProviders is null)
+			return;
+
+		gatewaySettings ??= BuildOllamaGatewaySettings();
+		var lines = new List<string>();
+		foreach (var provider in gatewaySettings?.Providers.Where(static p => p.Enabled) ?? [])
+		{
+			var providerId = string.IsNullOrWhiteSpace(provider.Id) ? "default" : provider.Id.Trim();
+			var name = string.IsNullOrWhiteSpace(provider.Name) ? providerId : provider.Name.Trim();
+			var status = provider.Enabled ? "enabled" : "disabled";
+			lines.Add($"- {name} [{providerId}] ({provider.Protocol}, {status})");
+			if (!string.IsNullOrWhiteSpace(provider.DefaultModel))
+				lines.Add($"  chat: {provider.DefaultModel}");
+			if (!string.IsNullOrWhiteSpace(provider.DefaultEmbeddingModel))
+				lines.Add($"  embedding: {provider.DefaultEmbeddingModel}");
+		}
+
+		_txtGatewayOverviewProviders.Lines = lines.Count == 0 ? ["<no providers>"] : lines.ToArray();
+	}
+
+	private void TxtGatewayProviderName2_TextChanged(object? sender, EventArgs e)
+	{
+		var providerId = GetSelectedGatewayProviderId();
+		if (string.IsNullOrWhiteSpace(providerId) || _gatewayProviderTabs is null || _txtGatewayProviderName2 is null)
+			return;
+
+		foreach (TabPage tabPage in _gatewayProviderTabs.TabPages)
+		{
+			if (!string.Equals(tabPage.Tag?.ToString(), providerId, StringComparison.OrdinalIgnoreCase))
+				continue;
+
+			var title = string.IsNullOrWhiteSpace(_txtGatewayProviderName2.Text) ? providerId : _txtGatewayProviderName2.Text.Trim();
+			tabPage.Text = title;
+			break;
+		}
+
+		if (_currentConfig.OllamaGateway is not null)
+			UpdateGatewayOverviewProviderList(_currentConfig.OllamaGateway);
+	}
+
+	private void TxtGatewayOverviewProviders_DoubleClick(object? sender, EventArgs e)
+	{
+		if (_txtGatewayOverviewProviders is null || _gatewayTabControl is null)
+			return;
+
+		var lineIndex = _txtGatewayOverviewProviders.GetLineFromCharIndex(_txtGatewayOverviewProviders.SelectionStart);
+		if (lineIndex < 0 || lineIndex >= _txtGatewayOverviewProviders.Lines.Length)
+			return;
+
+		var line = _txtGatewayOverviewProviders.Lines[lineIndex].Trim();
+		if (!line.StartsWith("- ") || !line.Contains("[", StringComparison.Ordinal) || !line.Contains("]", StringComparison.Ordinal))
+			return;
+
+		var start = line.IndexOf('[', StringComparison.Ordinal);
+		var end = line.IndexOf(']', start + 1);
+		if (start < 0 || end <= start)
+			return;
+
+		var providerId = line.Substring(start + 1, end - start - 1).Trim();
+		if (string.IsNullOrWhiteSpace(providerId))
+			return;
+
+		_gatewayTabControl.SelectedTab = _gatewayProviderTab;
+		SelectGatewayProviderTab(providerId);
 	}
 
 	private void UpdateGatewayProviderEditorFields(OllamaGatewaySettings? gatewaySettings, string? providerId)
@@ -892,6 +996,7 @@ internal partial class MainForm : Form
 		_txtGatewayProviderEmbeddingModel2.Text = provider.DefaultEmbeddingModel ?? string.Empty;
 		RebindEditableComboBox(_txtGatewayProviderDefaultModel2, provider.CachedModels ?? [], provider.DefaultModel ?? string.Empty);
 		RebindEditableComboBox(_txtGatewayProviderEmbeddingModel2, provider.CachedEmbeddingModels ?? provider.CachedModels ?? [], provider.DefaultEmbeddingModel ?? string.Empty);
+		UpdateGatewayProviderModelPreview(gatewaySettings, providerId);
 		_cmbGatewayProviderAuthType.SelectedItem = _cmbGatewayProviderAuthType.Items.Contains(provider.AuthType)
 			? provider.AuthType
 			: "Bearer";
@@ -1017,7 +1122,7 @@ internal partial class MainForm : Form
 		}
 	}
 
-	private async Task TryPopulateGatewayProviderModelsAsync(string baseUrl)
+	private async Task TryPopulateGatewayProviderModelsAsync(string baseUrl, bool autoApplySuggestedDefaults, bool showPrompt)
 	{
 		if (_txtGatewayProviderDefaultModel2 is null
 			|| _txtGatewayProviderEmbeddingModel2 is null
@@ -1028,26 +1133,33 @@ internal partial class MainForm : Form
 
 		var protocol = _cmbGatewayProviderProtocol2.SelectedItem?.ToString() ?? _txtGatewayDetectedProtocol?.Text ?? "OpenAICompatible";
 		var apiKey = _txtLocalApiApiKey?.Text.Trim();
-		var models = await FetchGatewayProviderModelNamesAsync(baseUrl, protocol, apiKey);
-		if (models.Count == 0)
+		var modelCatalog = await FetchGatewayProviderModelCatalogAsync(baseUrl, protocol, apiKey);
+		if (modelCatalog.AllModels.Count == 0)
 			return;
 
-		CacheGatewayProviderModels(models, protocol);
+		CacheGatewayProviderModels(modelCatalog, protocol);
 
-		var suggestedChat = models[0];
-		var suggestedEmbedding = models.FirstOrDefault(static m => m.Contains("embed", StringComparison.OrdinalIgnoreCase) || m.Contains("embedding", StringComparison.OrdinalIgnoreCase));
-		var preview = string.Join(", ", models.Take(6)) + (models.Count > 6 ? ", ..." : string.Empty);
+		var suggestedChat = modelCatalog.MessageModels.FirstOrDefault() ?? modelCatalog.AllModels[0];
+		var suggestedEmbedding = modelCatalog.EmbeddingModels.FirstOrDefault();
+		var preview = string.Join(", ", modelCatalog.AllModels.Take(6)) + (modelCatalog.AllModels.Count > 6 ? ", ..." : string.Empty);
 
-		var result = MessageBox.Show(
-			$"检测成功，发现 {models.Count} 个模型。\r\n\r\n示例：{preview}\r\n\r\n是否自动填入默认 Chat 模型{(string.IsNullOrWhiteSpace(suggestedEmbedding) ? string.Empty : "和 Embedding 模型")}？",
-			"Detect Models",
-			MessageBoxButtons.YesNo,
-			MessageBoxIcon.Information);
+		if (showPrompt)
+		{
+			var result = MessageBox.Show(
+				$"检测成功，发现 {modelCatalog.AllModels.Count} 个模型。\r\n\r\n示例：{preview}\r\n\r\n是否自动填入默认 Chat 模型{(string.IsNullOrWhiteSpace(suggestedEmbedding) ? string.Empty : "和 Embedding 模型")}？",
+				"Detect Models",
+				MessageBoxButtons.YesNo,
+				MessageBoxIcon.Information);
 
-		if (result != DialogResult.Yes)
+			if (result != DialogResult.Yes)
+				return;
+		}
+		else if (!autoApplySuggestedDefaults)
+		{
 			return;
+		}
 
-		if (string.IsNullOrWhiteSpace(_txtGatewayProviderDefaultModel2.Text))
+		if (string.IsNullOrWhiteSpace(_txtGatewayProviderDefaultModel2.Text) || protocol.Equals("Anthropic", StringComparison.OrdinalIgnoreCase))
 			_txtGatewayProviderDefaultModel2.Text = suggestedChat;
 
 		if (!string.IsNullOrWhiteSpace(suggestedEmbedding)
@@ -1058,7 +1170,7 @@ internal partial class MainForm : Form
 		}
 	}
 
-	private static async Task<List<string>> FetchGatewayProviderModelNamesAsync(string baseUrl, string protocol, string? apiKey)
+	private static async Task<GatewayProviderModelCatalog> FetchGatewayProviderModelCatalogAsync(string baseUrl, string protocol, string? apiKey)
 	{
 		using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(8) };
 		var normalized = baseUrl.Trim().TrimEnd('/');
@@ -1073,7 +1185,7 @@ internal partial class MainForm : Form
 			request.Headers.TryAddWithoutValidation("anthropic-version", "2023-06-01");
 		using var response = await client.SendAsync(request);
 		if (!response.IsSuccessStatusCode)
-			return [];
+			return GatewayProviderModelCatalog.Empty;
 
 		var json = await response.Content.ReadAsStringAsync();
 		using var doc = System.Text.Json.JsonDocument.Parse(json);
@@ -1088,35 +1200,98 @@ internal partial class MainForm : Form
 		}
 		else
 		{
-			return [];
+			return GatewayProviderModelCatalog.Empty;
 		}
 
 		var results = new List<string>();
+		var messageModels = new List<string>();
+		var otherModels = new List<string>();
+		var moderationModels = new List<string>();
+		var unknownModels = new List<string>();
+		var summaries = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 		foreach (var item in data.EnumerateArray())
 		{
+			string? modelName = null;
 			if (item.TryGetProperty("id", out var id) && id.ValueKind == System.Text.Json.JsonValueKind.String)
 			{
-				var value = id.GetString();
-				if (!string.IsNullOrWhiteSpace(value))
-					results.Add(value.Trim());
+				modelName = id.GetString();
 			}
 			else if (isAnthropic && item.TryGetProperty("name", out var name) && name.ValueKind == System.Text.Json.JsonValueKind.String)
 			{
-				var value = name.GetString();
-				if (!string.IsNullOrWhiteSpace(value))
-					results.Add(value.Trim());
+				modelName = name.GetString();
+			}
+
+			if (string.IsNullOrWhiteSpace(modelName))
+				continue;
+
+			var normalizedName = modelName.Trim();
+			results.Add(normalizedName);
+			summaries[normalizedName] = BuildModelSummary(item);
+			if (isAnthropic)
+			{
+				var modelType = item.TryGetProperty("type", out var typeValue) && typeValue.ValueKind == System.Text.Json.JsonValueKind.String
+					? typeValue.GetString()
+					: null;
+				var supportsMessages = string.Equals(modelType, "messages", StringComparison.OrdinalIgnoreCase)
+					|| (item.TryGetProperty("capabilities", out var caps)
+						&& caps.ValueKind == System.Text.Json.JsonValueKind.Object
+						&& caps.TryGetProperty("messages", out var messagesCap)
+						&& messagesCap.ValueKind is System.Text.Json.JsonValueKind.True or System.Text.Json.JsonValueKind.False
+						&& messagesCap.GetBoolean());
+
+				var looksLikeEmbedding = normalizedName.Contains("embed", StringComparison.OrdinalIgnoreCase) || normalizedName.Contains("embedding", StringComparison.OrdinalIgnoreCase);
+				var looksLikeModeration = normalizedName.Contains("moderation", StringComparison.OrdinalIgnoreCase) || string.Equals(modelType, "moderation", StringComparison.OrdinalIgnoreCase);
+
+				if (supportsMessages)
+					messageModels.Add(normalizedName);
+				else if (looksLikeEmbedding)
+					otherModels.Add(normalizedName);
+				else if (looksLikeModeration)
+					moderationModels.Add(normalizedName);
+				else
+					unknownModels.Add(normalizedName);
 			}
 		}
 
-		return results.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+		var allModels = results.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+		var embeddingModels = allModels.Where(static m => m.Contains("embed", StringComparison.OrdinalIgnoreCase) || m.Contains("embedding", StringComparison.OrdinalIgnoreCase)).ToList();
+		return new GatewayProviderModelCatalog(
+			allModels,
+			embeddingModels,
+			messageModels.Distinct(StringComparer.OrdinalIgnoreCase).ToList(),
+			otherModels.Distinct(StringComparer.OrdinalIgnoreCase).ToList(),
+			moderationModels.Distinct(StringComparer.OrdinalIgnoreCase).ToList(),
+			unknownModels.Distinct(StringComparer.OrdinalIgnoreCase).ToList(),
+			summaries);
 	}
 
-	private void CacheGatewayProviderModels(IReadOnlyList<string> models, string protocol)
+	private static string BuildModelSummary(System.Text.Json.JsonElement item)
 	{
-		if (_currentConfig.OllamaGateway is null || _cmbGatewayProviderSelection is null)
+		var fields = new List<string>();
+		foreach (var property in item.EnumerateObject())
+		{
+			string value = property.Value.ValueKind switch
+			{
+				System.Text.Json.JsonValueKind.String => property.Value.GetString() ?? string.Empty,
+				System.Text.Json.JsonValueKind.Number => property.Value.ToString(),
+				System.Text.Json.JsonValueKind.True => "true",
+				System.Text.Json.JsonValueKind.False => "false",
+				System.Text.Json.JsonValueKind.Object => "{...}",
+				System.Text.Json.JsonValueKind.Array => "[...]",
+				_ => string.Empty
+			};
+			if (!string.IsNullOrWhiteSpace(value))
+				fields.Add($"{property.Name}={value}");
+		}
+		return string.Join(", ", fields.Take(8));
+	}
+
+	private void CacheGatewayProviderModels(GatewayProviderModelCatalog catalog, string protocol)
+	{
+		if (_currentConfig.OllamaGateway is null || _gatewayProviderTabs is null)
 			return;
 
-		var selectedProviderId = _cmbGatewayProviderSelection.SelectedItem?.ToString();
+		var selectedProviderId = GetSelectedGatewayProviderId();
 		if (string.IsNullOrWhiteSpace(selectedProviderId))
 			return;
 
@@ -1125,15 +1300,342 @@ internal partial class MainForm : Form
 		if (provider is null)
 			return;
 
-		provider.CachedModels = models.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
-		provider.CachedEmbeddingModels = protocol.Equals("Anthropic", StringComparison.OrdinalIgnoreCase)
-			? []
-			: models.Where(static m => m.Contains("embed", StringComparison.OrdinalIgnoreCase) || m.Contains("embedding", StringComparison.OrdinalIgnoreCase))
-				.Distinct(StringComparer.OrdinalIgnoreCase)
-				.ToList();
+		provider.CachedModels = catalog.AllModels;
+		provider.CachedEmbeddingModels = protocol.Equals("Anthropic", StringComparison.OrdinalIgnoreCase) ? catalog.EmbeddingModels : catalog.EmbeddingModels;
+		provider.CachedMessageModels = catalog.MessageModels;
+		provider.CachedOtherModels = catalog.OtherModels;
+		provider.CachedModerationModels = catalog.ModerationModels;
+		provider.CachedUnknownModels = catalog.UnknownModels;
+		provider.CachedModelSummaries = catalog.Summaries;
 
 		RebindEditableComboBox(_txtGatewayProviderDefaultModel2!, provider.CachedModels, _txtGatewayProviderDefaultModel2!.Text);
 		RebindEditableComboBox(_txtGatewayProviderEmbeddingModel2!, provider.CachedEmbeddingModels.Count > 0 ? provider.CachedEmbeddingModels : provider.CachedModels, _txtGatewayProviderEmbeddingModel2!.Text);
+		UpdateGatewayProviderModelPreview(_currentConfig.OllamaGateway, selectedProviderId);
+	}
+
+	private void UpdateGatewayProviderModelPreview(OllamaGatewaySettings? gatewaySettings, string? providerId)
+	{
+		if (_txtGatewayProviderModelPreview is null)
+			return;
+
+		gatewaySettings ??= BuildOllamaGatewaySettings();
+		var provider = gatewaySettings?.Providers.FirstOrDefault(p =>
+			string.Equals(string.IsNullOrWhiteSpace(p.Id) ? "default" : p.Id.Trim(), providerId, StringComparison.OrdinalIgnoreCase));
+
+		if (provider is null)
+		{
+			_txtGatewayProviderModelPreview.Items.Clear();
+			if (_txtGatewayProviderModelMetadata is not null)
+				_txtGatewayProviderModelMetadata.Text = string.Empty;
+			return;
+		}
+
+		_txtGatewayProviderModelPreview.BeginUpdate();
+		try
+		{
+			_txtGatewayProviderModelPreview.Items.Clear();
+
+		if (string.Equals(provider.Protocol, "Anthropic", StringComparison.OrdinalIgnoreCase))
+		{
+			AddPreviewSection("Messages", provider.CachedMessageModels, provider.DefaultModel, null);
+			AddPreviewSection("Embeddings", provider.CachedOtherModels, null, provider.DefaultEmbeddingModel);
+			AddPreviewSection("Moderation", provider.CachedModerationModels, null, null);
+			AddPreviewSection("Unknown", provider.CachedUnknownModels, null, null);
+			return;
+		}
+
+			AddPreviewSection("Models", provider.CachedModels, provider.DefaultModel, provider.DefaultEmbeddingModel);
+		}
+		finally
+		{
+			_txtGatewayProviderModelPreview.EndUpdate();
+		}
+
+		void AddPreviewSection(string title, IEnumerable<string> items, string? defaultChat, string? defaultEmbedding)
+		{
+			_txtGatewayProviderModelPreview.Items.Add($"[{title}]");
+			var hasItem = false;
+			foreach (var item in items.DefaultIfEmpty("<none>"))
+			{
+				hasItem = true;
+				var display = item;
+				if (string.Equals(item, defaultChat, StringComparison.OrdinalIgnoreCase))
+					display = $"* {item}  [default]";
+				else if (string.Equals(item, defaultEmbedding, StringComparison.OrdinalIgnoreCase))
+					display = $"* {item}  [embedding]";
+				_txtGatewayProviderModelPreview.Items.Add(display);
+			}
+			if (!hasItem)
+				_txtGatewayProviderModelPreview.Items.Add("<none>");
+			_txtGatewayProviderModelPreview.Items.Add(string.Empty);
+		}
+	}
+
+	private async void BtnGatewayRefreshProviderModels_Click(object? sender, EventArgs e)
+	{
+		await RefreshGatewayProviderModelsAsync(autoApplySuggestedDefaults: false, showPrompt: false);
+	}
+
+	private async void BtnGatewayRefreshProviderModelsApply_Click(object? sender, EventArgs e)
+	{
+		await RefreshGatewayProviderModelsAsync(autoApplySuggestedDefaults: true, showPrompt: false);
+	}
+
+	private async Task RefreshGatewayProviderModelsAsync(bool autoApplySuggestedDefaults, bool showPrompt)
+	{
+		if (_txtGatewayProviderBaseUrl2 is null || _btnGatewayRefreshProviderModels is null || _btnGatewayRefreshProviderModelsApply is null)
+			return;
+
+		var baseUrl = _txtGatewayProviderBaseUrl2.Text.Trim();
+		if (string.IsNullOrWhiteSpace(baseUrl))
+		{
+			MessageBox.Show("Please enter Provider Base URL first.", "Refresh Models", MessageBoxButtons.OK, MessageBoxIcon.Information);
+			return;
+		}
+
+		PersistGatewayProviderApiKey();
+		_btnGatewayRefreshProviderModels.Enabled = false;
+		_btnGatewayRefreshProviderModelsApply.Enabled = false;
+		try
+		{
+			var chatBefore = _txtGatewayProviderDefaultModel2?.Text.Trim() ?? string.Empty;
+			var embeddingBefore = _txtGatewayProviderEmbeddingModel2?.Text.Trim() ?? string.Empty;
+			await TryPopulateGatewayProviderModelsAsync(baseUrl, autoApplySuggestedDefaults, showPrompt);
+			if (autoApplySuggestedDefaults)
+			{
+				var providerId = GetSelectedGatewayProviderId();
+				var provider = _currentConfig.OllamaGateway?.Providers.FirstOrDefault(p =>
+					string.Equals(string.IsNullOrWhiteSpace(p.Id) ? "default" : p.Id.Trim(), providerId, StringComparison.OrdinalIgnoreCase));
+				var count = provider?.CachedModels.Count ?? 0;
+				var chatAfter = _txtGatewayProviderDefaultModel2?.Text.Trim() ?? string.Empty;
+				var embeddingAfter = _txtGatewayProviderEmbeddingModel2?.Text.Trim() ?? string.Empty;
+				MessageBox.Show(
+					$"已刷新 {count} 个模型，已应用默认 Chat={(string.IsNullOrWhiteSpace(chatAfter) ? "<none>" : chatAfter)}{(string.IsNullOrWhiteSpace(embeddingAfter) ? string.Empty : $"，Embedding={embeddingAfter}")}",
+					"Refresh + Apply",
+					MessageBoxButtons.OK,
+					MessageBoxIcon.Information);
+				AppendLog($"[{DateTime.Now:HH:mm:ss.fff}] [Gateway] Refreshed {count} models and applied defaults: Chat={(string.IsNullOrWhiteSpace(chatAfter) ? "<none>" : chatAfter)}{(string.IsNullOrWhiteSpace(embeddingAfter) ? string.Empty : $", Embedding={embeddingAfter}")}");
+			}
+		}
+		catch (Exception ex)
+		{
+			MessageBox.Show($"Refresh failed: {ex.Message}", "Refresh Models", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+		}
+		finally
+		{
+			_btnGatewayRefreshProviderModels.Enabled = true;
+			_btnGatewayRefreshProviderModelsApply.Enabled = true;
+		}
+	}
+
+	private void GatewayProviderModelPreview_DoubleClick(object? sender, EventArgs e)
+	{
+		ApplySelectedPreviewModelByCategory();
+	}
+
+	private void GatewayProviderModelPreview_MouseDown(object? sender, MouseEventArgs e)
+	{
+		if (_txtGatewayProviderModelPreview is null)
+			return;
+
+		var index = _txtGatewayProviderModelPreview.IndexFromPoint(e.Location);
+		if (index >= 0)
+			_txtGatewayProviderModelPreview.SelectedIndex = index;
+	}
+
+	private void GatewayProviderModelPreview_SelectedIndexChanged(object? sender, EventArgs e)
+	{
+		UpdateSelectedGatewayModelMetadata();
+	}
+
+	private void GatewaySetAsChatModelMenuItem_Click(object? sender, EventArgs e)
+	{
+		ApplySelectedPreviewModel(forceEmbedding: false);
+	}
+
+	private void GatewaySetAsEmbeddingModelMenuItem_Click(object? sender, EventArgs e)
+	{
+		ApplySelectedPreviewModel(forceEmbedding: true);
+	}
+
+	private void ApplySelectedPreviewModelByCategory()
+	{
+		ApplySelectedPreviewModel(forceEmbedding: null);
+	}
+
+	private void ApplySelectedPreviewModel(bool? forceEmbedding)
+	{
+		if (_txtGatewayProviderModelPreview is null || _gatewayProviderTabs is null)
+			return;
+
+		var selected = _txtGatewayProviderModelPreview.SelectedItem?.ToString();
+		if (string.IsNullOrWhiteSpace(selected) || selected.StartsWith("[") || selected.Equals("<none>", StringComparison.OrdinalIgnoreCase))
+			return;
+
+		var normalized = selected.Replace("* ", string.Empty).Replace("  [default]", string.Empty).Replace("  [embedding]", string.Empty).Trim();
+		var selectedProviderId = GetSelectedGatewayProviderId();
+		var provider = _currentConfig.OllamaGateway?.Providers.FirstOrDefault(p =>
+			string.Equals(string.IsNullOrWhiteSpace(p.Id) ? "default" : p.Id.Trim(), selectedProviderId, StringComparison.OrdinalIgnoreCase));
+		if (provider is null)
+			return;
+
+		if (forceEmbedding == true)
+		{
+			_txtGatewayProviderEmbeddingModel2!.Text = normalized;
+		}
+		else if (forceEmbedding == false)
+		{
+			_txtGatewayProviderDefaultModel2!.Text = normalized;
+		}
+		else if (string.Equals(provider.Protocol, "Anthropic", StringComparison.OrdinalIgnoreCase))
+		{
+			if (provider.CachedMessageModels.Contains(normalized, StringComparer.OrdinalIgnoreCase))
+				_txtGatewayProviderDefaultModel2!.Text = normalized;
+			else if (provider.CachedOtherModels.Contains(normalized, StringComparer.OrdinalIgnoreCase) || provider.CachedEmbeddingModels.Contains(normalized, StringComparer.OrdinalIgnoreCase))
+				_txtGatewayProviderEmbeddingModel2!.Text = normalized;
+		}
+		else
+		{
+			if (provider.CachedEmbeddingModels.Contains(normalized, StringComparer.OrdinalIgnoreCase))
+				_txtGatewayProviderEmbeddingModel2!.Text = normalized;
+			else
+				_txtGatewayProviderDefaultModel2!.Text = normalized;
+		}
+
+		ApplyGatewayProviderEditorChanges(_currentConfig.OllamaGateway);
+		UpdateGatewayProviderModelPreview(_currentConfig.OllamaGateway, selectedProviderId);
+	}
+
+	private void UpdateSelectedGatewayModelMetadata()
+	{
+		if (_txtGatewayProviderModelPreview is null || _txtGatewayProviderModelMetadata is null || _gatewayProviderTabs is null)
+			return;
+
+		var selected = _txtGatewayProviderModelPreview.SelectedItem?.ToString();
+		if (string.IsNullOrWhiteSpace(selected) || selected.StartsWith("[") || selected.Equals("<none>", StringComparison.OrdinalIgnoreCase))
+		{
+			_txtGatewayProviderModelMetadata.Text = string.Empty;
+			if (_lblStatus is not null && _lblStatus.Text.StartsWith("Model:", StringComparison.OrdinalIgnoreCase))
+				_lblStatus.Text = _engine?.IsRunning == true ? "Status: Running" : "Status: Stopped";
+			return;
+		}
+
+		var normalized = selected.Replace("* ", string.Empty).Replace("  [default]", string.Empty).Replace("  [embedding]", string.Empty).Trim();
+		var selectedProviderId = GetSelectedGatewayProviderId();
+		var provider = _currentConfig.OllamaGateway?.Providers.FirstOrDefault(p =>
+			string.Equals(string.IsNullOrWhiteSpace(p.Id) ? "default" : p.Id.Trim(), selectedProviderId, StringComparison.OrdinalIgnoreCase));
+		if (provider is null)
+		{
+			_txtGatewayProviderModelMetadata.Text = string.Empty;
+			return;
+		}
+
+		var lines = new List<string>
+		{
+			$"Model: {normalized}",
+			$"Provider: {provider.Name} ({provider.Id})",
+			$"Protocol: {provider.Protocol}"
+		};
+
+		if (string.Equals(provider.DefaultModel, normalized, StringComparison.OrdinalIgnoreCase))
+			lines.Add("Role: Default Chat Model");
+		else if (string.Equals(provider.DefaultEmbeddingModel, normalized, StringComparison.OrdinalIgnoreCase))
+			lines.Add("Role: Default Embedding Model");
+
+		if (string.Equals(provider.Protocol, "Anthropic", StringComparison.OrdinalIgnoreCase))
+		{
+			var category = provider.CachedMessageModels.Contains(normalized, StringComparer.OrdinalIgnoreCase) ? "messages"
+				: provider.CachedOtherModels.Contains(normalized, StringComparer.OrdinalIgnoreCase) ? "embeddings"
+				: provider.CachedModerationModels.Contains(normalized, StringComparer.OrdinalIgnoreCase) ? "moderation"
+				: provider.CachedUnknownModels.Contains(normalized, StringComparer.OrdinalIgnoreCase) ? "unknown"
+				: "uncategorized";
+			lines.Add($"Category: {category}");
+		}
+		else
+		{
+			lines.Add($"Category: {(provider.CachedEmbeddingModels.Contains(normalized, StringComparer.OrdinalIgnoreCase) ? "embedding-capable" : "general")}");
+		}
+
+		if (provider.CachedModelSummaries.TryGetValue(normalized, out var summary) && !string.IsNullOrWhiteSpace(summary))
+			lines.Add($"Raw Fields: {summary}");
+
+		_txtGatewayProviderModelMetadata.Text = string.Join(Environment.NewLine, lines);
+		if (_lblStatus is not null)
+			ShowTemporaryStatusHint($"Model: {normalized} ({lines.LastOrDefault(static line => line.StartsWith("Category:"))?.Replace("Category: ", string.Empty) ?? "selected"})");
+	}
+
+	private void BtnGatewayCopyModelMetadata_Click(object? sender, EventArgs e)
+	{
+		if (_txtGatewayProviderModelMetadata is null || string.IsNullOrWhiteSpace(_txtGatewayProviderModelMetadata.Text))
+			return;
+
+		Clipboard.SetText(_txtGatewayProviderModelMetadata.Text);
+		ShowTemporaryStatusHint("Model metadata copied");
+	}
+
+	private void ShowTemporaryStatusHint(string message, int delayMilliseconds = 3000)
+	{
+		if (_lblStatus is null)
+			return;
+
+		_statusHintCts?.Cancel();
+		_statusHintCts?.Dispose();
+		_statusHintCts = new CancellationTokenSource();
+		var token = _statusHintCts.Token;
+
+		_lblStatus.Text = message;
+		_ = RestoreStatusLabelAsync(delayMilliseconds, token);
+	}
+
+	private async Task RestoreStatusLabelAsync(int delayMilliseconds, CancellationToken cancellationToken)
+	{
+		try
+		{
+			await Task.Delay(delayMilliseconds, cancellationToken);
+			if (cancellationToken.IsCancellationRequested || _lblStatus is null || _lblStatus.IsDisposed)
+				return;
+
+			if (_lblStatus.InvokeRequired)
+			{
+				_lblStatus.BeginInvoke(() => RestoreStatusLabel());
+			}
+			else
+			{
+				RestoreStatusLabel();
+			}
+		}
+		catch (TaskCanceledException)
+		{
+		}
+	}
+
+	private void RestoreStatusLabel()
+	{
+		if (_lblStatus is null)
+			return;
+
+		if (_engine?.IsRunning == true)
+		{
+			_lblStatus.Text = "Status: Running";
+			_lblStatus.ForeColor = Color.Green;
+		}
+		else
+		{
+			_lblStatus.Text = "Status: Stopped";
+			_lblStatus.ForeColor = Color.Black;
+		}
+	}
+
+	private sealed record GatewayProviderModelCatalog(
+		List<string> AllModels,
+		List<string> EmbeddingModels,
+		List<string> MessageModels,
+		List<string> OtherModels,
+		List<string> ModerationModels,
+		List<string> UnknownModels,
+		Dictionary<string, string> Summaries)
+	{
+		public static GatewayProviderModelCatalog Empty { get; } = new([], [], [], [], [], [], new(StringComparer.OrdinalIgnoreCase));
 	}
 
 	private IEnumerable<(string Kind, string Uri)> BuildProviderProbeTargets(string baseUrl)
@@ -1169,10 +1671,10 @@ internal partial class MainForm : Form
 
 	private void PersistGatewayProviderApiKey()
 	{
-		if (_cmbGatewayProviderSelection is null || _txtLocalApiApiKey is null)
+		if (_gatewayProviderTabs is null || _txtLocalApiApiKey is null)
 			return;
 
-		var providerKey = _cmbGatewayProviderSelection.SelectedItem?.ToString();
+		var providerKey = GetSelectedGatewayProviderId();
 		if (string.IsNullOrWhiteSpace(providerKey))
 			return;
 
@@ -1220,7 +1722,7 @@ internal partial class MainForm : Form
 	private void ApplyGatewayProviderEditorChanges(OllamaGatewaySettings? gatewaySettings)
 	{
 		if (gatewaySettings is null
-			|| _cmbGatewayProviderSelection is null
+			|| _gatewayProviderTabs is null
 			|| _txtGatewayProviderId is null
 			|| _cmbGatewayProviderProtocol2 is null
 			|| _cmbGatewayProviderAuthType is null
@@ -1241,7 +1743,7 @@ internal partial class MainForm : Form
 			return;
 		}
 
-		var selectedProviderId = _cmbGatewayProviderSelection.SelectedItem?.ToString();
+		var selectedProviderId = GetSelectedGatewayProviderId();
 		if (string.IsNullOrWhiteSpace(selectedProviderId))
 			return;
 

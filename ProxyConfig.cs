@@ -199,6 +199,21 @@ internal class GatewayProviderSettings
 	[JsonPropertyName("cachedEmbeddingModels")]
 	public List<string> CachedEmbeddingModels { get; set; } = [];
 
+	[JsonPropertyName("cachedMessageModels")]
+	public List<string> CachedMessageModels { get; set; } = [];
+
+	[JsonPropertyName("cachedOtherModels")]
+	public List<string> CachedOtherModels { get; set; } = [];
+
+	[JsonPropertyName("cachedModerationModels")]
+	public List<string> CachedModerationModels { get; set; } = [];
+
+	[JsonPropertyName("cachedUnknownModels")]
+	public List<string> CachedUnknownModels { get; set; } = [];
+
+	[JsonPropertyName("cachedModelSummaries")]
+	public Dictionary<string, string> CachedModelSummaries { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+
 	[JsonPropertyName("authType")]
 	public string AuthType { get; set; } = "Bearer";
 

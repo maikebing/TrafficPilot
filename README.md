@@ -45,6 +45,24 @@
 
 > 本轮继续优化：`Chat Model / Embedding Model` 已改为可编辑下拉框；检测得到的模型列表会缓存到当前 provider，下次切换回来可直接选用；Anthropic 模型探测也增加了专门兼容处理，优先兼容其返回格式与请求头要求。
 
+> 本轮补充交互：Providers 基础区新增独立 `Refresh Models` 按钮，并在 provider 下方显示只读模型预览；对于 Anthropic，预览会进一步区分 `messages` 可用模型与其他模型，便于挑选默认聊天模型。
+
+> 本轮再优化：模型预览现在会高亮当前默认 `Chat Model / Embedding Model`；Anthropic 在刷新后会优先从 `messages` 模型中自动选择默认 `Chat Model`；同时其 `other` 模型也继续细分为 `embeddings / moderation / unknown`，更方便人工确认用途。
+
+> 本轮交互增强：模型预览区已改为可双击选择，按分类自动回填默认模型；同时 `Refresh Models` 已拆分为 `Refresh Only` 和 `Refresh + Apply` 两种模式，分别用于仅更新缓存或刷新后自动应用推荐默认值。
+
+> 本轮补充：模型预览区已增加右键菜单，可显式设为 `Chat Model` 或 `Embedding Model`；`Refresh + Apply` 完成后也会显示结果提示，例如已刷新模型数量和最终应用的默认模型。
+
+> 本轮继续增强：单击模型预览项时，底部会显示该模型的只读元信息（provider、protocol、分类、当前是否为默认模型）；同时 `Refresh + Apply` 的结果也会同步写入日志区，便于后续回溯。
+
+> 本轮补充：元信息区现在会追加展示原始服务端返回字段摘要；同时选中模型时，状态栏也会显示简短提示，方便快速确认当前聚焦的模型与分类。
+
+> 本轮继续补充：状态栏中的模型提示会在几秒后自动恢复为 `Status: Running / Stopped`；元信息区也新增了 `Copy Raw Summary` 按钮，方便复制当前模型的原始字段摘要。
+
+> Provider 交互已进一步调整：`Providers` 页面现在按“一个 provider 一个页签”组织；编辑 provider 名称时，页签标题会实时刷新。`Overview` 中的 provider 列表也会显示每个 provider 的协议、启用状态以及默认 chat / embedding 模型。
+
+> 本轮补充：`Overview` 中的 provider 列表现在支持双击后直接跳转到对应 provider 页签；同时 `Providers` 页签区右侧的删除操作也改成更直白的 `Delete` 按钮，便于理解当前是在删除正在查看的 provider。
+
 ## 主要功能
 
 - **进程流量重定向**：支持按进程名（含通配符匹配）进行筛选，将相关网络请求通过指定代理服务器转发到目标网络。

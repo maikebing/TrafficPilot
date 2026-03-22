@@ -37,6 +37,25 @@
 - Providers 中的 `Chat Model / Embedding Model` 已改为可编辑下拉框，优先从当前 provider 的已缓存模型列表中选择。
 - 模型探测结果现在会缓存到对应 provider 的配置中，切换 provider 后仍可复用该模型列表。
 - Anthropic 模型探测增加了专门兼容逻辑：补充所需请求头，并兼容非 OpenAI 风格的模型列表返回结构。
+- Providers 基础区新增只读模型预览，并增加独立 `Refresh Models` 按钮，支持在不重新执行默认值探测时单独刷新模型目录。
+- Anthropic provider 的模型缓存与预览现已区分 `messages` 可用模型和其他模型，便于默认 Chat Model 选择。
+- 模型预览现在会高亮当前默认 Chat / Embedding 模型，便于快速核对当前 provider 配置。
+- Anthropic 刷新模型后会优先从 `messages` 模型集合中自动选择默认 `Chat Model`。
+- Anthropic 的非 `messages` 模型现已进一步细分为 `embeddings / moderation / unknown` 三类并显示在预览中。
+- 模型预览区现支持双击模型名直接回填默认值：messages/普通模型回填 Chat，embeddings 类模型回填 Embedding。
+- `Refresh Models` 已拆分为两个显式入口：`Refresh Only` 仅刷新缓存，`Refresh + Apply` 在刷新后自动应用推荐默认值。
+- 模型预览区新增右键菜单：可将当前选中模型显式设为 `Chat Model` 或 `Embedding Model`。
+- `Refresh + Apply` 完成后会显示结果提示，反馈刷新到的模型数量以及最终应用的默认 Chat / Embedding 模型。
+- 模型预览区现支持单击显示底部元信息，包括 provider、protocol、模型分类及默认角色。
+- `Refresh + Apply` 的结果现在除弹窗外，还会同步写入运行日志区，便于排查和回看。
+- 元信息区新增原始服务端字段摘要展示，便于快速查看模型条目的关键返回内容。
+- 选中模型时，状态栏会显示简短提示，例如当前模型名及其分类。
+- 状态栏中的临时模型提示现会在几秒后自动恢复为正常运行状态文本。
+- 元信息区新增 `Copy Raw Summary` 按钮，可一键复制当前模型的原始字段摘要。
+- `Providers` 页面现改为每个 provider 一个页签，编辑 provider 名称时页签标题会实时刷新。
+- `Overview` 中的 provider 列表现会显示 provider 协议、启用状态，以及默认 chat / embedding 模型摘要。
+- `Overview` 中的 provider 列表现支持双击后直接跳转到对应的 provider 页签。
+- `Providers` 页签区右侧的删除按钮已改为更明确的 `Delete` 文案，表示删除当前正在查看的 provider。
 
 ### 兼容性
 - 保留 `localApiForwarder` 字段，避免旧配置立即失效。
