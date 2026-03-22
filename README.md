@@ -105,7 +105,7 @@
 3. 切换到 `Providers` 页面；当前内置固定三家 provider：
   - `OpenAI`
   - `Anthropic`
-  - `Google Gemini`
+  - `Gemini`
 4. 直接切换对应页签，填写最少必需项：
   - `Display Name`
   - `Base URL`
