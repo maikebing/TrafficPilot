@@ -232,7 +232,7 @@ internal sealed class ProxyEngine : IDisposable
 
 	private static LocalApiForwarderSettings BuildLegacyLocalApiForwarderSettings(OllamaGatewaySettings gatewaySettings)
 	{
-		var provider = gatewaySettings.GetDefaultProvider() ?? new GatewayProviderSettings();
+		var provider = GatewayProviderModelHelpers.GetDefault(gatewaySettings);
 		return new LocalApiForwarderSettings
 		{
 			Enabled = gatewaySettings.Enabled,
@@ -252,8 +252,7 @@ internal sealed class ProxyEngine : IDisposable
 				ResponsesEndpoint = provider.ResponsesEndpoint,
 				AdditionalHeaders = provider.AdditionalHeaders ?? []
 			},
-			ModelMappings = gatewaySettings.Routes
-				.Where(route => string.Equals(route.ProviderId, provider.Id, StringComparison.OrdinalIgnoreCase))
+			ModelMappings = provider.Routes
 				.Select(static route => new LocalApiModelMapping
 				{
 					LocalModel = route.LocalModel,

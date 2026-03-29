@@ -38,7 +38,7 @@ internal sealed class LocalApiForwarder : IDisposable
 	public event Action<string>? OnLog;
 
 	private sealed record GatewayProviderRuntimeContext(
-		GatewayProviderSettings Provider,
+		IGatewayProviderModel Provider,
 		string ApiKey,
 		string ProviderAlias,
 		IReadOnlyDictionary<string, string> ModelRouteMap);
@@ -127,26 +127,24 @@ internal sealed class LocalApiForwarder : IDisposable
 	private void LogStartupConfiguration()
 	{
 		var provider = GetDefaultProviderContext().Provider;
+		var routeCount = GatewayProviderModelHelpers.Enumerate(_gatewaySettings).Sum(static providerModel => providerModel.Routes.Count);
 		LogInfo(
 			$"startup config: provider='{provider.Name}', protocol={provider.Protocol}, baseUrl={provider.BaseUrl}, defaultModel={FormatSettingValue(provider.DefaultModel)}, embeddingModel={FormatSettingValue(provider.DefaultEmbeddingModel)}");
 		LogInfo(
-			$"startup ports: ollama={_settings.OllamaPort}, foundry={_settings.FoundryPort}, providers={_providerContexts.Count}, modelMappings={_gatewaySettings.Routes.Count}");
+			$"startup ports: ollama={_settings.OllamaPort}, foundry={_settings.FoundryPort}, providers={_providerContexts.Count}, modelMappings={routeCount}");
 	}
 
 	private static Dictionary<string, GatewayProviderRuntimeContext> BuildProviderContexts(OllamaGatewaySettings gatewaySettings, string fallbackApiKey)
 	{
-		var providers = gatewaySettings.Providers ?? [];
-		var routes = gatewaySettings.Routes ?? [];
 		var contexts = new Dictionary<string, GatewayProviderRuntimeContext>(StringComparer.OrdinalIgnoreCase);
 
-		foreach (var provider in providers)
+		foreach (var provider in GatewayProviderModelHelpers.Enumerate(gatewaySettings))
 		{
 			if (string.IsNullOrWhiteSpace(provider.Id))
 				continue;
 
 			var providerApiKey = CredentialManager.LoadToken(CredentialManager.GetLocalApiTargetName(provider.Name)) ?? fallbackApiKey;
-			var routeMap = routes
-				.Where(route => string.Equals(route.ProviderId, provider.Id, StringComparison.OrdinalIgnoreCase))
+			var routeMap = provider.Routes
 				.Where(static route => !string.IsNullOrWhiteSpace(route.LocalModel) && !string.IsNullOrWhiteSpace(route.UpstreamModel))
 				.GroupBy(static route => route.LocalModel.Trim(), StringComparer.OrdinalIgnoreCase)
 				.ToDictionary(
@@ -163,7 +161,7 @@ internal sealed class LocalApiForwarder : IDisposable
 
 		if (contexts.Count == 0)
 		{
-			var provider = gatewaySettings.GetDefaultProvider() ?? new GatewayProviderSettings();
+			var provider = GatewayProviderModelHelpers.GetDefault(gatewaySettings);
 			contexts[provider.Id] = new GatewayProviderRuntimeContext(
 				provider,
 				fallbackApiKey,
@@ -4210,8 +4208,8 @@ internal sealed class LocalApiForwarder : IDisposable
 			return cachedMatch.UpstreamModel;
 
 		// Check model mappings directly instead of calling BuildConfiguredModelCatalog(),
-		// which would cause infinite recursion via AddConfiguredModelCatalogEntry â†?
-		// ResolveGeneratedUpstreamModelAliasOrSelf â†? TryResolveCatalogMappedUpstreamModel.
+		// which would cause infinite recursion via AddConfiguredModelCatalogEntry ï¿½?
+		// ResolveGeneratedUpstreamModelAliasOrSelf ï¿½? TryResolveCatalogMappedUpstreamModel.
 		if (providerContext.ModelRouteMap.TryGetValue(localModel, out var routeUpstreamModel))
 			return routeUpstreamModel.Trim();
 

@@ -65,6 +65,8 @@
 
 > 本轮继续优化：`Overview` 中的 provider 列表现已支持单击时同步选中对应 provider、双击时直接跳转到 `Providers` 页面；另外在 provider 页签工具区新增了 `Duplicate` 按钮，可快速复制当前 provider 配置与其对应 routes。
 
+> 当前结构补充：Gateway 的模型路由不再作为顶层共享 `routes` 维护；OpenAI / Anthropic / Gemini 各自持有自己的 `routes`，UI 与运行时都直接按当前 provider 读写，避免跨 provider 混写。
+
 ## 主要功能
 
 - **进程流量重定向**：支持按进程名（含通配符匹配）进行筛选，将相关网络请求通过指定代理服务器转发到目标网络。

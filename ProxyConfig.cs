@@ -151,29 +151,52 @@ internal class OllamaGatewaySettings
 	[JsonPropertyName("openAiPort")]
 	public ushort OpenAiPort { get; set; } = 5273;
 
-	[JsonPropertyName("providers")]
-	public List<GatewayProviderSettings> Providers { get; set; } = [];
+	[JsonPropertyName("openAIProvider")]
+	public OpenAiGatewayProviderSettings OpenAIProvider { get; set; } = new();
 
-	[JsonPropertyName("routes")]
-	public List<GatewayRouteSettings> Routes { get; set; } = [];
+	[JsonPropertyName("anthropicProvider")]
+	public AnthropicGatewayProviderSettings AnthropicProvider { get; set; } = new();
+
+	[JsonPropertyName("geminiProvider")]
+	public GeminiGatewayProviderSettings GeminiProvider { get; set; } = new();
 
 	[JsonPropertyName("requestResponseLogging")]
 	public LocalApiRequestResponseLoggingSettings RequestResponseLogging { get; set; } = new();
 
 	[JsonPropertyName("includeErrorDiagnostics")]
 	public bool IncludeErrorDiagnostics { get; set; } = true;
-
-	public GatewayProviderSettings? GetDefaultProvider()
-	{
-		return Providers.FirstOrDefault(static provider => provider.Enabled)
-			?? Providers.FirstOrDefault();
-	}
 }
 
-internal class GatewayProviderSettings
+internal interface IGatewayProviderModel
+{
+	string Id { get; set; }
+	bool Enabled { get; set; }
+	string Protocol { get; set; }
+	string Name { get; set; }
+	string BaseUrl { get; set; }
+	string DefaultModel { get; set; }
+	string DefaultEmbeddingModel { get; set; }
+	List<string> CachedModels { get; set; }
+	List<string> CachedEmbeddingModels { get; set; }
+	List<string> CachedMessageModels { get; set; }
+	List<string> CachedOtherModels { get; set; }
+	List<string> CachedModerationModels { get; set; }
+	List<string> CachedUnknownModels { get; set; }
+	Dictionary<string, string> CachedModelSummaries { get; set; }
+	string AuthType { get; set; }
+	string AuthHeaderName { get; set; }
+	string ChatEndpoint { get; set; }
+	string EmbeddingsEndpoint { get; set; }
+	string ResponsesEndpoint { get; set; }
+	List<LocalApiHeaderSetting> AdditionalHeaders { get; set; }
+	List<GatewayRouteSettings> Routes { get; set; }
+	GatewayProviderCapabilitySettings Capabilities { get; set; }
+}
+
+internal sealed class OpenAiGatewayProviderSettings : IGatewayProviderModel
 {
 	[JsonPropertyName("id")]
-	public string Id { get; set; } = "default";
+	public string Id { get; set; } = "openai";
 
 	[JsonPropertyName("enabled")]
 	public bool Enabled { get; set; } = true;
@@ -182,7 +205,7 @@ internal class GatewayProviderSettings
 	public string Protocol { get; set; } = "OpenAICompatible";
 
 	[JsonPropertyName("name")]
-	public string Name { get; set; } = "Default Provider";
+	public string Name { get; set; } = "OpenAI";
 
 	[JsonPropertyName("baseUrl")]
 	public string BaseUrl { get; set; } = "https://api.openai.com/v1/";
@@ -232,8 +255,361 @@ internal class GatewayProviderSettings
 	[JsonPropertyName("additionalHeaders")]
 	public List<LocalApiHeaderSetting> AdditionalHeaders { get; set; } = [];
 
+	[JsonPropertyName("routes")]
+	public List<GatewayRouteSettings> Routes { get; set; } = [];
+
 	[JsonPropertyName("capabilities")]
 	public GatewayProviderCapabilitySettings Capabilities { get; set; } = new();
+
+	public OpenAiGatewayProviderSettings()
+	{
+		Capabilities = new GatewayProviderCapabilitySettings
+		{
+			SupportsChat = true,
+			SupportsEmbeddings = true,
+			SupportsResponses = true,
+			SupportsStreaming = true
+		};
+	}
+}
+
+internal sealed class AnthropicGatewayProviderSettings : IGatewayProviderModel
+{
+	[JsonPropertyName("id")]
+	public string Id { get; set; } = "anthropic";
+
+	[JsonPropertyName("enabled")]
+	public bool Enabled { get; set; } = true;
+
+	[JsonPropertyName("protocol")]
+	public string Protocol { get; set; } = "Anthropic";
+
+	[JsonPropertyName("name")]
+	public string Name { get; set; } = "Anthropic";
+
+	[JsonPropertyName("baseUrl")]
+	public string BaseUrl { get; set; } = "https://api.anthropic.com/v1/";
+
+	[JsonPropertyName("defaultModel")]
+	public string DefaultModel { get; set; } = string.Empty;
+
+	[JsonPropertyName("defaultEmbeddingModel")]
+	public string DefaultEmbeddingModel { get; set; } = string.Empty;
+
+	[JsonPropertyName("cachedModels")]
+	public List<string> CachedModels { get; set; } = [];
+
+	[JsonPropertyName("cachedEmbeddingModels")]
+	public List<string> CachedEmbeddingModels { get; set; } = [];
+
+	[JsonPropertyName("cachedMessageModels")]
+	public List<string> CachedMessageModels { get; set; } = [];
+
+	[JsonPropertyName("cachedOtherModels")]
+	public List<string> CachedOtherModels { get; set; } = [];
+
+	[JsonPropertyName("cachedModerationModels")]
+	public List<string> CachedModerationModels { get; set; } = [];
+
+	[JsonPropertyName("cachedUnknownModels")]
+	public List<string> CachedUnknownModels { get; set; } = [];
+
+	[JsonPropertyName("cachedModelSummaries")]
+	public Dictionary<string, string> CachedModelSummaries { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+
+	[JsonPropertyName("authType")]
+	public string AuthType { get; set; } = "Header";
+
+	[JsonPropertyName("authHeaderName")]
+	public string AuthHeaderName { get; set; } = "x-api-key";
+
+	[JsonPropertyName("chatEndpoint")]
+	public string ChatEndpoint { get; set; } = "messages";
+
+	[JsonPropertyName("embeddingsEndpoint")]
+	public string EmbeddingsEndpoint { get; set; } = string.Empty;
+
+	[JsonPropertyName("responsesEndpoint")]
+	public string ResponsesEndpoint { get; set; } = "responses";
+
+	[JsonPropertyName("additionalHeaders")]
+	public List<LocalApiHeaderSetting> AdditionalHeaders { get; set; } = [];
+
+	[JsonPropertyName("routes")]
+	public List<GatewayRouteSettings> Routes { get; set; } = [];
+
+	[JsonPropertyName("capabilities")]
+	public GatewayProviderCapabilitySettings Capabilities { get; set; } = new();
+
+	public AnthropicGatewayProviderSettings()
+	{
+		Capabilities = new GatewayProviderCapabilitySettings
+		{
+			SupportsChat = true,
+			SupportsEmbeddings = false,
+			SupportsResponses = true,
+			SupportsStreaming = true
+		};
+	}
+}
+
+internal sealed class GeminiGatewayProviderSettings : IGatewayProviderModel
+{
+	[JsonPropertyName("id")]
+	public string Id { get; set; } = "google";
+
+	[JsonPropertyName("enabled")]
+	public bool Enabled { get; set; } = true;
+
+	[JsonPropertyName("protocol")]
+	public string Protocol { get; set; } = "OpenAICompatible";
+
+	[JsonPropertyName("name")]
+	public string Name { get; set; } = "Gemini";
+
+	[JsonPropertyName("baseUrl")]
+	public string BaseUrl { get; set; } = "https://generativelanguage.googleapis.com/v1beta/openai/";
+
+	[JsonPropertyName("defaultModel")]
+	public string DefaultModel { get; set; } = string.Empty;
+
+	[JsonPropertyName("defaultEmbeddingModel")]
+	public string DefaultEmbeddingModel { get; set; } = string.Empty;
+
+	[JsonPropertyName("cachedModels")]
+	public List<string> CachedModels { get; set; } = [];
+
+	[JsonPropertyName("cachedEmbeddingModels")]
+	public List<string> CachedEmbeddingModels { get; set; } = [];
+
+	[JsonPropertyName("cachedMessageModels")]
+	public List<string> CachedMessageModels { get; set; } = [];
+
+	[JsonPropertyName("cachedOtherModels")]
+	public List<string> CachedOtherModels { get; set; } = [];
+
+	[JsonPropertyName("cachedModerationModels")]
+	public List<string> CachedModerationModels { get; set; } = [];
+
+	[JsonPropertyName("cachedUnknownModels")]
+	public List<string> CachedUnknownModels { get; set; } = [];
+
+	[JsonPropertyName("cachedModelSummaries")]
+	public Dictionary<string, string> CachedModelSummaries { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+
+	[JsonPropertyName("authType")]
+	public string AuthType { get; set; } = "Bearer";
+
+	[JsonPropertyName("authHeaderName")]
+	public string AuthHeaderName { get; set; } = "Authorization";
+
+	[JsonPropertyName("chatEndpoint")]
+	public string ChatEndpoint { get; set; } = "chat/completions";
+
+	[JsonPropertyName("embeddingsEndpoint")]
+	public string EmbeddingsEndpoint { get; set; } = "embeddings";
+
+	[JsonPropertyName("responsesEndpoint")]
+	public string ResponsesEndpoint { get; set; } = "responses";
+
+	[JsonPropertyName("additionalHeaders")]
+	public List<LocalApiHeaderSetting> AdditionalHeaders { get; set; } = [];
+
+	[JsonPropertyName("routes")]
+	public List<GatewayRouteSettings> Routes { get; set; } = [];
+
+	[JsonPropertyName("capabilities")]
+	public GatewayProviderCapabilitySettings Capabilities { get; set; } = new();
+
+	public GeminiGatewayProviderSettings()
+	{
+		Capabilities = new GatewayProviderCapabilitySettings
+		{
+			SupportsChat = true,
+			SupportsEmbeddings = true,
+			SupportsResponses = true,
+			SupportsStreaming = true
+		};
+	}
+}
+
+internal static class GatewayProviderModelHelpers
+{
+	public static string NormalizeProviderId(string? providerId)
+	{
+		if (string.IsNullOrWhiteSpace(providerId))
+			return "openai";
+
+		return providerId.Trim().ToLowerInvariant() switch
+		{
+			"gemini" => "google",
+			var value => value
+		};
+	}
+
+	public static IEnumerable<IGatewayProviderModel> Enumerate(OllamaGatewaySettings settings)
+	{
+		ArgumentNullException.ThrowIfNull(settings);
+		yield return settings.OpenAIProvider ?? new OpenAiGatewayProviderSettings();
+		yield return settings.AnthropicProvider ?? new AnthropicGatewayProviderSettings();
+		yield return settings.GeminiProvider ?? new GeminiGatewayProviderSettings();
+	}
+
+	public static IGatewayProviderModel? Find(OllamaGatewaySettings? settings, string? providerId)
+	{
+		if (settings is null)
+			return null;
+
+		return NormalizeProviderId(providerId) switch
+		{
+			"openai" => settings.OpenAIProvider,
+			"anthropic" => settings.AnthropicProvider,
+			"google" => settings.GeminiProvider,
+			_ => null
+		};
+	}
+
+	public static IGatewayProviderModel GetDefault(OllamaGatewaySettings settings)
+	{
+		ArgumentNullException.ThrowIfNull(settings);
+		return Enumerate(settings).FirstOrDefault(static provider => provider.Enabled) ?? settings.OpenAIProvider;
+	}
+
+	public static string InferProviderId(LocalApiProviderSettings? provider)
+	{
+		var protocol = provider?.Protocol ?? string.Empty;
+		var name = provider?.Name ?? string.Empty;
+		var baseUrl = provider?.BaseUrl ?? string.Empty;
+		var combined = $"{protocol} {name} {baseUrl}";
+
+		if (combined.Contains("anthropic", StringComparison.OrdinalIgnoreCase))
+			return "anthropic";
+
+		if (combined.Contains("gemini", StringComparison.OrdinalIgnoreCase)
+			|| combined.Contains("google", StringComparison.OrdinalIgnoreCase)
+			|| combined.Contains("generativelanguage.googleapis.com", StringComparison.OrdinalIgnoreCase))
+		{
+			return "google";
+		}
+
+		return "openai";
+	}
+
+	public static void Normalize(OllamaGatewaySettings settings)
+	{
+		ArgumentNullException.ThrowIfNull(settings);
+		settings.OpenAIProvider ??= new OpenAiGatewayProviderSettings();
+		settings.AnthropicProvider ??= new AnthropicGatewayProviderSettings();
+		settings.GeminiProvider ??= new GeminiGatewayProviderSettings();
+		NormalizeProvider(settings.OpenAIProvider, "openai");
+		NormalizeProvider(settings.AnthropicProvider, "anthropic");
+		NormalizeProvider(settings.GeminiProvider, "google");
+	}
+
+	public static void ApplyLegacyProvider(OllamaGatewaySettings settings, LegacyGatewayProviderModel legacyProvider)
+	{
+		ArgumentNullException.ThrowIfNull(settings);
+		ArgumentNullException.ThrowIfNull(legacyProvider);
+
+		var provider = Find(settings, legacyProvider.Id);
+		if (provider is null)
+			return;
+
+		provider.Id = NormalizeProviderId(legacyProvider.Id);
+		provider.Enabled = legacyProvider.Enabled;
+		provider.Protocol = legacyProvider.Protocol ?? provider.Protocol;
+		provider.Name = legacyProvider.Name ?? provider.Name;
+		provider.BaseUrl = legacyProvider.BaseUrl ?? provider.BaseUrl;
+		provider.DefaultModel = legacyProvider.DefaultModel ?? string.Empty;
+		provider.DefaultEmbeddingModel = legacyProvider.DefaultEmbeddingModel ?? string.Empty;
+		provider.CachedModels = legacyProvider.CachedModels ?? [];
+		provider.CachedEmbeddingModels = legacyProvider.CachedEmbeddingModels ?? [];
+		provider.CachedMessageModels = legacyProvider.CachedMessageModels ?? [];
+		provider.CachedOtherModels = legacyProvider.CachedOtherModels ?? [];
+		provider.CachedModerationModels = legacyProvider.CachedModerationModels ?? [];
+		provider.CachedUnknownModels = legacyProvider.CachedUnknownModels ?? [];
+		provider.CachedModelSummaries = legacyProvider.CachedModelSummaries ?? new(StringComparer.OrdinalIgnoreCase);
+		provider.AuthType = legacyProvider.AuthType ?? provider.AuthType;
+		provider.AuthHeaderName = legacyProvider.AuthHeaderName ?? provider.AuthHeaderName;
+		provider.ChatEndpoint = legacyProvider.ChatEndpoint ?? provider.ChatEndpoint;
+		provider.EmbeddingsEndpoint = legacyProvider.EmbeddingsEndpoint ?? provider.EmbeddingsEndpoint;
+		provider.ResponsesEndpoint = legacyProvider.ResponsesEndpoint ?? provider.ResponsesEndpoint;
+		provider.AdditionalHeaders = legacyProvider.AdditionalHeaders ?? [];
+		provider.Routes = legacyProvider.Routes ?? [];
+		provider.Capabilities = legacyProvider.Capabilities ?? new GatewayProviderCapabilitySettings();
+	}
+
+	private static void NormalizeProvider(IGatewayProviderModel provider, string providerId)
+	{
+		provider.Id = providerId;
+		provider.Protocol ??= "OpenAICompatible";
+		provider.Name ??= providerId;
+		provider.BaseUrl ??= string.Empty;
+		provider.DefaultModel ??= string.Empty;
+		provider.DefaultEmbeddingModel ??= string.Empty;
+		provider.CachedModels ??= [];
+		provider.CachedEmbeddingModels ??= [];
+		provider.CachedMessageModels ??= [];
+		provider.CachedOtherModels ??= [];
+		provider.CachedModerationModels ??= [];
+		provider.CachedUnknownModels ??= [];
+		provider.CachedModelSummaries ??= new(StringComparer.OrdinalIgnoreCase);
+		provider.AuthType ??= "Bearer";
+		provider.AuthHeaderName ??= "Authorization";
+		provider.ChatEndpoint ??= string.Empty;
+		provider.EmbeddingsEndpoint ??= string.Empty;
+		provider.ResponsesEndpoint ??= string.Empty;
+		provider.AdditionalHeaders ??= [];
+		provider.Routes ??= [];
+		provider.Capabilities ??= new GatewayProviderCapabilitySettings();
+	}
+}
+
+internal sealed class LegacyGatewayProviderModel
+{
+	public string Id { get; set; } = "openai";
+	public bool Enabled { get; set; } = true;
+	public string Protocol { get; set; } = "OpenAICompatible";
+	public string Name { get; set; } = "OpenAI";
+	public string BaseUrl { get; set; } = "https://api.openai.com/v1/";
+	public string DefaultModel { get; set; } = string.Empty;
+	public string DefaultEmbeddingModel { get; set; } = string.Empty;
+	public List<string> CachedModels { get; set; } = [];
+	public List<string> CachedEmbeddingModels { get; set; } = [];
+	public List<string> CachedMessageModels { get; set; } = [];
+	public List<string> CachedOtherModels { get; set; } = [];
+	public List<string> CachedModerationModels { get; set; } = [];
+	public List<string> CachedUnknownModels { get; set; } = [];
+	public Dictionary<string, string> CachedModelSummaries { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+	public string AuthType { get; set; } = "Bearer";
+	public string AuthHeaderName { get; set; } = "Authorization";
+	public string ChatEndpoint { get; set; } = "chat/completions";
+	public string EmbeddingsEndpoint { get; set; } = "embeddings";
+	public string ResponsesEndpoint { get; set; } = "responses";
+	public List<LocalApiHeaderSetting> AdditionalHeaders { get; set; } = [];
+	public List<GatewayRouteSettings> Routes { get; set; } = [];
+	public GatewayProviderCapabilitySettings Capabilities { get; set; } = new();
+}
+
+internal class GatewayRouteSettings
+{
+	[JsonPropertyName("localModel")]
+	public string LocalModel { get; set; } = string.Empty;
+
+	[JsonPropertyName("upstreamModel")]
+	public string UpstreamModel { get; set; } = string.Empty;
+}
+
+internal sealed class LegacyGatewayRouteSettings
+{
+	[JsonPropertyName("localModel")]
+	public string LocalModel { get; set; } = string.Empty;
+
+	[JsonPropertyName("providerId")]
+	public string ProviderId { get; set; } = "openai";
+
+	[JsonPropertyName("upstreamModel")]
+	public string UpstreamModel { get; set; } = string.Empty;
 }
 
 internal class GatewayProviderCapabilitySettings
@@ -251,17 +627,7 @@ internal class GatewayProviderCapabilitySettings
 	public bool SupportsStreaming { get; set; } = true;
 }
 
-internal class GatewayRouteSettings
-{
-	[JsonPropertyName("localModel")]
-	public string LocalModel { get; set; } = string.Empty;
-
-	[JsonPropertyName("providerId")]
-	public string ProviderId { get; set; } = "default";
-
-	[JsonPropertyName("upstreamModel")]
-	public string UpstreamModel { get; set; } = string.Empty;
-}
+ 
 
 internal class LocalApiProviderSettings
 {
@@ -495,64 +861,9 @@ internal sealed class ProxyConfigManager
 	{
 		return new OllamaGatewaySettings
 		{
-			Providers =
-			[
-				new GatewayProviderSettings
-				{
-					Id = "openai",
-					Enabled = true,
-					Protocol = "OpenAICompatible",
-					Name = "OpenAI",
-					BaseUrl = "https://api.openai.com/v1/",
-					Capabilities = new GatewayProviderCapabilitySettings
-					{
-						SupportsChat = true,
-						SupportsEmbeddings = true,
-						SupportsResponses = true,
-						SupportsStreaming = true
-					}
-				},
-				new GatewayProviderSettings
-				{
-					Id = "anthropic",
-					Enabled = true,
-					Protocol = "Anthropic",
-					Name = "Anthropic",
-					BaseUrl = "https://api.anthropic.com/v1/",
-					AuthType = "Header",
-					AuthHeaderName = "x-api-key",
-					ChatEndpoint = "messages",
-					EmbeddingsEndpoint = string.Empty,
-					ResponsesEndpoint = "responses",
-					Capabilities = new GatewayProviderCapabilitySettings
-					{
-						SupportsChat = true,
-						SupportsEmbeddings = false,
-						SupportsResponses = true,
-						SupportsStreaming = true
-					}
-				},
-				new GatewayProviderSettings
-				{
-					Id = "google",
-					Enabled = true,
-					Protocol = "OpenAICompatible",
-					Name = "Gemini",
-					BaseUrl = "https://generativelanguage.googleapis.com/v1beta/openai/",
-					AuthType = "Bearer",
-					AuthHeaderName = "Authorization",
-					ChatEndpoint = "chat/completions",
-					EmbeddingsEndpoint = "embeddings",
-					ResponsesEndpoint = "responses",
-					Capabilities = new GatewayProviderCapabilitySettings
-					{
-						SupportsChat = true,
-						SupportsEmbeddings = true,
-						SupportsResponses = true,
-						SupportsStreaming = true
-					}
-				}
-			]
+			OpenAIProvider = new OpenAiGatewayProviderSettings(),
+			AnthropicProvider = new AnthropicGatewayProviderSettings(),
+			GeminiProvider = new GeminiGatewayProviderSettings()
 		};
 	}
 
@@ -567,6 +878,44 @@ internal sealed class ProxyConfigManager
 		config.OllamaGateway ??= BuildGatewaySettingsFromLegacy(config.LocalApiForwarder);
 		if (config.OllamaGateway is not null)
 		{
+			if (root.TryGetProperty("ollamaGateway", out var gatewayElement)
+				&& gatewayElement.TryGetProperty("providers", out var providersElement)
+				&& providersElement.ValueKind == JsonValueKind.Array)
+			{
+				foreach (var providerElement in providersElement.EnumerateArray())
+				{
+					var legacyProvider = providerElement.Deserialize<LegacyGatewayProviderModel>();
+					if (legacyProvider is null)
+						continue;
+
+					GatewayProviderModelHelpers.ApplyLegacyProvider(config.OllamaGateway, legacyProvider);
+					changed = true;
+				}
+			}
+
+			if (root.TryGetProperty("ollamaGateway", out gatewayElement)
+				&& gatewayElement.TryGetProperty("routes", out var routesElement)
+				&& routesElement.ValueKind == JsonValueKind.Array)
+			{
+				foreach (var routeElement in routesElement.EnumerateArray())
+				{
+					var legacyRoute = routeElement.Deserialize<LegacyGatewayRouteSettings>();
+					if (legacyRoute is null)
+						continue;
+
+					var provider = GatewayProviderModelHelpers.Find(config.OllamaGateway, legacyRoute.ProviderId);
+					if (provider is null)
+						continue;
+
+					provider.Routes.Add(new GatewayRouteSettings
+					{
+						LocalModel = legacyRoute.LocalModel,
+						UpstreamModel = legacyRoute.UpstreamModel
+					});
+					changed = true;
+				}
+			}
+
 			NormalizeGatewaySettings(config.OllamaGateway);
 			changed = true;
 		}
@@ -607,8 +956,8 @@ internal sealed class ProxyConfigManager
 	{
 		legacy ??= new LocalApiForwarderSettings();
 
-		var providerId = "default";
 		var provider = legacy.Provider ?? new LocalApiProviderSettings();
+		var providerId = GatewayProviderModelHelpers.InferProviderId(provider);
 		var capabilities = new GatewayProviderCapabilitySettings
 		{
 			SupportsChat = true,
@@ -617,129 +966,47 @@ internal sealed class ProxyConfigManager
 			SupportsEmbeddings = !string.Equals(provider.Protocol, "Anthropic", StringComparison.OrdinalIgnoreCase)
 		};
 
-		return new OllamaGatewaySettings
-		{
-			Enabled = legacy.Enabled,
-			OllamaPort = legacy.OllamaPort,
-			OpenAiPort = legacy.FoundryPort,
-			RequestResponseLogging = legacy.RequestResponseLogging ?? new LocalApiRequestResponseLoggingSettings(),
-			IncludeErrorDiagnostics = legacy.IncludeErrorDiagnostics,
-			Providers =
-			[
-				new GatewayProviderSettings
-				{
-					Id = providerId,
-					Enabled = legacy.Enabled,
-					Protocol = provider.Protocol,
-					Name = provider.Name,
-					BaseUrl = provider.BaseUrl,
-					DefaultModel = provider.DefaultModel,
-					DefaultEmbeddingModel = provider.DefaultEmbeddingModel,
-					AuthType = provider.AuthType,
-					AuthHeaderName = provider.AuthHeaderName,
-					ChatEndpoint = provider.ChatEndpoint,
-					EmbeddingsEndpoint = provider.EmbeddingsEndpoint,
-					ResponsesEndpoint = provider.ResponsesEndpoint,
-					AdditionalHeaders = provider.AdditionalHeaders ?? [],
-					Capabilities = capabilities
-				}
-			],
-			Routes = legacy.ModelMappings
-				.Select(mapping => new GatewayRouteSettings
-				{
-					LocalModel = mapping.LocalModel,
-					ProviderId = providerId,
-					UpstreamModel = mapping.UpstreamModel
-				})
-				.ToList()
-		};
+		var settings = CreateDefaultGatewaySettings();
+		settings.Enabled = legacy.Enabled;
+		settings.OllamaPort = legacy.OllamaPort;
+		settings.OpenAiPort = legacy.FoundryPort;
+		settings.RequestResponseLogging = legacy.RequestResponseLogging ?? new LocalApiRequestResponseLoggingSettings();
+		settings.IncludeErrorDiagnostics = legacy.IncludeErrorDiagnostics;
+
+		settings.OpenAIProvider.Enabled = false;
+		settings.AnthropicProvider.Enabled = false;
+		settings.GeminiProvider.Enabled = false;
+
+		var targetProvider = GatewayProviderModelHelpers.Find(settings, providerId) ?? settings.OpenAIProvider;
+		targetProvider.Id = providerId;
+		targetProvider.Enabled = legacy.Enabled;
+		targetProvider.Protocol = provider.Protocol;
+		targetProvider.Name = provider.Name;
+		targetProvider.BaseUrl = provider.BaseUrl;
+		targetProvider.DefaultModel = provider.DefaultModel;
+		targetProvider.DefaultEmbeddingModel = provider.DefaultEmbeddingModel;
+		targetProvider.AuthType = provider.AuthType;
+		targetProvider.AuthHeaderName = provider.AuthHeaderName;
+		targetProvider.ChatEndpoint = provider.ChatEndpoint;
+		targetProvider.EmbeddingsEndpoint = provider.EmbeddingsEndpoint;
+		targetProvider.ResponsesEndpoint = provider.ResponsesEndpoint;
+		targetProvider.AdditionalHeaders = provider.AdditionalHeaders ?? [];
+		targetProvider.Capabilities = capabilities;
+		targetProvider.Routes = legacy.ModelMappings
+			.Select(mapping => new GatewayRouteSettings
+			{
+				LocalModel = mapping.LocalModel,
+				UpstreamModel = mapping.UpstreamModel
+			})
+			.ToList();
+
+		return settings;
 	}
 
 	private static void NormalizeGatewaySettings(OllamaGatewaySettings settings)
 	{
-		settings.Providers ??= [];
-		settings.Routes ??= [];
 		settings.RequestResponseLogging ??= new LocalApiRequestResponseLoggingSettings();
-
-		EnsurePresetProviders(settings);
-
-		foreach (var provider in settings.Providers)
-		{
-			provider.Capabilities ??= new GatewayProviderCapabilitySettings();
-			provider.AdditionalHeaders ??= [];
-			if (string.IsNullOrWhiteSpace(provider.Id))
-				provider.Id = BuildProviderId(provider.Name, provider.Protocol);
-		}
-	}
-
-	private static void EnsurePresetProviders(OllamaGatewaySettings settings)
-	{
-		var presets = new[]
-		{
-			new GatewayProviderSettings
-			{
-				Id = "openai",
-				Enabled = true,
-				Protocol = "OpenAICompatible",
-				Name = "OpenAI",
-				BaseUrl = "https://api.openai.com/v1/",
-				Capabilities = new GatewayProviderCapabilitySettings
-				{
-					SupportsChat = true,
-					SupportsEmbeddings = true,
-					SupportsResponses = true,
-					SupportsStreaming = true
-				}
-			},
-			new GatewayProviderSettings
-			{
-				Id = "anthropic",
-				Enabled = true,
-				Protocol = "Anthropic",
-				Name = "Anthropic",
-				BaseUrl = "https://api.anthropic.com/v1/",
-				AuthType = "Header",
-				AuthHeaderName = "x-api-key",
-				ChatEndpoint = "messages",
-				EmbeddingsEndpoint = string.Empty,
-				ResponsesEndpoint = "responses",
-				Capabilities = new GatewayProviderCapabilitySettings
-				{
-					SupportsChat = true,
-					SupportsEmbeddings = false,
-					SupportsResponses = true,
-					SupportsStreaming = true
-				}
-			},
-			new GatewayProviderSettings
-			{
-				Id = "google",
-				Enabled = true,
-				Protocol = "OpenAICompatible",
-				Name = "Gemini",
-				BaseUrl = "https://generativelanguage.googleapis.com/v1beta/openai/",
-				AuthType = "Bearer",
-				AuthHeaderName = "Authorization",
-				ChatEndpoint = "chat/completions",
-				EmbeddingsEndpoint = "embeddings",
-				ResponsesEndpoint = "responses",
-				Capabilities = new GatewayProviderCapabilitySettings
-				{
-					SupportsChat = true,
-					SupportsEmbeddings = true,
-					SupportsResponses = true,
-					SupportsStreaming = true
-				}
-			}
-		};
-
-		foreach (var preset in presets)
-		{
-			if (settings.Providers.Any(provider => string.Equals(provider.Id, preset.Id, StringComparison.OrdinalIgnoreCase)))
-				continue;
-
-			settings.Providers.Add(preset);
-		}
+		GatewayProviderModelHelpers.Normalize(settings);
 	}
 
 	private static string BuildProviderId(string? name, string? protocol)
