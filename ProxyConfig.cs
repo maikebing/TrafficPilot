@@ -123,9 +123,6 @@ internal class LocalApiForwarderSettings
 	[JsonPropertyName("ollamaPort")]
 	public ushort OllamaPort { get; set; } = 11434;
 
-	[JsonPropertyName("foundryPort")]
-	public ushort FoundryPort { get; set; } = 5273;
-
 	[JsonPropertyName("provider")]
 	public LocalApiProviderSettings Provider { get; set; } = new();
 
@@ -146,9 +143,6 @@ internal class OllamaGatewaySettings
 
 	[JsonPropertyName("ollamaPort")]
 	public ushort OllamaPort { get; set; } = 11434;
-
-	[JsonPropertyName("openAiPort")]
-	public ushort OpenAiPort { get; set; } = 5273;
 
 	[JsonPropertyName("openAIProvider")]
 	public OpenAiGatewayProviderSettings OpenAIProvider { get; set; } = new();
@@ -1153,7 +1147,6 @@ internal sealed class ProxyConfigManager
 		var settings = CreateDefaultGatewaySettings();
 		settings.Enabled = legacy.Enabled;
 		settings.OllamaPort = legacy.OllamaPort;
-		settings.OpenAiPort = legacy.FoundryPort;
 		settings.RequestResponseLogging = legacy.RequestResponseLogging ?? new LocalApiRequestResponseLoggingSettings();
 		settings.IncludeErrorDiagnostics = legacy.IncludeErrorDiagnostics;
 

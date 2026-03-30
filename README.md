@@ -110,7 +110,7 @@
 **使用 Ollama Gateway（可选）：**
 
 1. 切换到 `Ollama Gateway` 选项卡，并勾选启用本地转发
-2. 在 `Overview` 页面确认本地监听端口（默认 Ollama `11434`、Foundry / Agent `5273`）
+2. 在 `Overview` 页面确认本地监听端口（默认 Ollama `11434`）
 3. 切换到 `Providers` 页面；当前内置固定三家 provider：
   - `OpenAI`
   - `Anthropic`
@@ -255,7 +255,6 @@
   "localApiForwarder": {
     "enabled": true,
     "ollamaPort": 11434,
-    "foundryPort": 5273,
     "provider": {
       "protocol": "Anthropic",
       "name": "Anthropic",
@@ -301,9 +300,8 @@
 | `autoStartProxy` | bool | 程序启动并加载配置后是否自动启动代理 |
 | `configSync.provider` | string | 配置同步服务提供商（`GitHub` 或 `Gitee`） |
 | `configSync.gistId` | string | 远程 Gist / Snippet ID，用于多设备配置同步 |
-| `localApiForwarder.enabled` | bool | 是否启用本地 Ollama / Foundry Local 接口转发 |
+| `localApiForwarder.enabled` | bool | 是否启用本地 Ollama 接口转发 |
 | `localApiForwarder.ollamaPort` | uint | Ollama 兼容接口监听端口 |
-| `localApiForwarder.foundryPort` | uint | Foundry Local / OpenAI 兼容接口监听端口 |
 | `localApiForwarder.includeErrorDiagnostics` | bool | 是否在错误返回中附带本地路径、上游状态、供应商信息等诊断信息 |
 | `localApiForwarder.requestResponseLogging.enabled` | bool | 是否启用本地转发请求/响应日志 |
 | `localApiForwarder.requestResponseLogging.includeBodies` | bool | 是否在日志中附带请求/响应正文（按长度截断） |
