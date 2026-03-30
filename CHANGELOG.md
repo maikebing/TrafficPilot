@@ -81,6 +81,8 @@
 - 修复应用日志文件写入依赖后台线程直接读取 UI `Write To Directory` 复选框的问题；现在改为使用线程安全的活动日志设置快照，因此勾选写盘后会稳定落到日志目录。
 - Provider API Key 的凭据目标名已改为严格使用“服务商名称 + Base URL”生成，不再兼容旧的 provider-id / provider-name 规则；地址相同但名称不同、或名称相同但地址不同的 key 现在会彻底分开。
 - Gateway 请求/响应日志现在会显式标注实际命中的上游 provider；内部模型目录探测也改为使用中性的 `upstream.models` / `upstream.tags` 标签，不再把所有探测都误记成 `openai.models`。
+- Gateway 运行时日志现在会为每个 provider 追加脱敏后的 API key 预览（前四位 + 星号 + 后四位），方便排查实际加载的是哪把 key，同时避免明文泄露。
+- 每次持久化 provider API key 时，程序现在都会先删除旧 target 和当前 target，再写入新的凭据值；当 provider 的 Base URL 变化时，也会同时清理掉旧地址对应的系统凭据，避免运行时继续命中陈旧 key。
 
 ### 兼容性
 - 保留 `localApiForwarder` 字段，避免旧配置立即失效。

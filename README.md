@@ -24,6 +24,8 @@
 > - App log file writing now uses the active logging settings snapshot instead of reading the UI checkbox from a background flush thread, so selecting `Write To Directory` reliably produces log files.
 > - Provider API keys are now stored strictly by `provider name + base URL`; old provider-id based credential targets are no longer read.
 > - Gateway request/response logs now annotate the actual upstream provider, and internal model-catalog probes use neutral `upstream.models` / `upstream.tags` labels instead of misleading fixed `openai.models` markers.
+> - Gateway runtime logs now include a masked API key preview for each provider (`first4****last4`), which makes it easier to verify whether a provider loaded the expected credential without exposing the full secret.
+> - Whenever a provider API key is persisted, TrafficPilot now deletes the previous credential target and the current target before writing the new key, reducing the chance of the runtime continuing to use a stale system credential.
 
 ## 项目简介
 

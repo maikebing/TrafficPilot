@@ -162,9 +162,12 @@ internal sealed class LocalApiForwarder : IDisposable
 
 	private void LogStartupConfiguration()
 	{
-		var provider = GetDefaultProviderContext().Provider;
-		LogInfo(
-			$"startup config: provider='{provider.Name}', protocol={provider.Protocol}, baseUrl={provider.BaseUrl}, defaultModel={FormatSettingValue(provider.DefaultModel)}, embeddingModel={FormatSettingValue(provider.DefaultEmbeddingModel)}");
+		foreach (var providerContext in _providerContexts.Values)
+		{
+			var provider = providerContext.Provider;
+			LogInfo(
+				$"startup config: provider='{provider.Name}', enabled={provider.Enabled}, protocol={provider.Protocol}, baseUrl={provider.BaseUrl}, apiKey={MaskApiKeyForLog(providerContext.ApiKey)}, defaultModel={FormatSettingValue(provider.DefaultModel)}, embeddingModel={FormatSettingValue(provider.DefaultEmbeddingModel)}");
+		}
 		LogInfo(
 			$"startup ports: ollama={_settings.OllamaPort}, providers={_providerContexts.Count}");
 	}
@@ -2631,6 +2634,18 @@ internal sealed class LocalApiForwarder : IDisposable
 			: providerContext.Provider.Name.Trim();
 	}
 
+	private static string MaskApiKeyForLog(string? apiKey)
+	{
+		if (string.IsNullOrWhiteSpace(apiKey))
+			return "<empty>";
+
+		var trimmed = apiKey.Trim();
+		if (trimmed.Length <= 8)
+			return trimmed;
+
+		return $"{trimmed[..4]}{new string('*', trimmed.Length - 8)}{trimmed[^4..]}";
+	}
+
 	private string TruncateForLog(string text)
 	{
 		var max = Math.Max(256, _settings.RequestResponseLogging?.MaxBodyCharacters ?? 4000);
@@ -3638,7 +3653,7 @@ internal sealed class LocalApiForwarder : IDisposable
 		ICollection<string> attempts,
 		CancellationToken ct)
 	{
-		LogInfo($"model catalog probe started: provider='{providerContext.Provider.Name}' baseUrl={providerContext.Provider.BaseUrl}");
+		LogInfo($"model catalog probe started: provider='{providerContext.Provider.Name}' baseUrl={providerContext.Provider.BaseUrl} apiKey={MaskApiKeyForLog(providerContext.ApiKey)}");
 		foreach (var candidate in EnumerateUpstreamModelCatalogRequests(providerContext))
 		{
 			try
@@ -3649,7 +3664,6 @@ internal sealed class LocalApiForwarder : IDisposable
 				var responseBody = await response.Content.ReadAsStringAsync(ct);
 				LogResponseIfEnabled(candidate.LogOperation, response.StatusCode, responseBody, providerContext);
 				LogInfo($"model catalog response: provider='{providerContext.Provider.Name}' uri={candidate.RequestUri} status={(int)response.StatusCode} bytes={responseBody.Length}");
-
 				if (!response.IsSuccessStatusCode)
 				{
 					attempts.Add($"{providerContext.Provider.Name}: {candidate.RequestUri} -> {(int)response.StatusCode} {response.ReasonPhrase}");

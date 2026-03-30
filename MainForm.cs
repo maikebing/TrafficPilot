@@ -1005,10 +1005,13 @@ internal partial class MainForm : Form
 
        foreach (var pair in _gatewayProviderControls)
 		{
+			var previousProvider = FindGatewayProvider(gatewaySettings, pair.Key);
+			var previousProviderName = previousProvider?.Name;
+			var previousBaseUrl = previousProvider?.BaseUrl;
            ApplyGatewayProviderChanges(gatewaySettings, pair.Key, pair.Value);
 			var provider = FindGatewayProvider(gatewaySettings, pair.Key);
 			if (provider is not null)
-				PersistGatewayProviderApiKey(provider.Name, provider.BaseUrl, pair.Value.ApiKeyValue);
+				PersistGatewayProviderApiKey(previousProviderName, previousBaseUrl, provider.Name, provider.BaseUrl, pair.Value.ApiKeyValue);
 		}
 	}
 
@@ -1325,17 +1328,28 @@ internal partial class MainForm : Form
 	}
 
 
-	private static void PersistGatewayProviderApiKey(string providerName, string? baseUrl, string? rawApiKey)
+	private static void PersistGatewayProviderApiKey(string? previousProviderName, string? previousBaseUrl, string providerName, string? baseUrl, string? rawApiKey)
 	{
 		if (string.IsNullOrWhiteSpace(providerName))
 			return;
 
+		var previousTargetName = string.IsNullOrWhiteSpace(previousProviderName)
+			? null
+			: CredentialManager.GetLocalApiTargetName(previousProviderName.Trim(), previousBaseUrl);
 		var targetName = CredentialManager.GetLocalApiTargetName(providerName.Trim(), baseUrl);
 		var apiKey = rawApiKey?.Trim() ?? string.Empty;
+
+		if (!string.IsNullOrWhiteSpace(previousTargetName)
+			&& !previousTargetName.Equals(targetName, StringComparison.Ordinal))
+		{
+			CredentialManager.DeleteToken(previousTargetName);
+		}
+
+		CredentialManager.DeleteToken(targetName);
 		if (string.IsNullOrWhiteSpace(apiKey))
-			CredentialManager.DeleteToken(targetName);
-		else
-			CredentialManager.SaveToken(targetName, apiKey);
+			return;
+
+		CredentialManager.SaveToken(targetName, apiKey);
 	}
 
 	private void LoadGatewayProviderApiKey(OllamaGatewaySettings? gatewaySettings, string? providerId)
