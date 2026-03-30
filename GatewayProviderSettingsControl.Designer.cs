@@ -19,6 +19,7 @@ partial class GatewayProviderSettingsControl
 		_rootPanel = new TableLayoutPanel();
 		_grpBasic = new GroupBox();
 		_basicPanel = new TableLayoutPanel();
+		_chkEnabled = new CheckBox();
 		_lblProviderUrl = new Label();
       _txtBaseUrl = new TextBox();
 		_lblApiKey = new Label();
@@ -60,26 +61,40 @@ partial class GatewayProviderSettingsControl
 		_basicPanel.ColumnCount = 2;
 		_basicPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 150F));
 		_basicPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-		_basicPanel.Controls.Add(_lblProviderUrl, 0, 0);
-      _basicPanel.Controls.Add(_txtBaseUrl, 1, 0);
-		_basicPanel.Controls.Add(_lblApiKey, 0, 1);
-		_basicPanel.Controls.Add(_txtApiKey, 1, 1);
-      _basicPanel.Controls.Add(_lblModelSuffix, 0, 2);
-		_basicPanel.Controls.Add(_txtModelSuffix, 1, 2);
+		_basicPanel.Controls.Add(_chkEnabled, 0, 0);
+		_basicPanel.Controls.Add(_lblProviderUrl, 0, 1);
+	      _basicPanel.Controls.Add(_txtBaseUrl, 1, 1);
+		_basicPanel.Controls.Add(_lblApiKey, 0, 2);
+		_basicPanel.Controls.Add(_txtApiKey, 1, 2);
+	      _basicPanel.Controls.Add(_lblModelSuffix, 0, 3);
+		_basicPanel.Controls.Add(_txtModelSuffix, 1, 3);
 		_basicPanel.Dock = DockStyle.Fill;
 		_basicPanel.Location = new Point(3, 19);
 		_basicPanel.Name = "_basicPanel";
-		_basicPanel.RowCount = 3;
+		_basicPanel.RowCount = 4;
+		_basicPanel.RowStyles.Add(new RowStyle());
 		_basicPanel.RowStyles.Add(new RowStyle());
 		_basicPanel.RowStyles.Add(new RowStyle());
 		_basicPanel.RowStyles.Add(new RowStyle());
 		_basicPanel.Size = new Size(707, 144);
 		_basicPanel.TabIndex = 0;
+		_basicPanel.SetColumnSpan(_chkEnabled, 2);
+		// 
+		// _chkEnabled
+		// 
+		_chkEnabled.AutoSize = true;
+		_chkEnabled.Location = new Point(3, 3);
+		_chkEnabled.Margin = new Padding(3, 3, 3, 8);
+		_chkEnabled.Name = "_chkEnabled";
+		_chkEnabled.Size = new Size(119, 21);
+		_chkEnabled.TabIndex = 0;
+		_chkEnabled.Text = "Enable Provider";
+		_chkEnabled.UseVisualStyleBackColor = true;
 		// 
 		// _lblProviderUrl
 		// 
 		_lblProviderUrl.Anchor = AnchorStyles.Left | AnchorStyles.Right;
-		_lblProviderUrl.Location = new Point(3, 6);
+		_lblProviderUrl.Location = new Point(3, 39);
 		_lblProviderUrl.Name = "_lblProviderUrl";
        _lblProviderUrl.Size = new Size(144, 23);
 		_lblProviderUrl.Text = "Provider Base URL:";
@@ -88,7 +103,7 @@ partial class GatewayProviderSettingsControl
         // _txtBaseUrl
 		// 
         _txtBaseUrl.Dock = DockStyle.Fill;
-		_txtBaseUrl.Location = new Point(153, 5);
+		_txtBaseUrl.Location = new Point(153, 38);
 		_txtBaseUrl.Margin = new Padding(3, 5, 3, 5);
 		_txtBaseUrl.Name = "_txtBaseUrl";
 		_txtBaseUrl.PlaceholderText = "https://api.openai.com/v1/";
@@ -98,7 +113,7 @@ partial class GatewayProviderSettingsControl
 		// _lblApiKey
 		// 
      _lblApiKey.Anchor = AnchorStyles.Left | AnchorStyles.Right;
-		_lblApiKey.Location = new Point(3, 39);
+		_lblApiKey.Location = new Point(3, 73);
 		_lblApiKey.Name = "_lblApiKey";
 		_lblApiKey.Size = new Size(144, 23);
         _lblApiKey.Text = "Provider API Key:";
@@ -107,7 +122,7 @@ partial class GatewayProviderSettingsControl
 		// _txtApiKey
 		// 
 		_txtApiKey.Dock = DockStyle.Fill;
-		_txtApiKey.Location = new Point(153, 39);
+		_txtApiKey.Location = new Point(153, 72);
 		_txtApiKey.Name = "_txtApiKey";
 		_txtApiKey.PasswordChar = '●';
 		_txtApiKey.PlaceholderText = "Stored in Windows Credential Manager, not in config JSON";
@@ -117,7 +132,7 @@ partial class GatewayProviderSettingsControl
         // _lblModelSuffix
 		// 
       _lblModelSuffix.Anchor = AnchorStyles.Left | AnchorStyles.Right;
-		_lblModelSuffix.Location = new Point(3, 68);
+		_lblModelSuffix.Location = new Point(3, 102);
 		_lblModelSuffix.Name = "_lblModelSuffix";
 		_lblModelSuffix.Size = new Size(144, 23);
 		_lblModelSuffix.Text = "Model Suffix:";
@@ -126,7 +141,7 @@ partial class GatewayProviderSettingsControl
         // _txtModelSuffix
 		// 
         _txtModelSuffix.Dock = DockStyle.Fill;
-		_txtModelSuffix.Location = new Point(153, 68);
+		_txtModelSuffix.Location = new Point(153, 101);
 		_txtModelSuffix.Name = "_txtModelSuffix";
 		_txtModelSuffix.ReadOnly = true;
 		_txtModelSuffix.Size = new Size(551, 23);
@@ -149,6 +164,7 @@ partial class GatewayProviderSettingsControl
 	private TableLayoutPanel _rootPanel;
 	private GroupBox _grpBasic;
 	private TableLayoutPanel _basicPanel;
+	private CheckBox _chkEnabled;
 	private Label _lblProviderUrl;
   private TextBox _txtBaseUrl;
 	private Label _lblApiKey;

@@ -8,6 +8,13 @@
 - 新增 provider capability 配置模型，用于描述 chat / embeddings / responses / streaming 支持能力。
 
 ### 改进
+- 模型目录请求已取消 2 分钟级别的运行时缓存；每次刷新或访问模型列表时都会重新按当前 forwarder 配置拉取上游模型。
+- 配置页中的 `Refresh Models` 现在始终基于最新保存的 UI 配置创建临时 forwarder 获取模型，不再复用运行中实例启动时的 provider 快照。
+- 运行中的 `Ollama Gateway` 现在会在保存配置、载入配置和刷新模型时热更新当前 provider 设置，不再要求手动重启代理才能让转发链路切到新配置。
+- 本地暴露的模型名现统一使用稳定的 `upstreamModel@provider` 形式，避免上游 `display_name` 变化导致模型回写与再次请求不一致。
+- provider 的启用开关已移动到各自 provider 页签内部，并改为设计器静态可见控件；Gateway 区域不再动态创建 xAI 页签或 provider 启用复选框。
+- Ollama Gateway 现在会按 request ID 将每个进入的请求分别持久化到独立日志文件，便于逐请求排查。
+- `MainForm.Designer.cs` 中已移除旧 `Local API` 遗留字段，并同步清理对应的兼容代码和 MainForm 可空性告警。
 - 运行时启动逻辑已优先识别 `ollamaGateway`，并在当前阶段兼容回落到旧的 `localApiForwarder` 结构。
 - 当前 UI 仍使用现有 `Local API` 单 provider 编辑方式，但保存配置时会同步生成新的 `ollamaGateway` 结构。
 - 配置加载时会自动将旧版 `localApiForwarder` 迁移映射为新的 Gateway 结构。

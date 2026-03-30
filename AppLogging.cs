@@ -1,3 +1,4 @@
+using System.Net;
 using System.Text;
 using System.Text.Json.Serialization;
 
@@ -197,5 +198,99 @@ internal sealed class AppLogFileWriter
 					writer.WriteLine(entry.FormatForFile());
 			}
 		}
+	}
+}
+
+internal sealed class AppRequestLogWriter
+{
+	public AppRequestLogWriter(string logDirectory)
+	{
+		ArgumentNullException.ThrowIfNull(logDirectory);
+		RequestLogDirectory = Path.GetFullPath(logDirectory);
+	}
+
+	public string RequestLogDirectory { get; }
+
+	public AppRequestLogSession BeginRequest(long requestId, HttpListenerRequest request, string path)
+	{
+		ArgumentNullException.ThrowIfNull(request);
+		ArgumentNullException.ThrowIfNull(path);
+
+		var now = DateTime.Now;
+		var dateDirectory = Path.Combine(RequestLogDirectory, now.ToString("yyyy-MM-dd"));
+		var filePath = Path.Combine(
+			dateDirectory,
+			$"request-{now:HHmmssfff}-{requestId:D8}.log");
+		var session = new AppRequestLogSession(requestId, filePath);
+		var query = request.Url?.Query ?? string.Empty;
+		var contentType = string.IsNullOrWhiteSpace(request.ContentType) ? "-" : request.ContentType;
+		var contentLength = request.HasEntityBody ? request.ContentLength64 : 0;
+		var remoteEndPoint = request.RemoteEndPoint?.ToString() ?? "-";
+
+		session.Write(AppLogLevel.Information, $"[Request] #{requestId} started");
+		session.Write(
+			AppLogLevel.Information,
+			$"[Request] {request.HttpMethod} {path}{query} | remote={remoteEndPoint} | content-type={contentType} | length={contentLength}");
+		return session;
+	}
+}
+
+internal sealed class AppRequestLogSession
+{
+	private readonly object _sync = new();
+	private bool _completed;
+
+	public AppRequestLogSession(long requestId, string filePath)
+	{
+		RequestId = requestId;
+		FilePath = filePath;
+	}
+
+	public long RequestId { get; }
+
+	public string FilePath { get; }
+
+	public void Write(AppLogLevel level, string message)
+	{
+		if (string.IsNullOrWhiteSpace(message))
+			return;
+
+		try
+		{
+			lock (_sync)
+			{
+				var directory = Path.GetDirectoryName(FilePath);
+				if (!string.IsNullOrWhiteSpace(directory))
+					Directory.CreateDirectory(directory);
+
+				using var stream = new FileStream(FilePath, FileMode.Append, FileAccess.Write, FileShare.ReadWrite);
+				using var writer = new StreamWriter(stream, new UTF8Encoding(false));
+				writer.WriteLine(new AppLogEntry(DateTime.Now, level, message).FormatForFile());
+			}
+		}
+		catch
+		{
+		}
+	}
+
+	public void Complete(int statusCode, TimeSpan duration, bool canceled)
+	{
+		lock (_sync)
+		{
+			if (_completed)
+				return;
+
+			_completed = true;
+		}
+
+		var outcome = canceled ? "canceled" : "completed";
+		var level = statusCode >= 500
+			? AppLogLevel.Error
+			: statusCode >= 400
+				? AppLogLevel.Warning
+				: AppLogLevel.Information;
+		Write(
+			level,
+			$"[Request] #{RequestId} {outcome} | status={statusCode} | duration={duration.TotalMilliseconds:F0} ms");
 	}
 }

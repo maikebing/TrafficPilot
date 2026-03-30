@@ -38,7 +38,6 @@ internal partial class MainForm : Form
 	private bool _localProxySubscribed;
 	private CancellationTokenSource? _networkChangeCts;
 	private bool _isLoadingGatewayProviderFields;
-	private bool _isLoadingGatewayProviderOverview;
 	private bool _isRebuildingGatewayProviderTabs;
 	private bool _isLoadingSyncCredentials;
 	private bool _isLoadingLogSettings;
@@ -56,11 +55,7 @@ internal partial class MainForm : Form
 	private const int MaxLogHistoryEntries = 20000;
 	private const int MaxRenderedLogEntries = 10000;
 
-	private Dictionary<string, string> _localApiModelNameMap = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, GatewayProviderSettingsControl> _gatewayProviderControls = new(StringComparer.OrdinalIgnoreCase);
-	private TabPage? _gatewayXAiProviderTab;
-	private GatewayProviderSettingsControl? _gatewayXAiProviderControl;
-	private CheckBox? _chkGatewayXAiEnabled;
 
 	public MainForm(bool startMinimized = false)
 	{
@@ -329,7 +324,7 @@ internal partial class MainForm : Form
 			LogRuntimeConfigSnapshot(persistedConfig);
 
 			var opts = BuildProxyOptions();
-			_engine = new ProxyEngine(opts);
+			_engine = new ProxyEngine(opts, Path.Combine(_logFileWriter.LogDirectory, "requests"));
 			_engine.OnLog += (msg) => AppendLog(msg);
 			_engine.OnStatsUpdated += (stats) => UpdateStats(stats);
 
@@ -374,9 +369,9 @@ internal partial class MainForm : Form
 		}
 	}
 
-	private void BtnSaveConfig_Click(object? sender, EventArgs e)
+	private async void BtnSaveConfig_Click(object? sender, EventArgs e)
 	{
-		SaveConfig(_activeConfigPath, "Save Config");
+		await SaveConfigAsync(_activeConfigPath, "Save Config");
 	}
 
 	private void BtnResetConfig_Click(object? sender, EventArgs e)
@@ -395,7 +390,7 @@ internal partial class MainForm : Form
 		SetRefreshDomainsToUi(ProxyOptions.DefaultRefreshDomains);
 	}
 
-	private void BtnLoadConfig_Click(object? sender, EventArgs e)
+	private async void BtnLoadConfig_Click(object? sender, EventArgs e)
 	{
 		using OpenFileDialog dialog = new();
 		dialog.InitialDirectory = GetConfigDialogDirectory();
@@ -406,10 +401,10 @@ internal partial class MainForm : Form
 		if (dialog.ShowDialog(this) != DialogResult.OK)
 			return;
 
-		LoadConfigFromPath(dialog.FileName, "Load Config");
+		await LoadConfigFromPathAsync(dialog.FileName, "Load Config");
 	}
 
-	private void BtnSaveConfigAs_Click(object? sender, EventArgs e)
+	private async void BtnSaveConfigAs_Click(object? sender, EventArgs e)
 	{
 		using SaveFileDialog dialog = new();
 		dialog.InitialDirectory = GetConfigDialogDirectory();
@@ -420,7 +415,7 @@ internal partial class MainForm : Form
 		if (dialog.ShowDialog(this) != DialogResult.OK)
 			return;
 
-		SaveConfig(dialog.FileName, "Save Config");
+		await SaveConfigAsync(dialog.FileName, "Save Config");
 	}
 
 	private async void BtnSyncPush_Click(object? sender, EventArgs e)
@@ -625,8 +620,7 @@ internal partial class MainForm : Form
 		_chkStartOnBoot!.Checked = StartupManager.IsEnabled();
 		_chkAutoStartProxy!.Checked = _currentConfig.AutoStartProxy;
 		_txtConfigName!.Text = _currentConfig.ConfigName;
-		LoadLocalApiForwarderToUi(BuildGatewayCompatibilityLocalApiForwarderSettings(_currentConfig.OllamaGateway));
-		LoadGatewayProviderEnabledStates(_currentConfig.OllamaGateway);
+		LoadGatewayOverviewToUi(_currentConfig.OllamaGateway);
         LoadGatewayProviderTabs(_currentConfig.OllamaGateway);
 
 		// Load sync settings
@@ -837,7 +831,7 @@ internal partial class MainForm : Form
 				.ToArray();
 	}
 
-	private void LoadConfigFromPath(string configPath, string dialogTitle)
+	private async Task LoadConfigFromPathAsync(string configPath, string dialogTitle)
 	{
 		if (string.IsNullOrWhiteSpace(configPath))
 			throw new ArgumentException("Config path cannot be empty.", nameof(configPath));
@@ -846,6 +840,7 @@ internal partial class MainForm : Form
 		_currentConfig = _configManager.Load(_activeConfigPath);
 		LoadConfigToUI();
 		RefreshConfigShortcutButtons();
+		await ApplyGatewayConfigToRunningEngineAsync(_currentConfig, $"{dialogTitle} applied");
 
 		MessageBox.Show(
 			$"Configuration loaded successfully.\n{_activeConfigPath}",
@@ -854,12 +849,13 @@ internal partial class MainForm : Form
 			MessageBoxIcon.Information);
 	}
 
-	private void SaveConfig(string configPath, string dialogTitle)
+	private async Task SaveConfigAsync(string configPath, string dialogTitle)
 	{
 		if (string.IsNullOrWhiteSpace(configPath))
 			throw new ArgumentException("Config path cannot be empty.", nameof(configPath));
 
 		PersistCurrentConfig(configPath);
+		await ApplyGatewayConfigToRunningEngineAsync(_currentConfig, $"{dialogTitle} applied");
 		LoadConfigToUI();
 		RefreshConfigShortcutButtons();
 
@@ -877,6 +873,33 @@ internal partial class MainForm : Form
 		_activeConfigPath = path;
 		_configManager.Save(_currentConfig, _activeConfigPath);
 		return _currentConfig;
+	}
+
+	private async Task ApplyGatewayConfigToRunningEngineAsync(
+		ProxyConfigModel config,
+		string actionLabel,
+		bool showFailureDialog = true)
+	{
+		if (_engine?.IsRunning != true)
+			return;
+
+		try
+		{
+			await _engine.ApplyGatewaySettingsAsync(config.OllamaGateway);
+			AppendLog(AppLogLevel.Information, $"[Config] {actionLabel}: running Ollama Gateway updated.");
+		}
+		catch (Exception ex)
+		{
+			AppendLog(AppLogLevel.Error, $"[Config] Failed to update running Ollama Gateway: {ex}");
+			if (showFailureDialog)
+			{
+				MessageBox.Show(
+					$"Configuration changed, but the running Ollama Gateway could not be updated: {ex.Message}",
+					"Ollama Gateway",
+					MessageBoxButtons.OK,
+					MessageBoxIcon.Warning);
+			}
+		}
 	}
 
 	private void LogRuntimeConfigSnapshot(ProxyConfigModel config)
@@ -931,50 +954,29 @@ internal partial class MainForm : Form
 			gatewaySettings.IncludeErrorDiagnostics = _chkLocalApiIncludeErrorDiagnostics.Checked;
 	}
 
-	private static LocalApiForwarderSettings BuildGatewayCompatibilityLocalApiForwarderSettings(OllamaGatewaySettings? gatewaySettings)
+	private void LoadGatewayOverviewToUi(OllamaGatewaySettings? gatewaySettings)
 	{
 		gatewaySettings ??= new OllamaGatewaySettings();
 		GatewayProviderModelHelpers.Normalize(gatewaySettings);
 
-		var provider = GatewayProviderModelHelpers.GetDefault(gatewaySettings);
-		return new LocalApiForwarderSettings
+		if (_chkLocalApiForwarderEnabled is not null)
+			_chkLocalApiForwarderEnabled.Checked = gatewaySettings.Enabled;
+		if (_numOllamaPort is not null)
+			_numOllamaPort.Value = gatewaySettings.OllamaPort == 0 ? 11434 : gatewaySettings.OllamaPort;
+		if (_chkLocalApiRequestResponseLogging is not null)
+			_chkLocalApiRequestResponseLogging.Checked = gatewaySettings.RequestResponseLogging?.Enabled ?? false;
+		if (_chkLocalApiIncludeBodies is not null)
+			_chkLocalApiIncludeBodies.Checked = gatewaySettings.RequestResponseLogging?.IncludeBodies ?? false;
+		if (_chkLocalApiIncludeErrorDiagnostics is not null)
+			_chkLocalApiIncludeErrorDiagnostics.Checked = gatewaySettings.IncludeErrorDiagnostics;
+		if (_numLocalApiMaxBodyChars is not null)
 		{
-			Enabled = gatewaySettings.Enabled,
-			OllamaPort = gatewaySettings.OllamaPort,
-			Provider = new LocalApiProviderSettings
-			{
-				Protocol = provider.Protocol,
-				Name = provider.Name,
-				BaseUrl = provider.BaseUrl,
-				DefaultModel = provider.DefaultModel,
-				DefaultEmbeddingModel = provider.DefaultEmbeddingModel,
-				AuthType = provider.AuthType,
-				AuthHeaderName = provider.AuthHeaderName,
-				AdditionalHeaders = provider.AdditionalHeaders?
-					.Select(static header => new LocalApiHeaderSetting
-					{
-						Name = header.Name,
-						Value = header.Value
-					})
-					.ToList() ?? []
-			},
-			ModelMappings = provider.Routes?
-				.Select(static route => new LocalApiModelMapping
-				{
-					LocalModel = route.LocalModel,
-					UpstreamModel = route.UpstreamModel
-				})
-				.ToList() ?? [],
-			RequestResponseLogging = gatewaySettings.RequestResponseLogging is null
-				? new LocalApiRequestResponseLoggingSettings()
-				: new LocalApiRequestResponseLoggingSettings
-				{
-					Enabled = gatewaySettings.RequestResponseLogging.Enabled,
-					IncludeBodies = gatewaySettings.RequestResponseLogging.IncludeBodies,
-					MaxBodyCharacters = gatewaySettings.RequestResponseLogging.MaxBodyCharacters
-				},
-			IncludeErrorDiagnostics = gatewaySettings.IncludeErrorDiagnostics
-		};
+			var maxBodyChars = gatewaySettings.RequestResponseLogging?.MaxBodyCharacters ?? 4000;
+			_numLocalApiMaxBodyChars.Value = Math.Clamp(
+				maxBodyChars,
+				(int)_numLocalApiMaxBodyChars.Minimum,
+				(int)_numLocalApiMaxBodyChars.Maximum);
+		}
 	}
 
 	private static OllamaGatewaySettings? CloneGatewaySettings(OllamaGatewaySettings? settings)
@@ -985,11 +987,6 @@ internal partial class MainForm : Form
 	private static ProxyConfigModel? CloneConfigModel(ProxyConfigModel? model)
 	{
 		return DeepClone(model);
-	}
-
-	private static LocalApiForwarderSettings? CloneLocalApiForwarderSettings(LocalApiForwarderSettings? settings)
-	{
-		return DeepClone(settings);
 	}
 
 	private static T? DeepClone<T>(T? value)
@@ -1015,8 +1012,6 @@ internal partial class MainForm : Form
 
  private void InitializeGatewayProviderControls()
 	{
-		EnsureGatewayXAiUi();
-
 		if (_gatewayTabControl is null
 			|| _gatewayOpenAiProviderControl is null
 			|| _gatewayAnthropicProviderControl is null
@@ -1043,69 +1038,17 @@ internal partial class MainForm : Form
 		ApplySimpleGatewayUi();
 	}
 
-	private void EnsureGatewayXAiUi()
-	{
-		if (_gatewayTabControl is null || _gatewayProviderEnabledPanel is null)
-			return;
-
-		if (_chkGatewayXAiEnabled is null)
-		{
-			_chkGatewayXAiEnabled = new CheckBox
-			{
-				AutoSize = true,
-				Margin = new Padding(3, 4, 12, 3),
-				Name = "_chkGatewayXAiEnabled",
-				Tag = "xai",
-				Text = "xAI",
-				UseVisualStyleBackColor = true
-			};
-			_chkGatewayXAiEnabled.CheckedChanged += ChkGatewayProviderEnabled_CheckedChanged;
-			_gatewayProviderEnabledPanel.Controls.Add(_chkGatewayXAiEnabled);
-		}
-
-		if (_gatewayXAiProviderControl is null)
-		{
-			_gatewayXAiProviderControl = new GatewayProviderSettingsControl
-			{
-				Dock = DockStyle.Fill,
-				Name = "_gatewayXAiProviderControl"
-			};
-		}
-
-		if (_gatewayXAiProviderTab is null)
-		{
-			_gatewayXAiProviderTab = new TabPage
-			{
-				Name = "_gatewayXAiProviderTab",
-				Padding = new Padding(8),
-				Tag = "xai",
-				Text = "xAI"
-			};
-			_gatewayXAiProviderTab.Controls.Add(_gatewayXAiProviderControl);
-		}
-
-		if (!_gatewayTabControl.TabPages.Contains(_gatewayXAiProviderTab))
-		{
-          var insertIndex = _gatewayDiagnosticsTab is not null
-				? _gatewayTabControl.TabPages.IndexOf(_gatewayDiagnosticsTab)
-				: -1;
-			if (insertIndex >= 0)
-				_gatewayTabControl.TabPages.Insert(insertIndex, _gatewayXAiProviderTab);
-			else
-				_gatewayTabControl.TabPages.Add(_gatewayXAiProviderTab);
-		}
-	}
-
 	private void ApplySimpleGatewayUi()
 	{
 		if (_lblGatewayOverviewSummary is not null)
 		{
-			_lblGatewayOverviewSummary.Text = "统一 Ollama Gateway。\r\n只保留 Ollama 入口；四家 provider 通过模型名后缀路由。\r\n示例：gpt-4.1@openai、claude-sonnet-4@anthropic、gemini-2.5-pro@gemini、grok-4@xai。";
+			_lblGatewayOverviewSummary.Text = "统一 Ollama Gateway。\r\n只保留 Ollama 入口；四家 provider 通过模型名后缀路由。\r\n每个 provider 的启用状态都在对应页签内配置，并保持为设计器静态控件。\r\n示例：gpt-4.1@openai、claude-sonnet-4@anthropic、gemini-2.5-pro@gemini、grok-4@xai。";
 		}
 	}
 
  private void ConfigureGatewayProviderControl(string providerId, GatewayProviderSettingsControl control)
 	{
+		control.EnabledInput.Tag = GatewayProviderModelHelpers.NormalizeProviderId(providerId);
      control.ApplyProviderPreset(
 			GetSimpleGatewayProviderDisplayName(providerId),
 			GetSimpleGatewayProviderSuffixHint(providerId),
@@ -1202,6 +1145,7 @@ internal partial class MainForm : Form
    private void WireGatewayProviderControl(GatewayProviderSettingsControl control)
 	{
         control.BaseUrlInput.TextChanged += GatewayProviderBaseUrl_TextChanged;
+		control.EnabledInput.CheckedChanged += ChkGatewayProviderEnabled_CheckedChanged;
 	}
 
     private GatewayProviderSettingsControl? GetGatewayProviderControl(string? providerId)
@@ -1305,6 +1249,7 @@ internal partial class MainForm : Form
 				ConfigureGatewayProviderControl(providerId, control);
 		}
 		_isRebuildingGatewayProviderTabs = false;
+		SelectGatewayProviderTab(selectedProviderId);
 
 		UpdateGatewayOverviewProviderList(gatewaySettings);
 	}
@@ -1335,6 +1280,7 @@ internal partial class MainForm : Form
 			var providerId = string.IsNullOrWhiteSpace(provider.Id) ? "openai" : provider.Id.Trim();
 			var name = string.IsNullOrWhiteSpace(provider.Name) ? providerId : provider.Name.Trim();
 			lines.Add($"- {name} [{providerId}]  suffix: {GetSimpleGatewayProviderSuffixHint(providerId)}");
+			lines.Add($"  enabled: {(provider.Enabled ? "yes" : "no")}");
 			lines.Add($"  baseUrl: {provider.BaseUrl}");
 			lines.Add($"  embeddings: {(provider.Capabilities?.SupportsEmbeddings == true ? "yes" : "no")}");
 		}
@@ -1342,44 +1288,9 @@ internal partial class MainForm : Form
 		_txtGatewayOverviewProviders.Lines = lines.Count == 0 ? ["<no providers>"] : lines.ToArray();
 	}
 
-	private CheckBox? GetGatewayProviderEnabledCheckBox(string? providerId)
-	{
-		return providerId?.Trim().ToLowerInvariant() switch
-		{
-			"openai" => _chkGatewayOpenAiEnabled,
-			"anthropic" => _chkGatewayAnthropicEnabled,
-			"google" => _chkGatewayGeminiEnabled,
-			"xai" => _chkGatewayXAiEnabled,
-			_ => null
-		};
-	}
-
-	private void LoadGatewayProviderEnabledStates(OllamaGatewaySettings? gatewaySettings)
-	{
-		_isLoadingGatewayProviderOverview = true;
-		try
-		{
-			gatewaySettings ??= BuildOllamaGatewaySettings();
-
-			foreach (var providerId in new[] { "openai", "anthropic", "google", "xai" })
-			{
-				var checkBox = GetGatewayProviderEnabledCheckBox(providerId);
-				if (checkBox is null)
-					continue;
-
-				var provider = FindGatewayProvider(gatewaySettings, providerId);
-				checkBox.Checked = provider?.Enabled == true;
-			}
-		}
-		finally
-		{
-			_isLoadingGatewayProviderOverview = false;
-		}
-	}
-
 	private void ChkGatewayProviderEnabled_CheckedChanged(object? sender, EventArgs e)
 	{
-		if (_isLoadingGatewayProviderOverview
+		if (_isLoadingGatewayProviderFields
 			|| sender is not CheckBox checkBox
 			|| checkBox.Tag is not string providerId)
 		{
@@ -1398,7 +1309,6 @@ internal partial class MainForm : Form
 
 		provider.Enabled = checkBox.Checked;
 		_currentConfig.OllamaGateway = gatewaySettings;
-		LoadGatewayProviderEnabledStates(gatewaySettings);
      LoadGatewayProviderTabs(gatewaySettings);
 		SelectGatewayProviderTab(providerId);
 		UpdateGatewayOverviewProviderList(gatewaySettings);
@@ -1451,6 +1361,7 @@ internal partial class MainForm : Form
 		_isLoadingGatewayProviderFields = true;
       try
 		{
+ 			control.EnabledInput.Checked = provider?.Enabled == true;
          control.BaseUrlInput.Text = provider?.BaseUrl ?? string.Empty;
 		}
 		finally
@@ -1516,6 +1427,7 @@ internal partial class MainForm : Form
 			return;
 
 		provider.Id = normalizedProviderId;
+		provider.Enabled = control.EnabledInput.Checked;
 		provider.Protocol = GetSimpleGatewayProviderProtocol(normalizedProviderId);
 		provider.Name = GetSimpleGatewayProviderDisplayName(normalizedProviderId);
         provider.BaseUrl = string.IsNullOrWhiteSpace(control.BaseUrlInput.Text)
@@ -1612,12 +1524,12 @@ internal partial class MainForm : Form
 		return _configManager.GetConfigDirectory();
 	}
 
-	private void BtnQuickConfig_Click(object? sender, EventArgs e)
+	private async void BtnQuickConfig_Click(object? sender, EventArgs e)
 	{
 		if (sender is not Button button || button.Tag is not string configPath || string.IsNullOrWhiteSpace(configPath))
 			return;
 
-		LoadConfigFromPath(configPath, "Load Config");
+		await LoadConfigFromPathAsync(configPath, "Load Config");
 	}
 
 	private void AppendLog(string message)
@@ -1861,12 +1773,12 @@ internal partial class MainForm : Form
 		BtnSaveConfig_Click(_btnSaveConfig, e);
 	}
 
-	private void TrayQuickConfigMenuItem_Click(object? sender, EventArgs e)
+	private async void TrayQuickConfigMenuItem_Click(object? sender, EventArgs e)
 	{
 		if (sender is not ToolStripMenuItem menuItem || menuItem.Tag is not string configPath || string.IsNullOrWhiteSpace(configPath))
 			return;
 
-		LoadConfigFromPath(configPath, "Load Config");
+		await LoadConfigFromPathAsync(configPath, "Load Config");
 	}
 
 	private void TrayExitMenuItem_Click(object? sender, EventArgs e)
@@ -2264,152 +2176,6 @@ internal partial class MainForm : Form
 		}
 	}
 
-	private async void BtnRefreshLocalApiModels_Click(object? sender, EventArgs e)
-	{
-		if (_btnRefreshLocalApiModels is null)
-			return;
-
-		var originalText = _btnRefreshLocalApiModels.Text;
-		_btnRefreshLocalApiModels.Enabled = false;
-		_btnRefreshLocalApiModels.Text = "Refreshing...";
-
-		try
-		{
-			var persistedConfig = PersistCurrentConfig();
-			LogRuntimeConfigSnapshot(persistedConfig);
-
-			var gatewaySettings = persistedConfig.OllamaGateway;
-
-			IReadOnlyList<LocalApiAdvertisedModel> models;
-			if (_engine?.IsRunning == true && _engine.IsLocalApiForwarderRunning)
-			{
-				AppendLog(
-					AppLogLevel.Information,
-					"[Config] Refreshing upstream model catalog for the running Local API forwarder. Restart the proxy to apply any provider changes currently shown in the UI.");
-				models = await _engine.RefreshLocalApiModelCatalogEntriesAsync();
-			}
-			else
-			{
-				if (gatewaySettings?.Enabled != true)
-					throw new InvalidOperationException("Enable local Ollama Gateway before refreshing models.");
-
-				AppendLog(
-					AppLogLevel.Information,
-					"[Config] Refreshing upstream model catalog using the current UI settings (proxy not running).");
-				using var forwarder = CreateDetachedLocalApiForwarder(gatewaySettings);
-				forwarder.OnLog += AppendLog;
-				models = await forwarder.RefreshModelCatalogEntriesAsync();
-			}
-
-			ReplaceLocalApiModelNameMap(models);
-			var selectedDefaultModel = NormalizeLocalApiModelDisplayName(_cmbLocalApiDefaultModel?.Text ?? string.Empty);
-			var selectedEmbeddingModel = NormalizeLocalApiModelDisplayName(_cmbLocalApiDefaultEmbeddingModel?.Text ?? string.Empty);
-			var preview = models.Count == 0
-				? "<none>"
-				: string.Join(", ", models.Select(static model => model.LocalName).Take(5)) + (models.Count > 5 ? ", ..." : string.Empty);
-			UpdateLocalApiModelSelectors(
-				models.Select(static model => model.LocalName),
-				selectedDefaultModel,
-				selectedEmbeddingModel);
-			AppendLog(
-				AppLogLevel.Information,
-				$"[Config] Upstream model refresh completed: {models.Count} models ({preview})");
-		}
-		catch (Exception ex)
-		{
-			AppendLog(AppLogLevel.Error, $"[Config] Upstream model refresh failed: {ex}");
-			MessageBox.Show(
-				$"Failed to refresh upstream models: {ex.Message}",
-				"Local API Models",
-				MessageBoxButtons.OK,
-				MessageBoxIcon.Error);
-		}
-		finally
-		{
-			_btnRefreshLocalApiModels.Text = originalText;
-			_btnRefreshLocalApiModels.Enabled = true;
-		}
-	}
-
-	private static LocalApiForwarder CreateDetachedLocalApiForwarder(OllamaGatewaySettings settings)
-	{
-		var provider = GatewayProviderModelHelpers.GetDefault(settings);
-		var apiKey = CredentialManager.LoadToken(CredentialManager.GetLocalApiTargetName(provider.Id))
-			?? CredentialManager.LoadToken(CredentialManager.GetLocalApiTargetName(provider.Name));
-		return new LocalApiForwarder(settings, apiKey);
-	}
-
-	private void UpdateLocalApiModelSelectors(
-		IEnumerable<string>? models,
-		string selectedDefaultModel,
-		string selectedEmbeddingModel)
-	{
-		if (_cmbLocalApiDefaultModel is null || _cmbLocalApiDefaultEmbeddingModel is null)
-			return;
-
-		var normalizedItems = BuildLocalApiSelectorDisplayOrder(
-			models,
-			selectedDefaultModel,
-			selectedEmbeddingModel);
-
-		RebindEditableComboBox(_cmbLocalApiDefaultModel, normalizedItems, selectedDefaultModel);
-		RebindEditableComboBox(_cmbLocalApiDefaultEmbeddingModel, normalizedItems, selectedEmbeddingModel);
-	}
-
-	private static string[] BuildLocalApiSelectorDisplayOrder(
-		IEnumerable<string>? models,
-		string selectedDefaultModel,
-		string selectedEmbeddingModel)
-	{
-		var orderedItems = new List<string>();
-
-		if (!string.IsNullOrWhiteSpace(selectedDefaultModel))
-			orderedItems.Add(selectedDefaultModel.Trim());
-		if (!string.IsNullOrWhiteSpace(selectedEmbeddingModel))
-			orderedItems.Add(selectedEmbeddingModel.Trim());
-
-		orderedItems.AddRange((models ?? Enumerable.Empty<string>())
-			.Select(static model => model?.Trim() ?? string.Empty)
-			.Where(static model => !string.IsNullOrWhiteSpace(model))
-			.Reverse());
-
-		return orderedItems
-			.Distinct(StringComparer.OrdinalIgnoreCase)
-			.ToArray();
-	}
-
-	private IEnumerable<string> BuildLocalApiSelectorItems(LocalApiForwarderSettings settings)
-	{
-		var items = new List<string>();
-		ReplaceLocalApiModelNameMap(BuildConfiguredLocalApiSelectorModels(settings));
-
-		if (!string.IsNullOrWhiteSpace(settings.Provider?.DefaultModel))
-			items.Add(NormalizeLocalApiModelDisplayName(settings.Provider.DefaultModel));
-		if (!string.IsNullOrWhiteSpace(settings.Provider?.DefaultEmbeddingModel))
-			items.Add(NormalizeLocalApiModelDisplayName(settings.Provider.DefaultEmbeddingModel));
-
-		items.AddRange(settings.ModelMappings
-			.Where(static mapping => !string.IsNullOrWhiteSpace(mapping.UpstreamModel))
-			.Select(mapping => NormalizeLocalApiModelDisplayName(mapping.UpstreamModel)));
-
-		return items;
-	}
-
-	private static void RebindEditableComboBox(ComboBox comboBox, IEnumerable<string> items, string selectedText)
-	{
-		comboBox.BeginUpdate();
-		try
-		{
-			comboBox.Items.Clear();
-			comboBox.Items.AddRange(items.Cast<object>().ToArray());
-			comboBox.Text = selectedText ?? string.Empty;
-		}
-		finally
-		{
-			comboBox.EndUpdate();
-		}
-	}
-
 	private void ChkAutoFetch_CheckedChanged(object? sender, EventArgs e)
 	{
 		if (_chkAutoFetch!.Checked)
@@ -2559,309 +2325,4 @@ internal partial class MainForm : Form
 		return long.TryParse(text[..^3].Trim(), out latencyMs);
 	}
 
-	private LocalApiForwarderSettings? BuildLocalApiForwarderSettings()
-	{
-		if (_chkLocalApiForwarderEnabled is null
-			|| _numOllamaPort is null
-			|| _cmbLocalApiProviderProtocol is null
-			|| _txtLocalApiProviderName is null
-			|| _txtLocalApiProviderUrl is null
-			|| _cmbLocalApiDefaultModel is null
-			|| _cmbLocalApiDefaultEmbeddingModel is null
-			|| _cmbLocalApiAuthType is null
-			|| _txtLocalApiAuthHeaderName is null
-			|| _txtLocalApiApiKey is null
-			|| _txtLocalApiAdditionalHeaders is null
-			|| _chkLocalApiRequestResponseLogging is null
-			|| _chkLocalApiIncludeBodies is null
-			|| _chkLocalApiIncludeErrorDiagnostics is null
-			|| _numLocalApiMaxBodyChars is null
-			|| _txtLocalApiModelMappings is null)
-		{
-			return new LocalApiForwarderSettings();
-		}
-
-		var providerName = _txtLocalApiProviderName.Text.Trim();
-		var targetName = CredentialManager.GetLocalApiTargetName(providerName);
-		var apiKey = _txtLocalApiApiKey.Text.Trim();
-		if (string.IsNullOrWhiteSpace(apiKey))
-			CredentialManager.DeleteToken(targetName);
-		else
-			CredentialManager.SaveToken(targetName, apiKey);
-
-		return new LocalApiForwarderSettings
-		{
-			Enabled = _chkLocalApiForwarderEnabled.Checked,
-			OllamaPort = (ushort)_numOllamaPort.Value,
-			Provider = new LocalApiProviderSettings
-			{
-				Protocol = _cmbLocalApiProviderProtocol.SelectedItem?.ToString() ?? "OpenAICompatible",
-				Name = providerName,
-				BaseUrl = _txtLocalApiProviderUrl.Text.Trim(),
-				DefaultModel = ResolveLocalApiStoredModelName(_cmbLocalApiDefaultModel.Text),
-				DefaultEmbeddingModel = ResolveLocalApiStoredModelName(_cmbLocalApiDefaultEmbeddingModel.Text),
-				AuthType = _cmbLocalApiAuthType.SelectedItem?.ToString() ?? "Bearer",
-				AuthHeaderName = _txtLocalApiAuthHeaderName.Text.Trim(),
-				AdditionalHeaders = ParseLocalApiHeaders(_txtLocalApiAdditionalHeaders.Lines)
-			},
-			ModelMappings = ParseLocalApiModelMappings(_txtLocalApiModelMappings.Lines),
-			RequestResponseLogging = new LocalApiRequestResponseLoggingSettings
-			{
-				Enabled = _chkLocalApiRequestResponseLogging.Checked,
-				IncludeBodies = _chkLocalApiIncludeBodies.Checked,
-				MaxBodyCharacters = (int)_numLocalApiMaxBodyChars.Value
-			},
-			IncludeErrorDiagnostics = _chkLocalApiIncludeErrorDiagnostics.Checked
-		};
-	}
-
-	private void LoadLocalApiForwarderToUi(LocalApiForwarderSettings? settings)
-	{
-		if (_chkLocalApiForwarderEnabled is null
-			|| _numOllamaPort is null
-			|| _cmbLocalApiProviderProtocol is null
-			|| _txtLocalApiProviderName is null
-			|| _txtLocalApiProviderUrl is null
-			|| _cmbLocalApiDefaultModel is null
-			|| _cmbLocalApiDefaultEmbeddingModel is null
-			|| _cmbLocalApiAuthType is null
-			|| _txtLocalApiAuthHeaderName is null
-			|| _txtLocalApiApiKey is null
-			|| _txtLocalApiAdditionalHeaders is null
-			|| _chkLocalApiRequestResponseLogging is null
-			|| _chkLocalApiIncludeBodies is null
-			|| _chkLocalApiIncludeErrorDiagnostics is null
-			|| _numLocalApiMaxBodyChars is null
-			|| _txtLocalApiModelMappings is null)
-		{
-			return;
-		}
-
-		settings ??= new LocalApiForwarderSettings();
-		_chkLocalApiForwarderEnabled.Checked = settings.Enabled;
-		ReplaceLocalApiModelNameMap(BuildConfiguredLocalApiSelectorModels(settings));
-		_numOllamaPort.Value = settings.OllamaPort == 0 ? 11434 : settings.OllamaPort;
-		_cmbLocalApiProviderProtocol.SelectedItem = _cmbLocalApiProviderProtocol.Items.Contains(settings.Provider?.Protocol ?? "OpenAICompatible")
-			? settings.Provider?.Protocol ?? "OpenAICompatible"
-			: "OpenAICompatible";
-		_txtLocalApiProviderName.Text = settings.Provider?.Name ?? string.Empty;
-		_txtLocalApiProviderUrl.Text = settings.Provider?.BaseUrl ?? string.Empty;
-		UpdateLocalApiModelSelectors(
-			BuildLocalApiSelectorItems(settings),
-			NormalizeLocalApiModelDisplayName(settings.Provider?.DefaultModel ?? string.Empty),
-			NormalizeLocalApiModelDisplayName(settings.Provider?.DefaultEmbeddingModel ?? string.Empty));
-		_cmbLocalApiAuthType.SelectedItem = _cmbLocalApiAuthType.Items.Contains(settings.Provider?.AuthType ?? "Bearer")
-			? settings.Provider?.AuthType ?? "Bearer"
-			: "Bearer";
-		_txtLocalApiAuthHeaderName.Text = settings.Provider?.AuthHeaderName ?? "Authorization";
-		_txtLocalApiApiKey.Text = CredentialManager.LoadToken(
-			CredentialManager.GetLocalApiTargetName(settings.Provider?.Name ?? string.Empty)) ?? string.Empty;
-		_txtLocalApiAdditionalHeaders.Lines = settings.Provider?.AdditionalHeaders?.Count > 0
-			? settings.Provider.AdditionalHeaders
-				.Where(static header => !string.IsNullOrWhiteSpace(header.Name))
-				.Select(static header => $"{header.Name.Trim()}={header.Value}")
-				.ToArray()
-			: [];
-		_chkLocalApiRequestResponseLogging.Checked = settings.RequestResponseLogging?.Enabled ?? false;
-		_chkLocalApiIncludeBodies.Checked = settings.RequestResponseLogging?.IncludeBodies ?? false;
-		_chkLocalApiIncludeErrorDiagnostics.Checked = settings.IncludeErrorDiagnostics;
-		var maxBodyChars = settings.RequestResponseLogging?.MaxBodyCharacters ?? 4000;
-		_numLocalApiMaxBodyChars.Value = Math.Clamp(maxBodyChars, (int)_numLocalApiMaxBodyChars.Minimum, (int)_numLocalApiMaxBodyChars.Maximum);
-		_txtLocalApiModelMappings.Lines = settings.ModelMappings.Count == 0
-			? []
-			: settings.ModelMappings
-				.Where(static mapping => !string.IsNullOrWhiteSpace(mapping.LocalModel)
-					&& !string.IsNullOrWhiteSpace(mapping.UpstreamModel))
-				.Select(static mapping => $"{mapping.LocalModel.Trim()}={mapping.UpstreamModel.Trim()}")
-				.ToArray();
-	}
-
-	private IEnumerable<LocalApiAdvertisedModel> BuildConfiguredLocalApiSelectorModels(LocalApiForwarderSettings settings)
-	{
-		var providerBaseUrl = settings.Provider?.BaseUrl;
-
-		if (!string.IsNullOrWhiteSpace(settings.Provider?.DefaultModel))
-		{
-			var upstreamModel = settings.Provider.DefaultModel.Trim();
-			yield return new LocalApiAdvertisedModel(FormatLocalApiDisplayName(upstreamModel, providerBaseUrl), upstreamModel);
-		}
-
-		if (!string.IsNullOrWhiteSpace(settings.Provider?.DefaultEmbeddingModel))
-		{
-			var upstreamModel = settings.Provider.DefaultEmbeddingModel.Trim();
-			yield return new LocalApiAdvertisedModel(FormatLocalApiDisplayName(upstreamModel, providerBaseUrl), upstreamModel);
-		}
-
-		foreach (var mapping in settings.ModelMappings.Where(static mapping => !string.IsNullOrWhiteSpace(mapping.UpstreamModel)))
-		{
-			var upstreamModel = mapping.UpstreamModel.Trim();
-			yield return new LocalApiAdvertisedModel(FormatLocalApiDisplayName(upstreamModel, providerBaseUrl), upstreamModel);
-		}
-	}
-
-	private void ReplaceLocalApiModelNameMap(IEnumerable<LocalApiAdvertisedModel> models)
-	{
-		_localApiModelNameMap = models
-			.Where(static model => !string.IsNullOrWhiteSpace(model.LocalName) && !string.IsNullOrWhiteSpace(model.UpstreamModel))
-			.GroupBy(static model => model.LocalName.Trim(), StringComparer.OrdinalIgnoreCase)
-			.ToDictionary(
-				static group => group.Key,
-				static group => group.First().UpstreamModel.Trim(),
-				StringComparer.OrdinalIgnoreCase);
-	}
-
-	private string NormalizeLocalApiModelDisplayName(string? modelName)
-	{
-		if (string.IsNullOrWhiteSpace(modelName))
-			return string.Empty;
-
-		var trimmed = modelName.Trim();
-		if (_localApiModelNameMap.ContainsKey(trimmed))
-			return trimmed;
-
-		var upstreamMatch = _localApiModelNameMap.FirstOrDefault(entry =>
-			entry.Value.Equals(trimmed, StringComparison.OrdinalIgnoreCase)
-			|| entry.Value.Equals(RemoveLocalApiModelSuffix(trimmed), StringComparison.OrdinalIgnoreCase));
-		if (!string.IsNullOrWhiteSpace(upstreamMatch.Key))
-			return upstreamMatch.Key;
-
-		return FormatLocalApiDisplayName(trimmed, GetCurrentLocalApiProviderBaseUrl());
-	}
-
-	private string ResolveLocalApiStoredModelName(string? displayOrModelName)
-	{
-		if (string.IsNullOrWhiteSpace(displayOrModelName))
-			return string.Empty;
-
-		var trimmed = displayOrModelName.Trim();
-		if (_localApiModelNameMap.TryGetValue(trimmed, out var upstreamModel))
-			return upstreamModel;
-
-		foreach (var suffix in GetLocalApiProviderSuffixCandidates(GetCurrentLocalApiProviderBaseUrl()))
-		{
-			if (!trimmed.EndsWith($"@{suffix}", StringComparison.OrdinalIgnoreCase))
-				continue;
-
-			return trimmed[..^(suffix.Length + 1)].Trim();
-		}
-
-		return trimmed;
-	}
-
-	private string? GetCurrentLocalApiProviderBaseUrl()
-	{
-		if (!string.IsNullOrWhiteSpace(_txtLocalApiProviderUrl?.Text))
-			return _txtLocalApiProviderUrl.Text.Trim();
-
-		var gatewaySettings = _currentConfig.OllamaGateway;
-		if (gatewaySettings is null)
-			return string.Empty;
-
-		var provider = GatewayProviderModelHelpers.GetDefault(gatewaySettings);
-		return provider.BaseUrl;
-	}
-
-	private static string FormatLocalApiDisplayName(string? modelName, string? providerBaseUrl)
-	{
-		if (string.IsNullOrWhiteSpace(modelName))
-			return string.Empty;
-
-		var trimmed = modelName.Trim();
-		var providerSuffix = TryGetLocalApiProviderDisplaySuffix(providerBaseUrl);
-		if (string.IsNullOrWhiteSpace(providerSuffix))
-			return trimmed;
-
-		var baseModelName = RemoveLocalApiModelSuffix(trimmed);
-		return $"{baseModelName}@{providerSuffix}";
-	}
-
-	private static string RemoveLocalApiModelSuffix(string modelName)
-	{
-		var trimmed = modelName.Trim();
-		var atIndex = trimmed.LastIndexOf('@');
-		return atIndex > 0 ? trimmed[..atIndex].Trim() : trimmed;
-	}
-
-	private static string TryGetLocalApiProviderDomain(string? baseUrl)
-	{
-		if (!Uri.TryCreate(baseUrl, UriKind.Absolute, out var uri))
-			return string.Empty;
-
-		return uri.IdnHost.Trim().TrimEnd('.').ToLowerInvariant();
-	}
-
-	private static IEnumerable<string> GetLocalApiProviderSuffixCandidates(string? baseUrl)
-	{
-		var domain = TryGetLocalApiProviderDomain(baseUrl);
-		if (string.IsNullOrWhiteSpace(domain))
-			yield break;
-
-		yield return domain;
-
-		var compact = domain.Replace(".", string.Empty, StringComparison.Ordinal);
-		if (!compact.Equals(domain, StringComparison.OrdinalIgnoreCase))
-			yield return compact;
-	}
-
-	private static string TryGetLocalApiProviderDisplaySuffix(string? baseUrl)
-	{
-		var domain = TryGetLocalApiProviderDomain(baseUrl);
-		if (string.IsNullOrWhiteSpace(domain))
-			return string.Empty;
-
-		return domain.Replace(".", string.Empty, StringComparison.Ordinal);
-	}
-
-	private static List<LocalApiModelMapping> ParseLocalApiModelMappings(IEnumerable<string> lines)
-	{
-		var mappings = new List<LocalApiModelMapping>();
-
-		foreach (var rawLine in lines)
-		{
-			var line = rawLine.Trim();
-			if (line.Length == 0 || line.StartsWith('#'))
-				continue;
-
-			var separatorIndex = line.IndexOf('=');
-			if (separatorIndex <= 0 || separatorIndex == line.Length - 1)
-				continue;
-
-			var localModel = line[..separatorIndex].Trim();
-			var upstreamModel = line[(separatorIndex + 1)..].Trim();
-			if (localModel.Length == 0 || upstreamModel.Length == 0)
-				continue;
-
-			mappings.Add(new LocalApiModelMapping
-			{
-				LocalModel = localModel,
-				UpstreamModel = upstreamModel
-			});
-		}
-
-		return mappings
-			.GroupBy(static mapping => mapping.LocalModel, StringComparer.OrdinalIgnoreCase)
-			.Select(static group => group.Last())
-			.ToList();
-	}
-
-	private static List<LocalApiHeaderSetting> ParseLocalApiHeaders(IEnumerable<string> lines)
-	{
-		return lines
-			.Select(static rawLine => rawLine.Trim())
-			.Where(static line => line.Length > 0 && !line.StartsWith('#'))
-			.Select(static line =>
-			{
-				var separatorIndex = line.IndexOf('=');
-				return separatorIndex <= 0
-					? null
-					: new LocalApiHeaderSetting
-					{
-						Name = line[..separatorIndex].Trim(),
-						Value = line[(separatorIndex + 1)..].Trim()
-					};
-			})
-			.Where(static header => header is not null && !string.IsNullOrWhiteSpace(header.Name))
-			.Select(static header => header!)
-			.ToList();
-	}
 }

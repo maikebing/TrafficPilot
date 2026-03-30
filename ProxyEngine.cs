@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.Net;
 using System.Net.Sockets;
 using System.Runtime.InteropServices;
+using System.Text.Json;
 
 namespace TrafficPilot;
 
@@ -12,6 +13,7 @@ namespace TrafficPilot;
 internal sealed class ProxyEngine : IDisposable
 {
 	private readonly ProxyOptions _options;
+	private readonly string? _gatewayRequestLogDirectory;
 	private readonly IPAddress _proxyIp;
 	private TcpRelayServer? _relay;
 	private ProcessAllowListMatcher? _processMatcher;
@@ -27,6 +29,7 @@ internal sealed class ProxyEngine : IDisposable
 	private GitHub520HostsProvider? _hostsProvider;
 	private DnsInterceptor? _dnsInterceptor;
 	private LocalApiForwarder? _localApiForwarder;
+	private OllamaGatewaySettings? _currentGatewaySettings;
 
 	public event Action<string>? OnLog;
 	public event Action<RedirectStats>? OnStatsUpdated;
@@ -35,9 +38,13 @@ internal sealed class ProxyEngine : IDisposable
 	public bool IsLocalApiForwarderRunning => _localApiForwarder is not null;
 	public ushort RelayPort { get; private set; }
 
-	public ProxyEngine(ProxyOptions options)
+	public ProxyEngine(ProxyOptions options, string? gatewayRequestLogDirectory = null)
 	{
 		_options = options;
+		_gatewayRequestLogDirectory = string.IsNullOrWhiteSpace(gatewayRequestLogDirectory)
+			? null
+			: Path.GetFullPath(gatewayRequestLogDirectory);
+		_currentGatewaySettings = CloneGatewaySettings(options.OllamaGateway);
 		_proxyIp = options.ProxyEnabled
 			? ResolveProxyIpv4(_options.ProxyHost)
 			: IPAddress.Loopback;
@@ -47,20 +54,13 @@ internal sealed class ProxyEngine : IDisposable
 	{
 		if (_isRunning) return;
 
-		var gatewaySettings = _options.OllamaGateway;
+		var gatewaySettings = _currentGatewaySettings;
 
 		if (!_options.ProxyEnabled && !_options.HostsRedirectEnabled && gatewaySettings?.Enabled != true)
 			throw new InvalidOperationException("Proxy, hosts redirect, and local API forwarding are all disabled.");
 
 		if (gatewaySettings?.Enabled == true)
-		{
-			var defaultProvider = GatewayProviderModelHelpers.GetDefault(gatewaySettings);
-			var apiKey = CredentialManager.LoadToken(CredentialManager.GetLocalApiTargetName(defaultProvider.Id))
-				?? CredentialManager.LoadToken(CredentialManager.GetLocalApiTargetName(defaultProvider.Name));
-			_localApiForwarder = new LocalApiForwarder(gatewaySettings, apiKey);
-			_localApiForwarder.OnLog += message => OnLog?.Invoke(message);
-			await _localApiForwarder.StartAsync();
-		}
+			await StartLocalApiForwarderAsync(gatewaySettings);
 
 		// Start hosts redirect in appropriate mode
 		if (_options.HostsRedirectEnabled)
@@ -154,8 +154,7 @@ internal sealed class ProxyEngine : IDisposable
 		}
 		if (_dnsInterceptor != null)
 			await _dnsInterceptor.StopAsync();
-		if (_localApiForwarder != null)
-			await _localApiForwarder.StopAsync();
+		await StopLocalApiForwarderAsync();
 
         // Clean up hosts file entries if in hosts file mode
 		if (_options.HostsRedirectEnabled && 
@@ -176,7 +175,7 @@ internal sealed class ProxyEngine : IDisposable
 
 	public async Task<IReadOnlyList<string>> RefreshLocalApiModelCatalogAsync(CancellationToken ct = default)
 	{
-		var gatewaySettings = _options.OllamaGateway;
+		var gatewaySettings = _currentGatewaySettings;
 		if (gatewaySettings?.Enabled != true || _localApiForwarder is null)
 			throw new InvalidOperationException("Local API forwarder is not running.");
 
@@ -185,11 +184,53 @@ internal sealed class ProxyEngine : IDisposable
 
 	public async Task<IReadOnlyList<LocalApiAdvertisedModel>> RefreshLocalApiModelCatalogEntriesAsync(CancellationToken ct = default)
 	{
-		var gatewaySettings = _options.OllamaGateway;
+		var gatewaySettings = _currentGatewaySettings;
 		if (gatewaySettings?.Enabled != true || _localApiForwarder is null)
 			throw new InvalidOperationException("Local API forwarder is not running.");
 
 		return await _localApiForwarder.RefreshModelCatalogEntriesAsync(ct);
+	}
+
+	public async Task ApplyGatewaySettingsAsync(OllamaGatewaySettings? gatewaySettings)
+	{
+		var nextGatewaySettings = CloneGatewaySettings(gatewaySettings);
+		var previousGatewaySettings = CloneGatewaySettings(_currentGatewaySettings);
+
+		if (!_isRunning)
+		{
+			_currentGatewaySettings = nextGatewaySettings;
+			return;
+		}
+
+		try
+		{
+			await StopLocalApiForwarderAsync();
+			_currentGatewaySettings = nextGatewaySettings;
+
+			if (nextGatewaySettings?.Enabled == true)
+			{
+				LogInfo("Applying updated Ollama Gateway settings to the running proxy.");
+				await StartLocalApiForwarderAsync(nextGatewaySettings);
+			}
+		}
+		catch
+		{
+			_currentGatewaySettings = previousGatewaySettings;
+			if (_isRunning && previousGatewaySettings?.Enabled == true && _localApiForwarder is null)
+			{
+				try
+				{
+					LogWarning("Failed to apply updated Ollama Gateway settings; restoring previous runtime configuration.");
+					await StartLocalApiForwarderAsync(previousGatewaySettings);
+				}
+				catch (Exception restoreEx)
+				{
+					LogError($"Failed to restore previous Ollama Gateway runtime configuration: {restoreEx.Message}");
+				}
+			}
+
+			throw;
+		}
 	}
 
 	/// <summary>Pushes freshly resolved IPs into the live DNS interceptor without restarting it.</summary>
@@ -225,9 +266,58 @@ internal sealed class ProxyEngine : IDisposable
 		_connInfoCache?.Dispose();
 		_dnsInterceptor?.Dispose();
 		_hostsProvider?.Dispose();
+		if (_localApiForwarder is not null)
+			_localApiForwarder.OnLog -= ForwardLocalApiForwarderLog;
 		_localApiForwarder?.Dispose();
 		if (_winDivertHandle != IntPtr.Zero && _winDivertHandle != new IntPtr(-1))
 			WinDivertNative.WinDivertClose(_winDivertHandle);
+	}
+
+	private async Task StartLocalApiForwarderAsync(OllamaGatewaySettings gatewaySettings)
+	{
+		var defaultProvider = GatewayProviderModelHelpers.GetDefault(gatewaySettings);
+		var apiKey = CredentialManager.LoadToken(CredentialManager.GetLocalApiTargetName(defaultProvider.Id))
+			?? CredentialManager.LoadToken(CredentialManager.GetLocalApiTargetName(defaultProvider.Name));
+		var forwarder = new LocalApiForwarder(gatewaySettings, apiKey, _gatewayRequestLogDirectory);
+		forwarder.OnLog += ForwardLocalApiForwarderLog;
+
+		try
+		{
+			await forwarder.StartAsync();
+			_localApiForwarder = forwarder;
+		}
+		catch
+		{
+			forwarder.OnLog -= ForwardLocalApiForwarderLog;
+			forwarder.Dispose();
+			throw;
+		}
+	}
+
+	private async Task StopLocalApiForwarderAsync()
+	{
+		if (_localApiForwarder is null)
+			return;
+
+		var forwarder = _localApiForwarder;
+		_localApiForwarder = null;
+		forwarder.OnLog -= ForwardLocalApiForwarderLog;
+		await forwarder.StopAsync();
+		forwarder.Dispose();
+	}
+
+	private void ForwardLocalApiForwarderLog(string message)
+	{
+		OnLog?.Invoke(message);
+	}
+
+	private static OllamaGatewaySettings? CloneGatewaySettings(OllamaGatewaySettings? settings)
+	{
+		if (settings is null)
+			return null;
+
+		var json = JsonSerializer.Serialize(settings);
+		return JsonSerializer.Deserialize<OllamaGatewaySettings>(json);
 	}
 	private async Task PacketProcessingLoopAsync(CancellationToken ct)
 	{

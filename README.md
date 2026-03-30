@@ -9,6 +9,15 @@
 > - Model routing is suffix-based: `model@openai`, `model@anthropic`, `model@gemini`, `model@xai`.
 > - Explicit routes, provider probing, Foundry/OpenAI local compatibility, and legacy `localApiForwarder` config are being removed from the active path.
 > - Supported shorthand aliases: `@oai`, `@claude`, `@google`, `@grok`.
+>
+> 2026-03-31 update:
+> - Model catalog fetches no longer reuse a time-based runtime cache.
+> - `Refresh Models` always uses the latest saved UI configuration instead of the running forwarder's startup snapshot.
+> - Saving, loading, and refreshing models now hot-apply Ollama Gateway provider settings to the running proxy.
+> - Advertised model IDs are now stabilized as `upstreamModel@provider` so upstream display-name changes do not break later requests.
+> - Provider enable toggles now live inside each provider tab, and the Gateway provider UI is fully designer-defined instead of dynamically creating xAI/provider controls at runtime.
+> - Incoming Ollama Gateway requests are now persisted as one log file per request ID under the request log directory.
+> - Dead `Local API` designer fields and their compatibility-only MainForm code have been removed, along with the related MainForm nullability warnings.
 
 ## 项目简介
 

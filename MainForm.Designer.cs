@@ -142,11 +142,6 @@ partial class MainForm
     private TabPage? _gatewayOverviewTab;
     private TabPage? _gatewayDiagnosticsTab;
     private TableLayoutPanel? _gatewayOverviewPanel;
-    private Label? _lblGatewayProviderEnabled;
-    private FlowLayoutPanel? _gatewayProviderEnabledPanel;
-    private CheckBox? _chkGatewayOpenAiEnabled;
-    private CheckBox? _chkGatewayAnthropicEnabled;
-    private CheckBox? _chkGatewayGeminiEnabled;
     private Label? _lblGatewayOverviewSummary;
     private TextBox? _txtGatewayOverviewProviders;
     private FlowLayoutPanel? _localApiHeaderPanel;
@@ -156,33 +151,6 @@ partial class MainForm
     private TableLayoutPanel? _localApiPortPanel;
     private Label? _lblOllamaPort;
     private NumericUpDown? _numOllamaPort;
-    private Label? _lblLocalApiProvider;
-    private TableLayoutPanel? _localApiProviderPanel;
-    private Label? _lblLocalApiProtocol;
-    private ComboBox? _cmbLocalApiProviderProtocol;
-    private Label? _lblLocalApiProviderName;
-    private TextBox? _txtLocalApiProviderName;
-    private Label? _lblLocalApiProviderUrl;
-    private TableLayoutPanel? _localApiProviderUrlPanel;
-    private TextBox? _txtLocalApiProviderUrl;
-    private Button? _btnRefreshLocalApiModels;
-    private Label? _lblLocalApiDefaultModel;
-    private ComboBox? _cmbLocalApiDefaultModel;
-    private Label? _lblLocalApiDefaultEmbeddingModel;
-    private ComboBox? _cmbLocalApiDefaultEmbeddingModel;
-    private Label? _lblLocalApiAuthentication;
-    private TableLayoutPanel? _localApiAuthPanel;
-    private Label? _lblLocalApiAuthType;
-    private ComboBox? _cmbLocalApiAuthType;
-    private Label? _lblLocalApiAuthHeaderName;
-    private TextBox? _txtLocalApiAuthHeaderName;
-    private Label? _lblLocalApiApiKey;
-    private TextBox? _txtLocalApiApiKey;
-    private Label? _lblLocalApiExtraHeaders;
-    private TextBox? _txtLocalApiAdditionalHeaders;
-    private Label? _lblLocalApiModelMappings;
-    private TextBox? _txtLocalApiModelMappings;
-    private Label? _lblLocalApiDiagnostics;
     private FlowLayoutPanel? _localApiLoggingPanel;
     private CheckBox? _chkLocalApiRequestResponseLogging;
     private CheckBox? _chkLocalApiIncludeBodies;
@@ -254,11 +222,6 @@ partial class MainForm
         _localApiPortPanel = new TableLayoutPanel();
         _lblOllamaPort = new Label();
         _numOllamaPort = new NumericUpDown();
-        _lblGatewayProviderEnabled = new Label();
-        _gatewayProviderEnabledPanel = new FlowLayoutPanel();
-        _chkGatewayOpenAiEnabled = new CheckBox();
-        _chkGatewayAnthropicEnabled = new CheckBox();
-        _chkGatewayGeminiEnabled = new CheckBox();
         _lblGatewayOverviewSummary = new Label();
         _txtGatewayOverviewProviders = new TextBox();
         _gatewayOpenAiProviderTab = new TabPage();
@@ -267,6 +230,8 @@ partial class MainForm
         _gatewayAnthropicProviderControl = new GatewayProviderSettingsControl();
         _gatewayGeminiProviderTab = new TabPage();
         _gatewayGeminiProviderControl = new GatewayProviderSettingsControl();
+        _gatewayXAiProviderTab = new TabPage();
+        _gatewayXAiProviderControl = new GatewayProviderSettingsControl();
         _gatewayDiagnosticsTab = new TabPage();
         _localApiLoggingPanel = new FlowLayoutPanel();
         _chkLocalApiRequestResponseLogging = new CheckBox();
@@ -365,10 +330,10 @@ partial class MainForm
         _gatewayOverviewPanel.SuspendLayout();
         _localApiPortPanel.SuspendLayout();
         ((ISupportInitialize)_numOllamaPort).BeginInit();
-        _gatewayProviderEnabledPanel.SuspendLayout();
         _gatewayOpenAiProviderTab.SuspendLayout();
         _gatewayAnthropicProviderTab.SuspendLayout();
         _gatewayGeminiProviderTab.SuspendLayout();
+        _gatewayXAiProviderTab.SuspendLayout();
         _gatewayDiagnosticsTab.SuspendLayout();
         _localApiLoggingPanel.SuspendLayout();
         ((ISupportInitialize)_numLocalApiMaxBodyChars).BeginInit();
@@ -1001,6 +966,7 @@ partial class MainForm
         _gatewayTabControl.Controls.Add(_gatewayOpenAiProviderTab);
         _gatewayTabControl.Controls.Add(_gatewayAnthropicProviderTab);
         _gatewayTabControl.Controls.Add(_gatewayGeminiProviderTab);
+        _gatewayTabControl.Controls.Add(_gatewayXAiProviderTab);
         _gatewayTabControl.Controls.Add(_gatewayDiagnosticsTab);
         _gatewayTabControl.Dock = DockStyle.Fill;
         _gatewayTabControl.Location = new Point(13, 48);
@@ -1026,15 +992,12 @@ partial class MainForm
         _gatewayOverviewPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
         _gatewayOverviewPanel.Controls.Add(_lblLocalApiListenPorts, 0, 0);
         _gatewayOverviewPanel.Controls.Add(_localApiPortPanel, 1, 0);
-        _gatewayOverviewPanel.Controls.Add(_lblGatewayProviderEnabled, 0, 1);
-        _gatewayOverviewPanel.Controls.Add(_gatewayProviderEnabledPanel, 1, 1);
-        _gatewayOverviewPanel.Controls.Add(_lblGatewayOverviewSummary, 0, 2);
-        _gatewayOverviewPanel.Controls.Add(_txtGatewayOverviewProviders, 1, 2);
+        _gatewayOverviewPanel.Controls.Add(_lblGatewayOverviewSummary, 0, 1);
+        _gatewayOverviewPanel.Controls.Add(_txtGatewayOverviewProviders, 1, 1);
         _gatewayOverviewPanel.Dock = DockStyle.Fill;
         _gatewayOverviewPanel.Location = new Point(8, 8);
         _gatewayOverviewPanel.Name = "_gatewayOverviewPanel";
-        _gatewayOverviewPanel.RowCount = 3;
-        _gatewayOverviewPanel.RowStyles.Add(new RowStyle());
+        _gatewayOverviewPanel.RowCount = 2;
         _gatewayOverviewPanel.RowStyles.Add(new RowStyle());
         _gatewayOverviewPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
         _gatewayOverviewPanel.Size = new Size(719, 489);
@@ -1087,85 +1050,23 @@ partial class MainForm
         _numOllamaPort.TabIndex = 1;
         _numOllamaPort.Value = new decimal(new int[] { 11434, 0, 0, 0 });
         // 
-        // _lblGatewayProviderEnabled
-        // 
-        _lblGatewayProviderEnabled.Anchor = AnchorStyles.Left | AnchorStyles.Right;
-        _lblGatewayProviderEnabled.Location = new Point(3, 46);
-        _lblGatewayProviderEnabled.Name = "_lblGatewayProviderEnabled";
-        _lblGatewayProviderEnabled.Size = new Size(144, 23);
-        _lblGatewayProviderEnabled.TabIndex = 3;
-        _lblGatewayProviderEnabled.Text = "Providers:";
-        _lblGatewayProviderEnabled.TextAlign = ContentAlignment.MiddleRight;
-        // 
-        // _gatewayProviderEnabledPanel
-        // 
-        _gatewayProviderEnabledPanel.AutoSize = true;
-        _gatewayProviderEnabledPanel.Controls.Add(_chkGatewayOpenAiEnabled);
-        _gatewayProviderEnabledPanel.Controls.Add(_chkGatewayAnthropicEnabled);
-        _gatewayProviderEnabledPanel.Controls.Add(_chkGatewayGeminiEnabled);
-        _gatewayProviderEnabledPanel.Dock = DockStyle.Fill;
-        _gatewayProviderEnabledPanel.Location = new Point(153, 44);
-        _gatewayProviderEnabledPanel.Name = "_gatewayProviderEnabledPanel";
-        _gatewayProviderEnabledPanel.Size = new Size(563, 28);
-        _gatewayProviderEnabledPanel.TabIndex = 4;
-        _gatewayProviderEnabledPanel.WrapContents = false;
-        // 
-        // _chkGatewayOpenAiEnabled
-        // 
-        _chkGatewayOpenAiEnabled.AutoSize = true;
-        _chkGatewayOpenAiEnabled.Location = new Point(3, 4);
-        _chkGatewayOpenAiEnabled.Margin = new Padding(3, 4, 12, 3);
-        _chkGatewayOpenAiEnabled.Name = "_chkGatewayOpenAiEnabled";
-        _chkGatewayOpenAiEnabled.Size = new Size(71, 21);
-        _chkGatewayOpenAiEnabled.TabIndex = 0;
-        _chkGatewayOpenAiEnabled.Tag = "openai";
-        _chkGatewayOpenAiEnabled.Text = "OpenAI";
-        _chkGatewayOpenAiEnabled.UseVisualStyleBackColor = true;
-        _chkGatewayOpenAiEnabled.CheckedChanged += ChkGatewayProviderEnabled_CheckedChanged;
-        // 
-        // _chkGatewayAnthropicEnabled
-        // 
-        _chkGatewayAnthropicEnabled.AutoSize = true;
-        _chkGatewayAnthropicEnabled.Location = new Point(89, 4);
-        _chkGatewayAnthropicEnabled.Margin = new Padding(3, 4, 12, 3);
-        _chkGatewayAnthropicEnabled.Name = "_chkGatewayAnthropicEnabled";
-        _chkGatewayAnthropicEnabled.Size = new Size(83, 21);
-        _chkGatewayAnthropicEnabled.TabIndex = 1;
-        _chkGatewayAnthropicEnabled.Tag = "anthropic";
-        _chkGatewayAnthropicEnabled.Text = "Anthropic";
-        _chkGatewayAnthropicEnabled.UseVisualStyleBackColor = true;
-        _chkGatewayAnthropicEnabled.CheckedChanged += ChkGatewayProviderEnabled_CheckedChanged;
-        // 
-        // _chkGatewayGeminiEnabled
-        // 
-        _chkGatewayGeminiEnabled.AutoSize = true;
-        _chkGatewayGeminiEnabled.Location = new Point(187, 4);
-        _chkGatewayGeminiEnabled.Margin = new Padding(3, 4, 12, 3);
-        _chkGatewayGeminiEnabled.Name = "_chkGatewayGeminiEnabled";
-        _chkGatewayGeminiEnabled.Size = new Size(67, 21);
-        _chkGatewayGeminiEnabled.TabIndex = 2;
-        _chkGatewayGeminiEnabled.Tag = "google";
-        _chkGatewayGeminiEnabled.Text = "Gemini";
-        _chkGatewayGeminiEnabled.UseVisualStyleBackColor = true;
-        _chkGatewayGeminiEnabled.CheckedChanged += ChkGatewayProviderEnabled_CheckedChanged;
-        // 
         // _lblGatewayOverviewSummary
         // 
         _lblGatewayOverviewSummary.AutoSize = true;
         _lblGatewayOverviewSummary.Dock = DockStyle.Fill;
-        _lblGatewayOverviewSummary.Location = new Point(3, 75);
+        _lblGatewayOverviewSummary.Location = new Point(3, 41);
         _lblGatewayOverviewSummary.Name = "_lblGatewayOverviewSummary";
         _lblGatewayOverviewSummary.Padding = new Padding(0, 8, 0, 0);
         _lblGatewayOverviewSummary.Size = new Size(144, 414);
         _lblGatewayOverviewSummary.TabIndex = 5;
-        _lblGatewayOverviewSummary.Text = "Overview 只保留全局项。\r\n在 Providers 里先填写提供者地址和 API Key；协议、鉴权和端点默认自动判断。\r\n只有在需要覆盖默认行为时，再展开高级设置。";
+        _lblGatewayOverviewSummary.Text = "Overview 只保留全局项。\r\n每个 provider 的启用状态都在对应页签内配置，设计器中静态可见。\r\n在 Providers 里先填写提供者地址和 API Key；协议、鉴权和端点默认自动判断。";
         // 
         // _txtGatewayOverviewProviders
         // 
         _txtGatewayOverviewProviders.BackColor = SystemColors.Window;
         _txtGatewayOverviewProviders.Cursor = Cursors.Hand;
         _txtGatewayOverviewProviders.Dock = DockStyle.Fill;
-        _txtGatewayOverviewProviders.Location = new Point(153, 78);
+        _txtGatewayOverviewProviders.Location = new Point(153, 44);
         _txtGatewayOverviewProviders.Multiline = true;
         _txtGatewayOverviewProviders.Name = "_txtGatewayOverviewProviders";
         _txtGatewayOverviewProviders.ReadOnly = true;
@@ -1233,6 +1134,25 @@ partial class MainForm
         _gatewayGeminiProviderControl.Name = "_gatewayGeminiProviderControl";
         _gatewayGeminiProviderControl.Size = new Size(719, 489);
         _gatewayGeminiProviderControl.TabIndex = 0;
+        // 
+        // _gatewayXAiProviderTab
+        // 
+        _gatewayXAiProviderTab.Controls.Add(_gatewayXAiProviderControl);
+        _gatewayXAiProviderTab.Location = new Point(4, 26);
+        _gatewayXAiProviderTab.Name = "_gatewayXAiProviderTab";
+        _gatewayXAiProviderTab.Padding = new Padding(8);
+        _gatewayXAiProviderTab.Size = new Size(735, 505);
+        _gatewayXAiProviderTab.TabIndex = 4;
+        _gatewayXAiProviderTab.Tag = "xai";
+        _gatewayXAiProviderTab.Text = "xAI";
+        // 
+        // _gatewayXAiProviderControl
+        // 
+        _gatewayXAiProviderControl.Dock = DockStyle.Fill;
+        _gatewayXAiProviderControl.Location = new Point(8, 8);
+        _gatewayXAiProviderControl.Name = "_gatewayXAiProviderControl";
+        _gatewayXAiProviderControl.Size = new Size(719, 489);
+        _gatewayXAiProviderControl.TabIndex = 0;
         // 
         // _gatewayDiagnosticsTab
         // 
@@ -2027,7 +1947,7 @@ partial class MainForm
         // 
         ClientSize = new Size(787, 691);
         Controls.Add(_mainPanel);
-        Icon = (Icon)resources.GetObject("$this.Icon");
+        Icon = (Icon?)resources.GetObject("$this.Icon") ?? Resources.favicon;
         MinimumSize = new Size(600, 400);
         Name = "MainForm";
         StartPosition = FormStartPosition.CenterScreen;
@@ -2065,11 +1985,10 @@ partial class MainForm
         _gatewayOverviewPanel.PerformLayout();
         _localApiPortPanel.ResumeLayout(false);
         ((ISupportInitialize)_numOllamaPort).EndInit();
-        _gatewayProviderEnabledPanel.ResumeLayout(false);
-        _gatewayProviderEnabledPanel.PerformLayout();
         _gatewayOpenAiProviderTab.ResumeLayout(false);
         _gatewayAnthropicProviderTab.ResumeLayout(false);
         _gatewayGeminiProviderTab.ResumeLayout(false);
+        _gatewayXAiProviderTab.ResumeLayout(false);
         _gatewayDiagnosticsTab.ResumeLayout(false);
         _gatewayDiagnosticsTab.PerformLayout();
         _localApiLoggingPanel.ResumeLayout(false);
@@ -2103,23 +2022,25 @@ partial class MainForm
     }
 
     private FlowLayoutPanel? _versionPanel;
-    private Label titleLabel;
-    private Label versionLabel;
+    private Label titleLabel = null!;
+    private Label versionLabel = null!;
     private Label? _lblLatestVersion;
-    private Label descLabel;
-    private Label descContentLabel;
-    private Label contribLabel;
-    private Label contribContentLabel;
-    private Label techLabel;
-    private Label techContentLabel;
+    private Label descLabel = null!;
+    private Label descContentLabel = null!;
+    private Label contribLabel = null!;
+    private Label contribContentLabel = null!;
+    private Label techLabel = null!;
+    private Label techContentLabel = null!;
     private Button? _btnCheckUpdate;
     private Label? _lblUpdateStatus;
-    private TabPage _gatewayOpenAiProviderTab;
-    private TabPage _gatewayAnthropicProviderTab;
-    private TabPage _gatewayGeminiProviderTab;
-    private GatewayProviderSettingsControl _gatewayOpenAiProviderControl;
-    private GatewayProviderSettingsControl _gatewayAnthropicProviderControl;
-    private GatewayProviderSettingsControl _gatewayGeminiProviderControl;
+    private TabPage _gatewayOpenAiProviderTab = null!;
+    private TabPage _gatewayAnthropicProviderTab = null!;
+    private TabPage _gatewayGeminiProviderTab = null!;
+    private TabPage _gatewayXAiProviderTab = null!;
+    private GatewayProviderSettingsControl _gatewayOpenAiProviderControl = null!;
+    private GatewayProviderSettingsControl _gatewayAnthropicProviderControl = null!;
+    private GatewayProviderSettingsControl _gatewayGeminiProviderControl = null!;
+    private GatewayProviderSettingsControl _gatewayXAiProviderControl = null!;
 
     // Hosts Redirect Mode Selection (dynamically created)
     private GroupBox? _grpRedirectMode;
@@ -2234,9 +2155,9 @@ partial class MainForm
             item.ForeColor = Color.Red;
     }
 
-    private Label label1;
-    private Label lblBytes;
-    private Button btnResetConfig;
+    private Label label1 = null!;
+    private Label lblBytes = null!;
+    private Button btnResetConfig = null!;
 }
 
 

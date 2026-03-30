@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
@@ -13,8 +14,6 @@ internal sealed record LocalApiAdvertisedModel(string LocalName, string Upstream
 internal sealed class LocalApiForwarder : IDisposable
 {
 	private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
-	private static readonly TimeSpan ModelCatalogSuccessCacheDuration = TimeSpan.FromMinutes(2);
-	private static readonly TimeSpan ModelCatalogFailureCacheDuration = TimeSpan.FromSeconds(20);
 	private const string OllamaCompatibilityVersion = "0.6.4";
 	private const long DefaultContextLength = 100_000;
 	private const long DefaultMaxOutputTokens = 8_192;
@@ -26,12 +25,12 @@ internal sealed class LocalApiForwarder : IDisposable
 	private readonly CancellationTokenSource _cts = new();
 	private readonly List<HttpListener> _listeners = [];
 	private readonly List<Task> _acceptLoops = [];
+	private readonly AsyncLocal<AppRequestLogSession?> _currentRequestLogSession = new();
 	private readonly object _loadedModelsLock = new();
 	private readonly SemaphoreSlim _modelCatalogSyncLock = new(1, 1);
 	private readonly HashSet<string> _loadedModels = new(StringComparer.OrdinalIgnoreCase);
-	private IReadOnlyList<ModelCatalogEntry> _cachedModelCatalog = [];
-	private bool _hasCachedModelCatalog;
-	private DateTimeOffset _modelCatalogExpiresAt = DateTimeOffset.MinValue;
+	private readonly AppRequestLogWriter _requestLogWriter;
+	private IReadOnlyList<ModelCatalogEntry> _lastAdvertisedModelCatalog = [];
 	private long _requestCounter;
 	private string? _providerModelAlias;
 	private readonly Dictionary<string, GatewayProviderRuntimeContext> _providerContexts;
@@ -74,17 +73,18 @@ internal sealed class LocalApiForwarder : IDisposable
 		public StringBuilder Arguments { get; } = new();
 	}
 
-	public LocalApiForwarder(OllamaGatewaySettings gatewaySettings, string? apiKey = null)
-		: this(BuildListenerSettings(gatewaySettings), gatewaySettings, apiKey)
+	public LocalApiForwarder(OllamaGatewaySettings gatewaySettings, string? apiKey = null, string? requestLogDirectory = null)
+		: this(BuildListenerSettings(gatewaySettings), gatewaySettings, apiKey, requestLogDirectory)
 	{
 	}
 
-	private LocalApiForwarder(ListenerSettings settings, OllamaGatewaySettings gatewaySettings, string? apiKey)
+	private LocalApiForwarder(ListenerSettings settings, OllamaGatewaySettings gatewaySettings, string? apiKey, string? requestLogDirectory)
 	{
 		_settings = settings ?? throw new ArgumentNullException(nameof(settings));
 		_gatewaySettings = gatewaySettings ?? throw new ArgumentNullException(nameof(gatewaySettings));
 		GatewayProviderModelHelpers.Normalize(_gatewaySettings);
 		_apiKey = apiKey?.Trim() ?? string.Empty;
+		_requestLogWriter = new AppRequestLogWriter(requestLogDirectory ?? GetDefaultRequestLogDirectory());
 		_httpClient = new HttpClient
 		{
 			Timeout = Timeout.InfiniteTimeSpan
@@ -93,6 +93,15 @@ internal sealed class LocalApiForwarder : IDisposable
 
 		foreach (var modelName in GetConfiguredLocalModelNames())
 			_loadedModels.Add(modelName);
+	}
+
+	private static string GetDefaultRequestLogDirectory()
+	{
+		return Path.Combine(
+			Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+			"TrafficPilot",
+			"logs",
+			"requests");
 	}
 
 	private static ListenerSettings BuildListenerSettings(OllamaGatewaySettings gatewaySettings)
@@ -140,7 +149,7 @@ internal sealed class LocalApiForwarder : IDisposable
 			throw new InvalidOperationException("Local API forwarding is disabled.");
 
 		LogInfo("manual model catalog refresh requested");
-		var catalog = await GetAdvertisedModelCatalogAsync(ct, forceRefresh: true);
+		var catalog = await GetAdvertisedModelCatalogAsync(ct);
 		LogInfo($"manual model catalog refresh completed: {catalog.Count} models");
 		return catalog
 			.Select(static model => new LocalApiAdvertisedModel(model.LocalName, model.UpstreamModel))
@@ -303,6 +312,10 @@ internal sealed class LocalApiForwarder : IDisposable
 		var path = context.Request.Url?.AbsolutePath ?? "/";
      var normalizedPath = NormalizeLocalApiRequestPath(path);
 		var requestId = Interlocked.Increment(ref _requestCounter);
+		var requestLogSession = _requestLogWriter.BeginRequest(requestId, context.Request, path);
+		var priorRequestLogSession = _currentRequestLogSession.Value;
+		_currentRequestLogSession.Value = requestLogSession;
+		var startedAt = Stopwatch.GetTimestamp();
 		LogIncomingRequest(requestId, context.Request, path);
 		try
 		{
@@ -424,6 +437,14 @@ internal sealed class LocalApiForwarder : IDisposable
 		{
 			LogError($"request #{requestId} failed on {path}: {ex.Message}");
 			await WriteErrorAsync(context.Response, path, HttpStatusCode.BadGateway, ex.Message, "ollama", null, null, null);
+		}
+		finally
+		{
+			var elapsed = Stopwatch.GetElapsedTime(startedAt);
+			var statusCode = context.Response.StatusCode;
+			var canceled = ct.IsCancellationRequested || _cts.IsCancellationRequested;
+			requestLogSession.Complete(statusCode, elapsed, canceled);
+			_currentRequestLogSession.Value = priorRequestLogSession;
 		}
 	}
 
@@ -3545,38 +3566,23 @@ internal sealed class LocalApiForwarder : IDisposable
 		};
 	}
 
-	private async Task<IReadOnlyList<ModelCatalogEntry>> GetAdvertisedModelCatalogAsync(CancellationToken ct, bool forceRefresh = false)
+	private async Task<IReadOnlyList<ModelCatalogEntry>> GetAdvertisedModelCatalogAsync(CancellationToken ct)
 	{
-		var now = DateTimeOffset.UtcNow;
-		if (!forceRefresh && _hasCachedModelCatalog && now < _modelCatalogExpiresAt)
-			return _cachedModelCatalog;
-
 		await _modelCatalogSyncLock.WaitAsync(ct);
 		try
 		{
-			now = DateTimeOffset.UtcNow;
-			if (!forceRefresh && _hasCachedModelCatalog && now < _modelCatalogExpiresAt)
-				return _cachedModelCatalog;
-
 			var configuredCatalog = BuildConfiguredModelCatalog();
 			try
 			{
 				var upstreamCatalog = await FetchUpstreamModelCatalogAsync(ct);
 				var mergedCatalog = MergeModelCatalogs(upstreamCatalog, configuredCatalog);
-				CacheModelCatalog(mergedCatalog, now + ModelCatalogSuccessCacheDuration);
+				UpdateAdvertisedModelCatalogSnapshot(mergedCatalog);
 				LogInfo($"model catalog synced: upstream={upstreamCatalog.Count}, configured={configuredCatalog.Count}, advertised={mergedCatalog.Count}");
 				return mergedCatalog;
 			}
 			catch (Exception ex)
 			{
-				if (_hasCachedModelCatalog)
-				{
-					_modelCatalogExpiresAt = now + ModelCatalogFailureCacheDuration;
-					LogWarning($"model catalog sync failed: {ex.Message}; using cached catalog ({_cachedModelCatalog.Count} models)");
-					return _cachedModelCatalog;
-				}
-
-				CacheModelCatalog(configuredCatalog, now + ModelCatalogFailureCacheDuration);
+				UpdateAdvertisedModelCatalogSnapshot(configuredCatalog);
 				LogWarning($"model catalog sync failed: {ex.Message}; using configured fallback ({configuredCatalog.Count} models)");
 				return configuredCatalog;
 			}
@@ -3718,7 +3724,7 @@ internal sealed class LocalApiForwarder : IDisposable
 				continue;
 
 			var normalizedId = ResolveGeneratedUpstreamModelAliasOrSelf(modelId, providerContext);
-			var localName = BuildAdvertisedUpstreamLocalName(normalizedId, TryReadModelDisplayName(item, normalizedId), providerContext);
+			var localName = BuildAdvertisedUpstreamLocalName(normalizedId, null, providerContext);
 			catalog[localName] = CreateModelCatalogEntry(
 				localName,
 				normalizedId,
@@ -4189,7 +4195,7 @@ internal sealed class LocalApiForwarder : IDisposable
 		var normalizedLocalModel = localModel.Trim();
 		var strippedLocalModel = StripKnownProviderSuffix(normalizedLocalModel);
 
-		var cachedMatch = _cachedModelCatalog.FirstOrDefault(model =>
+		var cachedMatch = _lastAdvertisedModelCatalog.FirstOrDefault(model =>
 			model.LocalName.Equals(normalizedLocalModel, StringComparison.OrdinalIgnoreCase)
 			|| model.LocalName.Equals(strippedLocalModel, StringComparison.OrdinalIgnoreCase));
 		if (cachedMatch is not null && !string.IsNullOrWhiteSpace(cachedMatch.UpstreamModel))
@@ -4347,11 +4353,9 @@ internal sealed class LocalApiForwarder : IDisposable
 	private static long? TryReadLongFromAny(JsonNode? node, params string[] propertyNames) =>
 		TryReadInt64(FindPropertyValue(node, propertyNames));
 
-	private void CacheModelCatalog(IReadOnlyList<ModelCatalogEntry> catalog, DateTimeOffset expiresAt)
+	private void UpdateAdvertisedModelCatalogSnapshot(IReadOnlyList<ModelCatalogEntry> catalog)
 	{
-		_cachedModelCatalog = catalog;
-		_hasCachedModelCatalog = true;
-		_modelCatalogExpiresAt = expiresAt;
+		_lastAdvertisedModelCatalog = catalog;
 	}
 
 	private async Task<bool> ModelExistsAsync(string modelName, CancellationToken ct)
@@ -4360,10 +4364,6 @@ internal sealed class LocalApiForwarder : IDisposable
 			return false;
 
 		var catalog = await GetAdvertisedModelCatalogAsync(ct);
-		if (catalog.Any(model => model.LocalName.Equals(modelName, StringComparison.OrdinalIgnoreCase)))
-			return true;
-
-		catalog = await GetAdvertisedModelCatalogAsync(ct, forceRefresh: true);
 		return catalog.Any(model => model.LocalName.Equals(modelName, StringComparison.OrdinalIgnoreCase));
 	}
 
@@ -4390,28 +4390,6 @@ internal sealed class LocalApiForwarder : IDisposable
 		return TryReadString(obj["owned_by"])
 			?? TryReadString(obj["organization"])
 			?? TryReadString(obj["publisher"]);
-	}
-
-	private static string? TryReadModelDisplayName(JsonNode? node, string? modelId)
-	{
-		if (node is not JsonObject obj)
-			return null;
-
-		var displayName = TryReadString(obj["display_name"])
-			?? TryReadString(obj["displayName"])
-			?? TryReadString(obj["title"])
-			?? TryReadString(obj["label"]);
-		if (!string.IsNullOrWhiteSpace(displayName))
-			return displayName;
-
-		var alternateName = TryReadString(obj["name"]);
-		if (!string.IsNullOrWhiteSpace(alternateName)
-			&& !string.Equals(alternateName.Trim(), modelId?.Trim(), StringComparison.OrdinalIgnoreCase))
-		{
-			return alternateName;
-		}
-
-		return null;
 	}
 
 	private static long? TryReadModelCreatedUnixTime(JsonNode? node)
@@ -4711,13 +4689,20 @@ internal sealed class LocalApiForwarder : IDisposable
 		try { response.Close(); } catch { }
 	}
 
-	private void LogDebug(string message) => OnLog?.Invoke(AppLogFormatting.Encode(AppLogLevel.Debug, $"[Local API] {message}"));
+	private void EmitLog(AppLogLevel level, string message)
+	{
+		var formatted = $"[Local API] {message}";
+		_currentRequestLogSession.Value?.Write(level, formatted);
+		OnLog?.Invoke(AppLogFormatting.Encode(level, formatted));
+	}
 
-	private void LogInfo(string message) => OnLog?.Invoke(AppLogFormatting.Encode(AppLogLevel.Information, $"[Local API] {message}"));
+	private void LogDebug(string message) => EmitLog(AppLogLevel.Debug, message);
 
-	private void LogWarning(string message) => OnLog?.Invoke(AppLogFormatting.Encode(AppLogLevel.Warning, $"[Local API] {message}"));
+	private void LogInfo(string message) => EmitLog(AppLogLevel.Information, message);
 
-	private void LogError(string message) => OnLog?.Invoke(AppLogFormatting.Encode(AppLogLevel.Error, $"[Local API] {message}"));
+	private void LogWarning(string message) => EmitLog(AppLogLevel.Warning, message);
+
+	private void LogError(string message) => EmitLog(AppLogLevel.Error, message);
 
 	private static string FormatSettingValue(string? value)
 	{
