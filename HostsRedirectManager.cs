@@ -46,11 +46,11 @@ internal sealed class GitHub520HostsProvider : IDisposable
 				_hostsMap = map;
 				_lastRefresh = DateTime.UtcNow;
 			}
-			OnLog?.Invoke($"[hosts] Loaded {map.Count} entries from GitHub520");
+			OnLog?.Invoke(AppLogFormatting.Encode(AppLogLevel.Information, $"[hosts] Loaded {map.Count} entries from GitHub520"));
 		}
 		catch (Exception ex)
 		{
-			OnLog?.Invoke($"[hosts] Failed to refresh: {ex.Message}");
+			OnLog?.Invoke(AppLogFormatting.Encode(AppLogLevel.Error, $"[hosts] Failed to refresh: {ex.Message}"));
 		}
 	}
 
@@ -178,7 +178,7 @@ internal sealed class DnsInterceptor : IDisposable
 				WinDivertNative.WinDivertSend(_winDivertHandle, packet, recvLen, out _, ref addr);
 			}
 			catch (OperationCanceledException) { break; }
-			catch (Exception ex) { OnLog?.Invoke($"[dns] Error: {ex.Message}"); }
+			catch (Exception ex) { OnLog?.Invoke(AppLogFormatting.Encode(AppLogLevel.Error, $"[dns] Error: {ex.Message}")); }
 
 			await Task.Yield();
 		}
@@ -235,7 +235,7 @@ internal sealed class DnsInterceptor : IDisposable
 			if (rType == 1 && rdLen == 4 && pos + 4 <= dnsStart + dnsLen)
 			{
 				Buffer.BlockCopy(newIp, 0, buf, pos, 4);
-				OnLog?.Invoke($"[dns] {domain} -> {newIp[0]}.{newIp[1]}.{newIp[2]}.{newIp[3]}");
+				OnLog?.Invoke(AppLogFormatting.Encode(AppLogLevel.Information, $"[dns] {domain} -> {newIp[0]}.{newIp[1]}.{newIp[2]}.{newIp[3]}"));
 				patched = true;
 			}
 

@@ -8,13 +8,13 @@ namespace TrafficPilot;
 
 internal sealed class LogBuffer
 {
-	private readonly ConcurrentQueue<string> _queue = new();
+	private readonly ConcurrentQueue<AppLogEntry> _queue = new();
 	private readonly System.Timers.Timer _flushTimer;
-	private readonly Action<List<string>> _onFlush;
+	private readonly Action<List<AppLogEntry>> _onFlush;
 	private const int BATCH_SIZE = 50;
 	private const int FLUSH_INTERVAL_MS = 500;
 
-	public LogBuffer(Action<List<string>> onFlush)
+	public LogBuffer(Action<List<AppLogEntry>> onFlush)
 	{
 		_onFlush = onFlush;
 		_flushTimer = new System.Timers.Timer(FLUSH_INTERVAL_MS);
@@ -26,9 +26,9 @@ internal sealed class LogBuffer
 	/// <summary>
 	/// 添加日志到缓冲区
 	/// </summary>
-	public void Enqueue(string message)
+	public void Enqueue(AppLogEntry entry)
 	{
-		_queue.Enqueue(message);
+		_queue.Enqueue(entry);
 
 		// 缓冲区满时立即刷新
 		if (_queue.Count >= BATCH_SIZE)
@@ -40,7 +40,7 @@ internal sealed class LogBuffer
 	/// </summary>
 	public void Flush()
 	{
-		var batch = new List<string>(BATCH_SIZE);
+		var batch = new List<AppLogEntry>(BATCH_SIZE);
 		while (_queue.TryDequeue(out var msg) && batch.Count < BATCH_SIZE)
 			batch.Add(msg);
 

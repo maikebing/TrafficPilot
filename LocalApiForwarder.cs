@@ -282,7 +282,7 @@ internal sealed class LocalApiForwarder : IDisposable
 			}
 			catch (Exception ex)
 			{
-				LogInfo($"Local API accept error: {ex.Message}");
+				LogError($"Local API accept error: {ex.Message}");
 				if (context is not null)
 				{
 					try
@@ -382,14 +382,14 @@ internal sealed class LocalApiForwarder : IDisposable
 		}
 		catch (Exception ex) when (ex is not OperationCanceledException)
 		{
-			LogInfo($"request #{requestId} failed on {path}: {ex.Message}");
+			LogError($"request #{requestId} failed on {path}: {ex.Message}");
 			await WriteErrorAsync(context.Response, path, HttpStatusCode.BadGateway, ex.Message, "ollama", null, null, null);
 		}
 	}
 
 	private async Task HandleGetSingleModelAsync(HttpListenerContext context, string modelId, CancellationToken ct)
 	{
-		LogInfo($"single model lookup: '{modelId}'");
+		LogDebug($"single model lookup: '{modelId}'");
 		MarkModelLoaded(modelId);
 
 		var catalogEntry = await GetAdvertisedModelCatalogEntryAsync(modelId, ct);
@@ -812,7 +812,7 @@ internal sealed class LocalApiForwarder : IDisposable
 		};
 
 		request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-		LogInfo($"upstream POST {requestUri} | content-type=application/json | bytes={requestBytes.Length}");
+		LogDebug($"upstream POST {requestUri} | content-type=application/json | bytes={requestBytes.Length}");
 		ApplyAuthentication(request, providerContext);
 		foreach (var header in providerContext.Provider.AdditionalHeaders)
 		{
@@ -840,7 +840,7 @@ internal sealed class LocalApiForwarder : IDisposable
 	{
 		var request = new HttpRequestMessage(HttpMethod.Get, requestUri);
 		request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-		LogInfo($"upstream GET {requestUri} | accept=application/json");
+		LogDebug($"upstream GET {requestUri} | accept=application/json");
 		ApplyAuthentication(request, providerContext);
 		foreach (var header in providerContext.Provider.AdditionalHeaders)
 		{
@@ -2493,26 +2493,40 @@ internal sealed class LocalApiForwarder : IDisposable
 
 	private void LogRequestIfEnabled(string operation, JsonNode payload)
 	{
+		if (_settings.RequestResponseLogging.Enabled != true)
+			return;
+
 		var message = $"request {operation}";
 		if (_settings.RequestResponseLogging?.IncludeBodies == true)
 			message += $": {TruncateForLog(payload.ToJsonString(JsonOptions))}";
-		LogInfo(message);
+		LogDebug(message);
 	}
 
 	private void LogResponseIfEnabled(string operation, HttpStatusCode statusCode, string body)
 	{
+		if (_settings.RequestResponseLogging.Enabled != true)
+			return;
+
 		var message = $"response {operation}: {(int)statusCode} {statusCode}";
 		if (_settings.RequestResponseLogging?.IncludeBodies == true)
 			message += $" | {TruncateForLog(body)}";
-		LogInfo(message);
+		if ((int)statusCode >= 500)
+			LogError(message);
+		else if ((int)statusCode >= 400)
+			LogWarning(message);
+		else
+			LogDebug(message);
 	}
 
 	private void LogIncomingRequest(long requestId, HttpListenerRequest request, string path)
 	{
+		if (_settings.RequestResponseLogging.Enabled != true)
+			return;
+
 		var query = request.Url?.Query ?? string.Empty;
 		var contentType = string.IsNullOrWhiteSpace(request.ContentType) ? "-" : request.ContentType;
 		var contentLength = request.HasEntityBody ? request.ContentLength64 : 0;
-		LogInfo($"incoming #{requestId}: {request.HttpMethod} {path}{query} | content-type={contentType} | length={contentLength}");
+		LogDebug($"incoming #{requestId}: {request.HttpMethod} {path}{query} | content-type={contentType} | length={contentLength}");
 	}
 
 	private string TruncateForLog(string text)
@@ -3492,12 +3506,12 @@ internal sealed class LocalApiForwarder : IDisposable
 				if (_hasCachedModelCatalog)
 				{
 					_modelCatalogExpiresAt = now + ModelCatalogFailureCacheDuration;
-					LogInfo($"model catalog sync failed: {ex.Message}; using cached catalog ({_cachedModelCatalog.Count} models)");
+					LogWarning($"model catalog sync failed: {ex.Message}; using cached catalog ({_cachedModelCatalog.Count} models)");
 					return _cachedModelCatalog;
 				}
 
 				CacheModelCatalog(configuredCatalog, now + ModelCatalogFailureCacheDuration);
-				LogInfo($"model catalog sync failed: {ex.Message}; using configured fallback ({configuredCatalog.Count} models)");
+				LogWarning($"model catalog sync failed: {ex.Message}; using configured fallback ({configuredCatalog.Count} models)");
 				return configuredCatalog;
 			}
 		}
@@ -4528,7 +4542,10 @@ internal sealed class LocalApiForwarder : IDisposable
 			};
 		}
 
-		LogInfo($"error {localPath}: {(int)statusCode} {statusCode} | {message}");
+		if ((int)statusCode >= 500)
+			LogError($"{localPath}: {(int)statusCode} {statusCode} | {message}");
+		else
+			LogWarning($"{localPath}: {(int)statusCode} {statusCode} | {message}");
 		await WriteJsonAsync(response, statusCode, payload);
 	}
 
@@ -4605,7 +4622,13 @@ internal sealed class LocalApiForwarder : IDisposable
 		try { response.Close(); } catch { }
 	}
 
-	private void LogInfo(string message) => OnLog?.Invoke($"[Local API] {message}");
+	private void LogDebug(string message) => OnLog?.Invoke(AppLogFormatting.Encode(AppLogLevel.Debug, $"[Local API] {message}"));
+
+	private void LogInfo(string message) => OnLog?.Invoke(AppLogFormatting.Encode(AppLogLevel.Information, $"[Local API] {message}"));
+
+	private void LogWarning(string message) => OnLog?.Invoke(AppLogFormatting.Encode(AppLogLevel.Warning, $"[Local API] {message}"));
+
+	private void LogError(string message) => OnLog?.Invoke(AppLogFormatting.Encode(AppLogLevel.Error, $"[Local API] {message}"));
 
 	private static string FormatSettingValue(string? value)
 	{

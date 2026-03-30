@@ -58,7 +58,7 @@ internal sealed class ProxyEngine : IDisposable
 			var apiKey = CredentialManager.LoadToken(CredentialManager.GetLocalApiTargetName(defaultProvider.Id))
 				?? CredentialManager.LoadToken(CredentialManager.GetLocalApiTargetName(defaultProvider.Name));
 			_localApiForwarder = new LocalApiForwarder(gatewaySettings, apiKey);
-			_localApiForwarder.OnLog += LogInfo;
+			_localApiForwarder.OnLog += message => OnLog?.Invoke(message);
 			await _localApiForwarder.StartAsync();
 		}
 
@@ -66,7 +66,7 @@ internal sealed class ProxyEngine : IDisposable
 		if (_options.HostsRedirectEnabled)
 		{
 			_hostsProvider = new GitHub520HostsProvider(_options.HostsRedirectUrl);
-			_hostsProvider.OnLog += (msg) => OnLog?.Invoke($"[{DateTime.Now:HH:mm:ss.fff}] {msg}");
+			_hostsProvider.OnLog += message => OnLog?.Invoke(message);
 			await _hostsProvider.RefreshAsync();
 
 			bool useHostsFile = (_options.HostsRedirectMode ?? "DnsInterception")
@@ -91,7 +91,7 @@ internal sealed class ProxyEngine : IDisposable
 			{
 				// DNS interception mode
 				_dnsInterceptor = new DnsInterceptor(_hostsProvider);
-				_dnsInterceptor.OnLog += (msg) => OnLog?.Invoke($"[{DateTime.Now:HH:mm:ss.fff}] {msg}");
+				_dnsInterceptor.OnLog += message => OnLog?.Invoke(message);
 				await _dnsInterceptor.StartAsync();
 				LogInfo($"DNS interception started ({_hostsProvider.HostCount} hosts)");
 			}
@@ -113,7 +113,7 @@ internal sealed class ProxyEngine : IDisposable
 		_redirectNat = new RedirectNatTable(TimeSpan.FromMinutes(10));
 		_connInfoCache = new ConnectionInfoCache(TimeSpan.FromMinutes(5));
 		_relay = new TcpRelayServer(_proxyIp, _options.ProxyPort, _options.ProxyScheme, _redirectNat, _connInfoCache, domainRules);
-		_relay.OnLog += LogInfo;
+		_relay.OnLog += message => OnLog?.Invoke(message);
 		RelayPort = (ushort)_relay.Start();
 
 		LogInfo($"Relay started at 0.0.0.0:{RelayPort}");
@@ -165,11 +165,11 @@ internal sealed class ProxyEngine : IDisposable
 			{
 				SystemHostsFileManager.RemoveTrafficPilotEntries();
 				SystemHostsFileManager.FlushDnsCache();
-             LogInfo("Removed TrafficPilot entries from Windows/WSL hosts files");
+				LogInfo("Removed TrafficPilot entries from Windows/WSL hosts files");
 			}
 			catch (Exception ex)
 			{
-               LogInfo($"Warning: Failed to clean up Windows/WSL hosts files: {ex.Message}");
+				LogWarning($"Failed to clean up Windows/WSL hosts files: {ex.Message}");
 			}
 		}
 	}
@@ -205,11 +205,11 @@ internal sealed class ProxyEngine : IDisposable
 			{
 				SystemHostsFileManager.WriteHostsFile(_hostsProvider.GetHostsMap());
 				SystemHostsFileManager.FlushDnsCache();
-             LogInfo($"Windows/WSL hosts files refreshed ({_hostsProvider.HostCount} hosts)");
+				LogInfo($"Windows/WSL hosts files refreshed ({_hostsProvider.HostCount} hosts)");
 			}
 			catch (Exception ex)
 			{
-             LogInfo($"Warning: Failed to update Windows/WSL hosts files: {ex.Message}");
+				LogWarning($"Failed to update Windows/WSL hosts files: {ex.Message}");
 			}
 		}
 	}
@@ -326,7 +326,7 @@ internal sealed class ProxyEngine : IDisposable
 			}
 			catch (Exception ex)
 			{
-				LogInfo($"Error in packet loop: {ex.Message}");
+				LogError($"Packet loop error: {ex.Message}");
 			}
 
 			await Task.Yield();
@@ -335,7 +335,17 @@ internal sealed class ProxyEngine : IDisposable
 
 	private void LogInfo(string message)
 	{
-		OnLog?.Invoke($"[{DateTime.Now:HH:mm:ss.fff}] {message}");
+		OnLog?.Invoke(AppLogFormatting.Encode(AppLogLevel.Information, message));
+	}
+
+	private void LogWarning(string message)
+	{
+		OnLog?.Invoke(AppLogFormatting.Encode(AppLogLevel.Warning, message));
+	}
+
+	private void LogError(string message)
+	{
+		OnLog?.Invoke(AppLogFormatting.Encode(AppLogLevel.Error, message));
 	}
 
 	private static IPAddress ResolveProxyIpv4(string host)

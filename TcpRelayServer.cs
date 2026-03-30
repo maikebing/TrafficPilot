@@ -146,7 +146,7 @@ internal sealed class TcpRelayServer
 		catch (Exception ex) when (ex is not OperationCanceledException)
 		{
 			Interlocked.Increment(ref ProxiedFailed);
-			LogInfo($"[error] {targetText ?? "unknown"}: {ex.Message}");
+			LogError($"{targetText ?? "unknown"}: {ex.Message}");
 		}
 		finally
 		{
@@ -155,7 +155,9 @@ internal sealed class TcpRelayServer
 		}
 	}
 
-	private void LogInfo(string message) => OnLog?.Invoke(message);
+	private void LogInfo(string message) => OnLog?.Invoke(AppLogFormatting.Encode(AppLogLevel.Information, message));
+
+	private void LogError(string message) => OnLog?.Invoke(AppLogFormatting.Encode(AppLogLevel.Error, message));
 
 	private static string DescribeTarget(string? domain, byte[] dstIp, ushort dstPort)
 	{

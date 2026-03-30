@@ -34,6 +34,9 @@ internal class ProxyConfigModel
 	[JsonPropertyName("ollamaGateway")]
 	public OllamaGatewaySettings? OllamaGateway { get; set; }
 
+	[JsonPropertyName("logging")]
+	public AppLoggingSettings Logging { get; set; } = new();
+
 	public ProxyConfigModel() { }
 
 	public ProxyConfigModel(ProxyOptions opts)
@@ -993,7 +996,8 @@ internal sealed class ProxyConfigManager
             {
                 RefreshDomains = [.. ProxyOptions.DefaultRefreshDomains]
 			},
-			OllamaGateway = CreateDefaultGatewaySettings()
+			OllamaGateway = CreateDefaultGatewaySettings(),
+			Logging = new AppLoggingSettings()
 		};
 	}
 
@@ -1013,9 +1017,14 @@ internal sealed class ProxyConfigManager
 		ArgumentNullException.ThrowIfNull(config);
 
 		var changed = config.OllamaGateway is null;
-		if (config.ConfigSync is { Provider: { Length: > 0 } provider } && !string.IsNullOrWhiteSpace(config.ConfigSync.GistId))
+		if (config.Logging is null)
 		{
-			CredentialManager.SaveConfigSyncRemoteId(provider, config.ConfigSync.GistId.Trim());
+			config.Logging = new AppLoggingSettings();
+			changed = true;
+		}
+		if (config.ConfigSync is { Provider: { Length: > 0 } syncProvider } && !string.IsNullOrWhiteSpace(config.ConfigSync.GistId))
+		{
+			CredentialManager.SaveConfigSyncRemoteId(syncProvider, config.ConfigSync.GistId.Trim());
 			config.ConfigSync.GistId = null;
 			changed = true;
 		}
@@ -1082,7 +1091,8 @@ internal sealed class ProxyConfigManager
 			config.StartOnBoot,
 			config.AutoStartProxy,
 			configSync = CreatePersistedConfigSync(config.ConfigSync),
-			ollamaGateway = CreatePersistedGateway(config.OllamaGateway)
+			ollamaGateway = CreatePersistedGateway(config.OllamaGateway),
+			logging = config.Logging
 		};
 	}
 

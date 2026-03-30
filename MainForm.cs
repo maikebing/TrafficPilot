@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.Diagnostics;
 using System.Net;
 using System.Net.NetworkInformation;
 using System.Reflection;
@@ -19,6 +20,10 @@ internal partial class MainForm : Form
 	private string _activeConfigPath;
 
 	private LogBuffer? _logBuffer;
+	private readonly List<AppLogEntry> _logEntries = [];
+	private readonly object _logEntriesLock = new();
+	private readonly object _logSettingsLock = new();
+	private readonly AppLogFileWriter _logFileWriter;
 	private readonly AutoUpdater _autoUpdater;
 	private ReleaseInfo? _availableRelease;
 
@@ -36,6 +41,21 @@ internal partial class MainForm : Form
 	private bool _isLoadingGatewayProviderOverview;
 	private bool _isRebuildingGatewayProviderTabs;
 	private string? _activeGatewayProviderId;
+	private bool _isLoadingSyncCredentials;
+	private bool _isLoadingLogSettings;
+
+	private FlowLayoutPanel? _logFilterPanel;
+	private CheckBox? _chkLogDebug;
+	private CheckBox? _chkLogInformation;
+	private CheckBox? _chkLogWarning;
+	private CheckBox? _chkLogError;
+	private CheckBox? _chkLogWriteToDirectory;
+	private Label? _lblLogDirectory;
+	private Button? _btnOpenLogDirectory;
+	private AppLoggingSettings _activeLogSettings = new();
+
+	private const int MaxLogHistoryEntries = 20000;
+	private const int MaxRenderedLogEntries = 10000;
 
 	private Dictionary<string, string> _localApiModelNameMap = new(StringComparer.OrdinalIgnoreCase);
 	private readonly Dictionary<string, GatewayProviderSettingsControl> _gatewayProviderEditors = new(StringComparer.OrdinalIgnoreCase);
@@ -51,8 +71,10 @@ internal partial class MainForm : Form
 		_activeConfigPath = _configManager.GetConfigPath();
 		_currentConfig = _configManager.Load(_activeConfigPath);
 		_logBuffer = new LogBuffer(BatchAppendLogs);
+		_logFileWriter = new AppLogFileWriter(Path.Combine(_configManager.GetConfigDirectory(), "logs"));
 		_autoUpdater = new AutoUpdater();
 		InitializeComponent();
+		InitializeLogUi();
 		InitializeGatewayProviderEditors();
 		InitIpResultsColumns();
 		InitProxyHostComboBox();
@@ -63,6 +85,127 @@ internal partial class MainForm : Form
 		LoadConfigToUI();
 		RefreshConfigShortcutButtons();
 		UpdateTrayMenuState();
+	}
+
+	private void InitializeLogUi()
+	{
+		if (_logPanel is null || _rtbLogs is null || _btnClearPanel is null)
+			return;
+
+		_logFilterPanel = new FlowLayoutPanel
+		{
+			AutoSize = true,
+			Dock = DockStyle.Fill,
+			FlowDirection = FlowDirection.LeftToRight,
+			Margin = new Padding(5, 5, 5, 0),
+			Name = "_logFilterPanel",
+			WrapContents = true
+		};
+
+		var levelsLabel = new Label
+		{
+			AutoSize = true,
+			Margin = new Padding(3, 7, 6, 3),
+			Text = "Levels:"
+		};
+		_logFilterPanel.Controls.Add(levelsLabel);
+
+		_chkLogDebug = CreateLogLevelCheckBox("_chkLogDebug", "Debug");
+		_chkLogInformation = CreateLogLevelCheckBox("_chkLogInformation", "Info");
+		_chkLogWarning = CreateLogLevelCheckBox("_chkLogWarning", "Warning");
+		_chkLogError = CreateLogLevelCheckBox("_chkLogError", "Error");
+		_chkLogWriteToDirectory = CreateLogLevelCheckBox("_chkLogWriteToDirectory", "Write To Directory");
+		_chkLogWriteToDirectory.Margin = new Padding(20, 4, 12, 3);
+
+		_lblLogDirectory = new Label
+		{
+			AutoSize = true,
+			Margin = new Padding(3, 7, 8, 3),
+			Name = "_lblLogDirectory",
+			Text = string.Empty
+		};
+
+		_btnOpenLogDirectory = new Button
+		{
+			AutoSize = true,
+			Margin = new Padding(0, 2, 3, 2),
+			Name = "_btnOpenLogDirectory",
+			Text = "Open Folder",
+			UseVisualStyleBackColor = true
+		};
+		_btnOpenLogDirectory.Click += BtnOpenLogDirectory_Click;
+
+		_logFilterPanel.Controls.Add(_chkLogDebug);
+		_logFilterPanel.Controls.Add(_chkLogInformation);
+		_logFilterPanel.Controls.Add(_chkLogWarning);
+		_logFilterPanel.Controls.Add(_chkLogError);
+		_logFilterPanel.Controls.Add(_chkLogWriteToDirectory);
+		_logFilterPanel.Controls.Add(_lblLogDirectory);
+		_logFilterPanel.Controls.Add(_btnOpenLogDirectory);
+
+		_rtbLogs.HideSelection = false;
+		_rtbLogs.HandleCreated += (_, _) => RebuildLogView();
+
+		_logPanel.SuspendLayout();
+		_logPanel.Controls.Remove(_rtbLogs);
+		_logPanel.Controls.Remove(_btnClearPanel);
+		_logPanel.RowCount = 3;
+		_logPanel.RowStyles.Clear();
+		_logPanel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+		_logPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
+		_logPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 40F));
+		_logPanel.Controls.Add(_logFilterPanel, 0, 0);
+		_logPanel.Controls.Add(_rtbLogs, 0, 1);
+		_logPanel.Controls.Add(_btnClearPanel, 0, 2);
+		_logPanel.ResumeLayout();
+	}
+
+	private CheckBox CreateLogLevelCheckBox(string name, string text)
+	{
+		var checkBox = new CheckBox
+		{
+			AutoSize = true,
+			Margin = new Padding(3, 4, 12, 3),
+			Name = name,
+			Text = text,
+			UseVisualStyleBackColor = true
+		};
+		checkBox.CheckedChanged += LogFilterControl_Changed;
+		return checkBox;
+	}
+
+	private void LogFilterControl_Changed(object? sender, EventArgs e)
+	{
+		if (_isLoadingLogSettings)
+			return;
+
+		var settings = BuildAppLoggingSettings();
+		ApplyActiveLogSettings(settings);
+		UpdateLogDirectoryHint();
+		_currentConfig.Logging = settings;
+		RebuildLogView();
+	}
+
+	private void BtnOpenLogDirectory_Click(object? sender, EventArgs e)
+	{
+		try
+		{
+			Directory.CreateDirectory(_logFileWriter.LogDirectory);
+			Process.Start(new ProcessStartInfo
+			{
+				FileName = "explorer.exe",
+				Arguments = _logFileWriter.LogDirectory,
+				UseShellExecute = true
+			});
+		}
+		catch (Exception ex)
+		{
+			MessageBox.Show(
+				$"Failed to open log directory: {ex.Message}",
+				"Logs",
+				MessageBoxButtons.OK,
+				MessageBoxIcon.Error);
+		}
 	}
 
 	private void LoadVersionLabel()
@@ -301,7 +444,8 @@ internal partial class MainForm : Form
 
 			// Persist the returned gist ID back to the config
 			_txtGistId.Text = newId;
-			_currentConfig.ConfigSync = new ConfigSyncSettings { Provider = provider, GistId = newId };
+			SaveConfigSyncCredentials(provider, token, newId);
+			_currentConfig.ConfigSync = new ConfigSyncSettings { Provider = provider };
 			_configManager.Save(_currentConfig, _activeConfigPath);
 
 			MessageBox.Show($"Config pushed successfully to {provider}.\nGist/Snippet ID: {newId}",
@@ -361,7 +505,8 @@ internal partial class MainForm : Form
 				throw new InvalidOperationException("Remote config could not be deserialized.");
 
 			// Preserve sync settings from the current session
-			model.ConfigSync = new ConfigSyncSettings { Provider = provider, GistId = gistId };
+			SaveConfigSyncCredentials(provider, token, gistId);
+			model.ConfigSync = new ConfigSyncSettings { Provider = provider };
 			_currentConfig = model;
 			_configManager.Save(_currentConfig, _activeConfigPath);
 			LoadConfigToUI();
@@ -410,6 +555,7 @@ internal partial class MainForm : Form
 		model.AutoStartProxy = _chkAutoStartProxy!.Checked;
 		model.ConfigSync = BuildConfigSyncSettings();
 		model.OllamaGateway = gatewaySettings;
+		model.Logging = BuildAppLoggingSettings();
 
 		return model;
 	}
@@ -421,16 +567,11 @@ internal partial class MainForm : Form
 		string? gistId = _txtGistId!.Text.Trim();
 		if (string.IsNullOrEmpty(gistId)) gistId = null;
 
-		// Save token to Windows Credential Manager (never in config file)
-		string targetName = CredentialManager.GetTargetName(provider);
-		if (string.IsNullOrEmpty(token))
-			CredentialManager.DeleteToken(targetName);
-		else
-			CredentialManager.SaveToken(targetName, token);
+		SaveConfigSyncCredentials(provider, token, gistId);
 
 		if (string.IsNullOrEmpty(token) && gistId is null)
 			return null;
-		return new ConfigSyncSettings { Provider = provider, GistId = gistId };
+		return new ConfigSyncSettings { Provider = provider };
 	}
 
 	private ProxyOptions BuildProxyOptions()
@@ -483,8 +624,10 @@ internal partial class MainForm : Form
 		// Load sync settings
 		string syncProvider = _currentConfig.ConfigSync?.Provider ?? "GitHub";
 		_cmbSyncProvider!.SelectedItem = _cmbSyncProvider.Items.Contains(syncProvider) ? syncProvider : "GitHub";
-		_txtSyncToken!.Text = CredentialManager.LoadToken(CredentialManager.GetTargetName(syncProvider)) ?? string.Empty;
-		_txtGistId!.Text = _currentConfig.ConfigSync?.GistId ?? string.Empty;
+		_cmbSyncProvider.SelectedIndexChanged -= CmbSyncProvider_SelectedIndexChanged;
+		_cmbSyncProvider.SelectedIndexChanged += CmbSyncProvider_SelectedIndexChanged;
+		LoadConfigSyncCredentials(syncProvider);
+		LoadLogSettingsToUi(_currentConfig.Logging);
 
 		// 加载hosts redirect模式
 		string mode = _currentConfig.HostsRedirect?.Mode ?? "DnsInterception";
@@ -497,6 +640,131 @@ internal partial class MainForm : Form
 		}
 
 		ApplySimpleGatewayUi();
+	}
+
+	private void CmbSyncProvider_SelectedIndexChanged(object? sender, EventArgs e)
+	{
+		if (_isLoadingSyncCredentials)
+			return;
+
+		var provider = _cmbSyncProvider?.SelectedItem?.ToString() ?? "GitHub";
+		LoadConfigSyncCredentials(provider);
+	}
+
+	private void LoadConfigSyncCredentials(string provider)
+	{
+		if (_txtSyncToken is null || _txtGistId is null)
+			return;
+
+		_isLoadingSyncCredentials = true;
+		try
+		{
+			_txtSyncToken.Text = CredentialManager.LoadConfigSyncToken(provider) ?? string.Empty;
+			_txtGistId.Text = CredentialManager.LoadConfigSyncRemoteId(provider) ?? string.Empty;
+		}
+		finally
+		{
+			_isLoadingSyncCredentials = false;
+		}
+	}
+
+	private static void SaveConfigSyncCredentials(string provider, string? token, string? remoteId)
+	{
+		var normalizedProvider = string.IsNullOrWhiteSpace(provider) ? "GitHub" : provider.Trim();
+
+		if (string.IsNullOrWhiteSpace(token))
+			CredentialManager.DeleteConfigSyncToken(normalizedProvider);
+		else
+			CredentialManager.SaveConfigSyncToken(normalizedProvider, token.Trim());
+
+		if (string.IsNullOrWhiteSpace(remoteId))
+			CredentialManager.DeleteConfigSyncRemoteId(normalizedProvider);
+		else
+			CredentialManager.SaveConfigSyncRemoteId(normalizedProvider, remoteId.Trim());
+	}
+
+	private AppLoggingSettings BuildAppLoggingSettings()
+	{
+		return new AppLoggingSettings
+		{
+			EnableDebug = _chkLogDebug?.Checked ?? false,
+			EnableInformation = _chkLogInformation?.Checked ?? true,
+			EnableWarning = _chkLogWarning?.Checked ?? true,
+			EnableError = _chkLogError?.Checked ?? true,
+			WriteToDirectory = _chkLogWriteToDirectory?.Checked ?? false
+		};
+	}
+
+	private static AppLoggingSettings CloneAppLoggingSettings(AppLoggingSettings settings)
+	{
+		ArgumentNullException.ThrowIfNull(settings);
+
+		return new AppLoggingSettings
+		{
+			EnableDebug = settings.EnableDebug,
+			EnableInformation = settings.EnableInformation,
+			EnableWarning = settings.EnableWarning,
+			EnableError = settings.EnableError,
+			WriteToDirectory = settings.WriteToDirectory
+		};
+	}
+
+	private void ApplyActiveLogSettings(AppLoggingSettings settings)
+	{
+		lock (_logSettingsLock)
+			_activeLogSettings = CloneAppLoggingSettings(settings);
+	}
+
+	private AppLoggingSettings GetActiveLogSettings()
+	{
+		lock (_logSettingsLock)
+			return CloneAppLoggingSettings(_activeLogSettings);
+	}
+
+	private void LoadLogSettingsToUi(AppLoggingSettings? settings)
+	{
+		if (_chkLogDebug is null
+			|| _chkLogInformation is null
+			|| _chkLogWarning is null
+			|| _chkLogError is null
+			|| _chkLogWriteToDirectory is null)
+		{
+			return;
+		}
+
+		settings ??= new AppLoggingSettings();
+
+		_isLoadingLogSettings = true;
+		try
+		{
+			_chkLogDebug.Checked = settings.EnableDebug;
+			_chkLogInformation.Checked = settings.EnableInformation;
+			_chkLogWarning.Checked = settings.EnableWarning;
+			_chkLogError.Checked = settings.EnableError;
+			_chkLogWriteToDirectory.Checked = settings.WriteToDirectory;
+			ApplyActiveLogSettings(settings);
+			UpdateLogDirectoryHint();
+		}
+		finally
+		{
+			_isLoadingLogSettings = false;
+		}
+
+		RebuildLogView();
+	}
+
+	private void UpdateLogDirectoryHint()
+	{
+		if (_lblLogDirectory is null || _chkLogWriteToDirectory is null)
+			return;
+
+		var modeText = _chkLogWriteToDirectory.Checked ? "Writing" : "Directory";
+		_lblLogDirectory.Text = $"{modeText}: {_logFileWriter.LogDirectory}";
+	}
+
+	private bool IsLogLevelEnabled(AppLogLevel level)
+	{
+		return GetActiveLogSettings().IsEnabled(level);
 	}
 
 	private List<string> GetProcessNamesFromUi()
@@ -605,7 +873,7 @@ internal partial class MainForm : Form
 
 	private void LogRuntimeConfigSnapshot(ProxyConfigModel config)
 	{
-		AppendLog($"[{DateTime.Now:HH:mm:ss.fff}] [Config] Active config: {_activeConfigPath}");
+		AppendLog(AppLogLevel.Information, $"[Config] Active config: {_activeConfigPath}");
 
 		var localApi = config.OllamaGateway;
 		if (localApi?.Enabled != true)
@@ -619,7 +887,8 @@ internal partial class MainForm : Form
 			? "<empty>"
 			: provider.DefaultEmbeddingModel;
 		AppendLog(
-			$"[{DateTime.Now:HH:mm:ss.fff}] [Config] Local API provider='{provider.Name}', protocol={provider.Protocol}, baseUrl={provider.BaseUrl}, defaultModel={defaultModel}, embeddingModel={embeddingModel}");
+			AppLogLevel.Information,
+			$"[Config] Local API provider='{provider.Name}', protocol={provider.Protocol}, baseUrl={provider.BaseUrl}, defaultModel={defaultModel}, embeddingModel={embeddingModel}");
 	}
 
 	private OllamaGatewaySettings? BuildOllamaGatewaySettings()
@@ -1839,7 +2108,7 @@ internal partial class MainForm : Form
 					"Refresh + Apply",
 					MessageBoxButtons.OK,
 					MessageBoxIcon.Information);
-				AppendLog($"[{DateTime.Now:HH:mm:ss.fff}] [Gateway] Refreshed {count} models and applied defaults: Chat={(string.IsNullOrWhiteSpace(chatAfter) ? "<none>" : chatAfter)}{(string.IsNullOrWhiteSpace(embeddingAfter) ? string.Empty : $", Embedding={embeddingAfter}")}");
+				AppendLog(AppLogLevel.Information, $"[Gateway] Refreshed {count} models and applied defaults: Chat={(string.IsNullOrWhiteSpace(chatAfter) ? "<none>" : chatAfter)}{(string.IsNullOrWhiteSpace(embeddingAfter) ? string.Empty : $", Embedding={embeddingAfter}")}");
 			}
 		}
 		catch (Exception ex)
@@ -2468,19 +2737,61 @@ internal partial class MainForm : Form
 
 	private void AppendLog(string message)
 	{
-		_logBuffer?.Enqueue(message);
+		if (string.IsNullOrWhiteSpace(message))
+			return;
+
+		_logBuffer?.Enqueue(AppLogFormatting.Decode(message));
 	}
 
-	private void BatchAppendLogs(List<string> messages)
+	private void AppendLog(AppLogLevel level, string message)
+	{
+		if (string.IsNullOrWhiteSpace(message))
+			return;
+
+		_logBuffer?.Enqueue(new AppLogEntry(DateTime.Now, level, message.Trim()));
+	}
+
+	private void BatchAppendLogs(List<AppLogEntry> entries)
+	{
+		if (entries.Count == 0)
+			return;
+
+		lock (_logEntriesLock)
+		{
+			_logEntries.AddRange(entries);
+			if (_logEntries.Count > MaxLogHistoryEntries)
+				_logEntries.RemoveRange(0, _logEntries.Count - MaxLogHistoryEntries);
+		}
+
+		WriteLogsToDirectory(entries);
+		AppendLogBatchToUi(entries);
+	}
+
+	private void WriteLogsToDirectory(IEnumerable<AppLogEntry> entries)
+	{
+		if (_chkLogWriteToDirectory?.Checked != true)
+			return;
+
+		try
+		{
+			_logFileWriter.WriteEntries(entries.Where(entry => IsLogLevelEnabled(entry.Level)));
+		}
+		catch
+		{
+			// Keep file logging failures out of the main app flow.
+		}
+	}
+
+	private void AppendLogBatchToUi(List<AppLogEntry> entries)
 	{
 		if (_rtbLogs is null || _rtbLogs.IsDisposed || !_rtbLogs.IsHandleCreated)
 			return;
 
-		if (_rtbLogs!.InvokeRequired)
+		if (_rtbLogs.InvokeRequired)
 		{
 			try
 			{
-				_rtbLogs.BeginInvoke(() => BatchAppendLogs(messages));
+				_rtbLogs.BeginInvoke(() => AppendLogBatchToUi(entries));
 			}
 			catch (ObjectDisposedException)
 			{
@@ -2493,16 +2804,94 @@ internal partial class MainForm : Form
 			return;
 		}
 
-		foreach (var msg in messages)
+		foreach (var entry in entries)
 		{
-			_rtbLogs.AppendText(msg + Environment.NewLine);
+			if (!IsLogLevelEnabled(entry.Level))
+				continue;
+
+			AppendLogEntryToRichTextBox(entry);
 		}
 
+		TrimRenderedLogsIfNeeded();
+	}
+
+	private void RebuildLogView()
+	{
+		if (_rtbLogs is null || _rtbLogs.IsDisposed || !_rtbLogs.IsHandleCreated)
+			return;
+
+		if (_rtbLogs.InvokeRequired)
+		{
+			try
+			{
+				_rtbLogs.BeginInvoke(RebuildLogView);
+			}
+			catch (ObjectDisposedException)
+			{
+				return;
+			}
+			catch (InvalidOperationException)
+			{
+				return;
+			}
+			return;
+		}
+
+		List<AppLogEntry> snapshot;
+		lock (_logEntriesLock)
+		{
+			snapshot = _logEntries
+				.Where(entry => IsLogLevelEnabled(entry.Level))
+				.TakeLast(MaxRenderedLogEntries)
+				.ToList();
+		}
+
+		_rtbLogs.SuspendLayout();
+		try
+		{
+			_rtbLogs.Clear();
+			foreach (var entry in snapshot)
+				AppendLogEntryToRichTextBox(entry);
+		}
+		finally
+		{
+			_rtbLogs.ResumeLayout();
+		}
+	}
+
+	private void AppendLogEntryToRichTextBox(AppLogEntry entry)
+	{
+		if (_rtbLogs is null)
+			return;
+
+		_rtbLogs.SelectionStart = _rtbLogs.TextLength;
+		_rtbLogs.SelectionLength = 0;
+		_rtbLogs.SelectionColor = GetLogEntryColor(entry.Level);
+		_rtbLogs.AppendText(entry.FormatForDisplay() + Environment.NewLine);
+		_rtbLogs.SelectionColor = _rtbLogs.ForeColor;
 		_rtbLogs.SelectionStart = _rtbLogs.TextLength;
 		_rtbLogs.ScrollToCaret();
+	}
 
-		if (_rtbLogs.Lines.Length > 10000)
-			_rtbLogs.Clear();
+	private void TrimRenderedLogsIfNeeded()
+	{
+		if (_rtbLogs is null)
+			return;
+
+		if (_rtbLogs.Lines.Length > MaxRenderedLogEntries)
+			RebuildLogView();
+	}
+
+	private static Color GetLogEntryColor(AppLogLevel level)
+	{
+		return level switch
+		{
+			AppLogLevel.Debug => Color.LightGray,
+			AppLogLevel.Information => Color.Lime,
+			AppLogLevel.Warning => Color.Gold,
+			AppLogLevel.Error => Color.OrangeRed,
+			_ => Color.Lime
+		};
 	}
 
 	private void UpdateStats(RedirectStats stats)
@@ -2879,6 +3268,9 @@ internal partial class MainForm : Form
 
 	private void BtnClearLogs_Click(object? sender, EventArgs e)
 	{
+		lock (_logEntriesLock)
+			_logEntries.Clear();
+
 		_rtbLogs?.Clear();
 	}
 
@@ -3007,7 +3399,8 @@ internal partial class MainForm : Form
 			if (_engine?.IsRunning == true && _engine.IsLocalApiForwarderRunning)
 			{
 				AppendLog(
-					$"[{DateTime.Now:HH:mm:ss.fff}] [Config] Refreshing upstream model catalog for the running Local API forwarder. Restart the proxy to apply any provider changes currently shown in the UI.");
+					AppLogLevel.Information,
+					"[Config] Refreshing upstream model catalog for the running Local API forwarder. Restart the proxy to apply any provider changes currently shown in the UI.");
 				models = await _engine.RefreshLocalApiModelCatalogEntriesAsync();
 			}
 			else
@@ -3016,7 +3409,8 @@ internal partial class MainForm : Form
 					throw new InvalidOperationException("Enable local Ollama Gateway before refreshing models.");
 
 				AppendLog(
-					$"[{DateTime.Now:HH:mm:ss.fff}] [Config] Refreshing upstream model catalog using the current UI settings (proxy not running).");
+					AppLogLevel.Information,
+					"[Config] Refreshing upstream model catalog using the current UI settings (proxy not running).");
 				using var forwarder = CreateDetachedLocalApiForwarder(gatewaySettings);
 				forwarder.OnLog += AppendLog;
 				models = await forwarder.RefreshModelCatalogEntriesAsync();
@@ -3033,11 +3427,12 @@ internal partial class MainForm : Form
 				selectedDefaultModel,
 				selectedEmbeddingModel);
 			AppendLog(
-				$"[{DateTime.Now:HH:mm:ss.fff}] [Config] Upstream model refresh completed: {models.Count} models ({preview})");
+				AppLogLevel.Information,
+				$"[Config] Upstream model refresh completed: {models.Count} models ({preview})");
 		}
 		catch (Exception ex)
 		{
-			AppendLog($"[{DateTime.Now:HH:mm:ss.fff}] [Config] Upstream model refresh failed: {ex}");
+			AppendLog(AppLogLevel.Error, $"[Config] Upstream model refresh failed: {ex}");
 			MessageBox.Show(
 				$"Failed to refresh upstream models: {ex.Message}",
 				"Local API Models",
