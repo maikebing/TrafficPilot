@@ -301,11 +301,12 @@ internal sealed class LocalApiForwarder : IDisposable
 	private async Task HandleContextAsync(HttpListenerContext context, CancellationToken ct)
 	{
 		var path = context.Request.Url?.AbsolutePath ?? "/";
+     var normalizedPath = NormalizeLocalApiRequestPath(path);
 		var requestId = Interlocked.Increment(ref _requestCounter);
 		LogIncomingRequest(requestId, context.Request, path);
 		try
 		{
-			if (HttpMethodsEqual(context.Request.HttpMethod, "GET") && path.Equals("/api/tags", StringComparison.OrdinalIgnoreCase))
+            if (HttpMethodsEqual(context.Request.HttpMethod, "GET") && path.Equals("/api/tags", StringComparison.OrdinalIgnoreCase))
 			{
 				await WriteJsonAsync(context.Response, HttpStatusCode.OK, await BuildOllamaTagsResponseAsync(ct));
 				return;
@@ -359,18 +360,57 @@ internal sealed class LocalApiForwarder : IDisposable
 				return;
 			}
 
-			if (path.StartsWith("/v1/", StringComparison.OrdinalIgnoreCase)
+			if (HttpMethodsEqual(context.Request.HttpMethod, "GET")
+				&& (normalizedPath.Equals("/v1/models", StringComparison.OrdinalIgnoreCase)
+					|| normalizedPath.Equals("/models", StringComparison.OrdinalIgnoreCase)))
+			{
+				await WriteJsonAsync(context.Response, HttpStatusCode.OK, await BuildOpenAiModelsResponseAsync(ct));
+				return;
+			}
+
+			if (HttpMethodsEqual(context.Request.HttpMethod, "GET")
+				&& TryGetOpenAiModelId(normalizedPath, out var modelId))
+			{
+				await HandleGetSingleModelAsync(context, modelId, ct);
+				return;
+			}
+
+			if (HttpMethodsEqual(context.Request.HttpMethod, "POST")
+				&& (normalizedPath.Equals("/v1/chat/completions", StringComparison.OrdinalIgnoreCase)
+					|| normalizedPath.Equals("/chat/completions", StringComparison.OrdinalIgnoreCase)))
+			{
+				await HandleOpenAiChatAsync(context, ct);
+				return;
+			}
+
+			if (HttpMethodsEqual(context.Request.HttpMethod, "POST")
+				&& (normalizedPath.Equals("/v1/embeddings", StringComparison.OrdinalIgnoreCase)
+					|| normalizedPath.Equals("/embeddings", StringComparison.OrdinalIgnoreCase)))
+			{
+				await HandleOpenAiEmbeddingsAsync(context, ct);
+				return;
+			}
+
+			if (HttpMethodsEqual(context.Request.HttpMethod, "POST")
+				&& (normalizedPath.Equals("/v1/responses", StringComparison.OrdinalIgnoreCase)
+					|| normalizedPath.Equals("/responses", StringComparison.OrdinalIgnoreCase)))
+			{
+				await HandleOpenAiResponsesAsync(context, ct);
+				return;
+			}
+
+         if (normalizedPath.StartsWith("/v1/", StringComparison.OrdinalIgnoreCase)
 				|| path.StartsWith("/openai/", StringComparison.OrdinalIgnoreCase)
-				|| path.Equals("/models", StringComparison.OrdinalIgnoreCase)
-				|| path.Equals("/responses", StringComparison.OrdinalIgnoreCase)
-				|| path.Equals("/embeddings", StringComparison.OrdinalIgnoreCase)
-				|| path.Equals("/chat/completions", StringComparison.OrdinalIgnoreCase))
+				|| normalizedPath.Equals("/models", StringComparison.OrdinalIgnoreCase)
+				|| normalizedPath.Equals("/responses", StringComparison.OrdinalIgnoreCase)
+				|| normalizedPath.Equals("/embeddings", StringComparison.OrdinalIgnoreCase)
+				|| normalizedPath.Equals("/chat/completions", StringComparison.OrdinalIgnoreCase))
 			{
 				await WriteErrorAsync(
 					context.Response,
 					path,
 					HttpStatusCode.NotFound,
-					$"TrafficPilot now exposes Ollama-compatible endpoints only. Use /api/tags, /api/chat, /api/generate, /api/embed, or /api/show instead of {path}.",
+                 $"Unsupported OpenAI-compatible local API path: {path}. Use /v1/models, /v1/chat/completions, /v1/embeddings, /v1/responses, /models, /chat/completions, /embeddings, or /responses.",
 					"ollama",
 					null,
 					null,
@@ -385,6 +425,32 @@ internal sealed class LocalApiForwarder : IDisposable
 			LogError($"request #{requestId} failed on {path}: {ex.Message}");
 			await WriteErrorAsync(context.Response, path, HttpStatusCode.BadGateway, ex.Message, "ollama", null, null, null);
 		}
+	}
+
+	private static string NormalizeLocalApiRequestPath(string path)
+	{
+		if (path.StartsWith("/openai/", StringComparison.OrdinalIgnoreCase))
+			return path["/openai".Length..];
+
+		return path;
+	}
+
+	private static bool TryGetOpenAiModelId(string path, out string modelId)
+	{
+		const string v1Prefix = "/v1/models/";
+		const string modelsPrefix = "/models/";
+
+		modelId = string.Empty;
+		var prefix = path.StartsWith(v1Prefix, StringComparison.OrdinalIgnoreCase)
+			? v1Prefix
+			: path.StartsWith(modelsPrefix, StringComparison.OrdinalIgnoreCase)
+				? modelsPrefix
+				: null;
+		if (prefix is null || path.Length <= prefix.Length)
+			return false;
+
+		modelId = Uri.UnescapeDataString(path[prefix.Length..]).Trim();
+		return modelId.Length > 0;
 	}
 
 	private async Task HandleGetSingleModelAsync(HttpListenerContext context, string modelId, CancellationToken ct)
@@ -3523,9 +3589,34 @@ internal sealed class LocalApiForwarder : IDisposable
 
 	private async Task<IReadOnlyList<ModelCatalogEntry>> FetchUpstreamModelCatalogAsync(CancellationToken ct)
 	{
-		var attempts = new List<string>();
+      var attempts = new List<string>();
+		var aggregatedCatalog = new Dictionary<string, ModelCatalogEntry>(StringComparer.OrdinalIgnoreCase);
 		foreach (var providerContext in _providerContexts.Values.Where(static context => context.Provider.Enabled))
 		{
+           var providerCatalog = await TryFetchProviderModelCatalogAsync(providerContext, attempts, ct);
+			foreach (var model in providerCatalog)
+				aggregatedCatalog[model.LocalName] = model;
+		}
+
+		if (aggregatedCatalog.Count > 0)
+		{
+			if (attempts.Count > 0)
+				LogWarning($"model catalog sync partially failed: {string.Join("; ", attempts)}");
+
+			return aggregatedCatalog.Values
+				.OrderBy(static model => model.LocalName, StringComparer.OrdinalIgnoreCase)
+				.ToList();
+		}
+
+		throw new InvalidOperationException(
+			$"Unable to load an upstream model catalog. Tried: {string.Join("; ", attempts)}");
+	}
+
+	private async Task<IReadOnlyList<ModelCatalogEntry>> TryFetchProviderModelCatalogAsync(
+		GatewayProviderRuntimeContext providerContext,
+		ICollection<string> attempts,
+		CancellationToken ct)
+	{
 			foreach (var candidate in EnumerateUpstreamModelCatalogRequests(providerContext))
 			{
 				using var request = CreateUpstreamGetRequest(candidate.RequestUri, providerContext);
@@ -3545,10 +3636,8 @@ internal sealed class LocalApiForwarder : IDisposable
 
 				attempts.Add($"{providerContext.Provider.Name}: {candidate.RequestUri} -> empty catalog");
 			}
-		}
 
-		throw new InvalidOperationException(
-			$"Unable to load an upstream model catalog. Tried: {string.Join("; ", attempts)}");
+        return [];
 	}
 
 	private IEnumerable<(Uri RequestUri, string LogOperation)> EnumerateUpstreamModelCatalogRequests(GatewayProviderRuntimeContext providerContext)
