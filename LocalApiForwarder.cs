@@ -557,7 +557,9 @@ internal sealed class LocalApiForwarder : IDisposable
 			return;
 		}
 
-		requestJson["model"] = ResolveUpstreamChatModelCore(requestedModel, providerContext);
+		var upstreamModel = ResolveUpstreamChatModelCore(requestedModel, providerContext);
+		requestJson["model"] = upstreamModel;
+		RewriteUpstreamModelReferences(requestJson, requestedModel, upstreamModel);
 		using var request = CreateUpstreamRequest(providerContext.Provider.ChatEndpoint, requestJson, providerContext);
 		using var response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
 
