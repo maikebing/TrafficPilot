@@ -1006,7 +1006,9 @@ internal partial class MainForm : Form
        foreach (var pair in _gatewayProviderControls)
 		{
            ApplyGatewayProviderChanges(gatewaySettings, pair.Key, pair.Value);
-			PersistGatewayProviderApiKey(pair.Key, pair.Value.ApiKeyInput.Text);
+			var provider = FindGatewayProvider(gatewaySettings, pair.Key);
+			if (provider is not null)
+				PersistGatewayProviderApiKey(provider.Name, provider.BaseUrl, pair.Value.ApiKeyValue);
 		}
 	}
 
@@ -1323,12 +1325,12 @@ internal partial class MainForm : Form
 	}
 
 
-	private static void PersistGatewayProviderApiKey(string providerKey, string? rawApiKey)
+	private static void PersistGatewayProviderApiKey(string providerName, string? baseUrl, string? rawApiKey)
 	{
-		if (string.IsNullOrWhiteSpace(providerKey))
+		if (string.IsNullOrWhiteSpace(providerName))
 			return;
 
-		var targetName = CredentialManager.GetLocalApiTargetName(providerKey.Trim());
+		var targetName = CredentialManager.GetLocalApiTargetName(providerName.Trim(), baseUrl);
 		var apiKey = rawApiKey?.Trim() ?? string.Empty;
 		if (string.IsNullOrWhiteSpace(apiKey))
 			CredentialManager.DeleteToken(targetName);
@@ -1344,11 +1346,19 @@ internal partial class MainForm : Form
 
 		if (string.IsNullOrWhiteSpace(providerId))
 		{
-         control.ApiKeyInput.Text = string.Empty;
+			control.SetApiKey(string.Empty);
 			return;
 		}
 
-      control.ApiKeyInput.Text = CredentialManager.LoadToken(CredentialManager.GetLocalApiTargetName(providerId.Trim())) ?? string.Empty;
+		gatewaySettings ??= BuildOllamaGatewaySettings();
+		var provider = FindGatewayProvider(gatewaySettings, providerId);
+		if (provider is null)
+		{
+			control.SetApiKey(string.Empty);
+			return;
+		}
+
+		control.SetApiKey(CredentialManager.LoadToken(CredentialManager.GetLocalApiTargetName(provider.Name, provider.BaseUrl)) ?? string.Empty);
 	}
 
   private void ApplySelectedGatewayProviderChanges(OllamaGatewaySettings? gatewaySettings)
@@ -1518,16 +1528,23 @@ internal partial class MainForm : Form
 
 	private void WriteLogsToDirectory(IEnumerable<AppLogEntry> entries)
 	{
-		if (_chkLogWriteToDirectory?.Checked != true)
+		var activeSettings = GetActiveLogSettings();
+		if (!activeSettings.WriteToDirectory)
+			return;
+
+		var materialized = entries
+			.Where(entry => activeSettings.IsEnabled(entry.Level))
+			.ToList();
+		if (materialized.Count == 0)
 			return;
 
 		try
 		{
-			_logFileWriter.WriteEntries(entries.Where(entry => IsLogLevelEnabled(entry.Level)));
+			_logFileWriter.WriteEntries(materialized);
 		}
-		catch
+		catch (Exception ex)
 		{
-			// Keep file logging failures out of the main app flow.
+			Debug.WriteLine($"Failed to write app logs to '{_logFileWriter.LogDirectory}': {ex}");
 		}
 	}
 

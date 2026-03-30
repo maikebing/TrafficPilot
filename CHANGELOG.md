@@ -76,6 +76,10 @@
 - Providers 工具按钮现改为 `Preset / Enable / Disable` 语义，匹配当前固定 provider 模式。
 - Gateway 配置模型已进一步收敛为显式三家 provider 对象；每个 provider 自带自己的模型路由 `routes`，不再依赖顶层共享 `providers / routes` 运行时结构。
 - 修复 Gateway provider 基础区的 `Base URL` 写回目标：现在按实际触发控件所属 provider 回写配置，不再因页签切换时序把 A 服务商地址写到 B 服务商上，导致模型目录串位。
+- 模型目录 JSON 元数据读取已改为 `TryGetValue` 路径，不再通过 `JsonNode.GetValue<T>()` 反复触发并吞掉 `System.InvalidOperationException`，减少刷新模型时的调试噪音。
+- 模型目录探测日志已补充 provider、请求 URI、响应状态、返回体形态与解析结果；默认日志也改为显示 Debug 并写入日志目录，便于定位上游模型读取问题。
+- 修复应用日志文件写入依赖后台线程直接读取 UI `Write To Directory` 复选框的问题；现在改为使用线程安全的活动日志设置快照，因此勾选写盘后会稳定落到日志目录。
+- Provider API Key 的凭据目标名已改为严格使用“服务商名称 + Base URL”生成，不再兼容旧的 provider-id / provider-name 规则；地址相同但名称不同、或名称相同但地址不同的 key 现在会彻底分开。
 
 ### 兼容性
 - 保留 `localApiForwarder` 字段，避免旧配置立即失效。

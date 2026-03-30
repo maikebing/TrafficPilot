@@ -275,10 +275,7 @@ internal sealed class ProxyEngine : IDisposable
 
 	private async Task StartLocalApiForwarderAsync(OllamaGatewaySettings gatewaySettings)
 	{
-		var defaultProvider = GatewayProviderModelHelpers.GetDefault(gatewaySettings);
-		var apiKey = CredentialManager.LoadToken(CredentialManager.GetLocalApiTargetName(defaultProvider.Id))
-			?? CredentialManager.LoadToken(CredentialManager.GetLocalApiTargetName(defaultProvider.Name));
-		var forwarder = new LocalApiForwarder(gatewaySettings, apiKey, _gatewayRequestLogDirectory);
+		var forwarder = new LocalApiForwarder(gatewaySettings, requestLogDirectory: _gatewayRequestLogDirectory);
 		forwarder.OnLog += ForwardLocalApiForwarderLog;
 
 		try

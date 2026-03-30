@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using System.Runtime.InteropServices;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
 
@@ -796,16 +797,46 @@ internal static class CredentialManager
 		return $"TrafficPilot_ConfigSync_{provider}";
 	}
 
-	public static string GetLocalApiTargetName(string providerName)
+	public static string GetLocalApiTargetName(string providerName, string? baseUrl)
 	{
-		if (string.IsNullOrWhiteSpace(providerName))
-			return "TrafficPilot_LocalApi_Default";
+		var normalizedProviderName = NormalizeLocalApiCredentialSegment(providerName, "Default");
+		var normalizedBaseUrl = NormalizeLocalApiCredentialBaseUrl(baseUrl);
+		var baseUrlHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(normalizedBaseUrl)));
+		return $"TrafficPilot_LocalApi_{normalizedProviderName}_{baseUrlHash}";
+	}
 
-		var normalized = Regex.Replace(providerName.Trim(), @"[^A-Za-z0-9_-]+", "_");
+	private static string NormalizeLocalApiCredentialSegment(string? value, string fallback)
+	{
+		var normalized = Regex.Replace(value?.Trim() ?? string.Empty, @"[^A-Za-z0-9_-]+", "_");
 		normalized = normalized.Trim('_');
 		if (normalized.Length == 0)
-			normalized = "Default";
+			normalized = fallback;
+		if (normalized.Length > 48)
+			normalized = normalized[..48];
 
-		return $"TrafficPilot_LocalApi_{normalized}";
+		return normalized;
+	}
+
+	private static string NormalizeLocalApiCredentialBaseUrl(string? baseUrl)
+	{
+		if (string.IsNullOrWhiteSpace(baseUrl))
+			return "no-url";
+
+		var trimmed = baseUrl.Trim();
+		if (!Uri.TryCreate(trimmed, UriKind.Absolute, out var uri))
+			return trimmed;
+
+		var builder = new StringBuilder();
+		builder.Append(uri.Scheme.ToLowerInvariant());
+		builder.Append("://");
+		builder.Append(uri.IdnHost.Trim().TrimEnd('.').ToLowerInvariant());
+		if (!uri.IsDefaultPort)
+			builder.Append($":{uri.Port}");
+
+		var path = uri.AbsolutePath.Trim();
+		if (!string.IsNullOrWhiteSpace(path) && !path.Equals("/", StringComparison.Ordinal))
+			builder.Append(path.TrimEnd('/').ToLowerInvariant());
+
+		return builder.ToString();
 	}
 }

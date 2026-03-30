@@ -89,7 +89,7 @@ internal sealed class LocalApiForwarder : IDisposable
 		{
 			Timeout = Timeout.InfiniteTimeSpan
 		};
-		_providerContexts = BuildProviderContexts(_gatewaySettings, _apiKey);
+		_providerContexts = BuildProviderContexts(_gatewaySettings);
 
 		foreach (var modelName in GetConfiguredLocalModelNames())
 			_loadedModels.Add(modelName);
@@ -148,7 +148,11 @@ internal sealed class LocalApiForwarder : IDisposable
 		if (!_settings.Enabled)
 			throw new InvalidOperationException("Local API forwarding is disabled.");
 
-		LogInfo("manual model catalog refresh requested");
+		var enabledProviders = _providerContexts.Values
+			.Where(static context => context.Provider.Enabled)
+			.Select(context => $"{context.Provider.Name}<{context.Provider.BaseUrl}>")
+			.ToArray();
+		LogInfo($"manual model catalog refresh requested | providers={string.Join(", ", enabledProviders)}");
 		var catalog = await GetAdvertisedModelCatalogAsync(ct);
 		LogInfo($"manual model catalog refresh completed: {catalog.Count} models");
 		return catalog
@@ -165,7 +169,7 @@ internal sealed class LocalApiForwarder : IDisposable
 			$"startup ports: ollama={_settings.OllamaPort}, providers={_providerContexts.Count}");
 	}
 
-	private static Dictionary<string, GatewayProviderRuntimeContext> BuildProviderContexts(OllamaGatewaySettings gatewaySettings, string fallbackApiKey)
+	private static Dictionary<string, GatewayProviderRuntimeContext> BuildProviderContexts(OllamaGatewaySettings gatewaySettings)
 	{
 		var contexts = new Dictionary<string, GatewayProviderRuntimeContext>(StringComparer.OrdinalIgnoreCase);
 
@@ -174,10 +178,8 @@ internal sealed class LocalApiForwarder : IDisposable
 			if (string.IsNullOrWhiteSpace(provider.Id))
 				continue;
 
-			var providerApiKey =
-				CredentialManager.LoadToken(CredentialManager.GetLocalApiTargetName(provider.Id))
-				?? CredentialManager.LoadToken(CredentialManager.GetLocalApiTargetName(provider.Name))
-				?? fallbackApiKey;
+			var providerApiKey = CredentialManager.LoadToken(CredentialManager.GetLocalApiTargetName(provider.Name, provider.BaseUrl))
+				?? string.Empty;
 			contexts[provider.Id] = new GatewayProviderRuntimeContext(
 				provider,
 				providerApiKey,
@@ -189,7 +191,7 @@ internal sealed class LocalApiForwarder : IDisposable
 			var provider = GatewayProviderModelHelpers.GetDefault(gatewaySettings);
 			contexts[provider.Id] = new GatewayProviderRuntimeContext(
 				provider,
-				fallbackApiKey,
+				string.Empty,
 				GatewayProviderModelHelpers.GetPreferredModelSuffix(provider.Id));
 		}
 
@@ -3623,12 +3625,17 @@ internal sealed class LocalApiForwarder : IDisposable
 		ICollection<string> attempts,
 		CancellationToken ct)
 	{
-			foreach (var candidate in EnumerateUpstreamModelCatalogRequests(providerContext))
+		LogInfo($"model catalog probe started: provider='{providerContext.Provider.Name}' baseUrl={providerContext.Provider.BaseUrl}");
+		foreach (var candidate in EnumerateUpstreamModelCatalogRequests(providerContext))
+		{
+			try
 			{
+				LogDebug($"model catalog request: provider='{providerContext.Provider.Name}' uri={candidate.RequestUri}");
 				using var request = CreateUpstreamGetRequest(candidate.RequestUri, providerContext);
 				using var response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
 				var responseBody = await response.Content.ReadAsStringAsync(ct);
 				LogResponseIfEnabled(candidate.LogOperation, response.StatusCode, responseBody);
+				LogInfo($"model catalog response: provider='{providerContext.Provider.Name}' uri={candidate.RequestUri} status={(int)response.StatusCode} bytes={responseBody.Length}");
 
 				if (!response.IsSuccessStatusCode)
 				{
@@ -3638,10 +3645,25 @@ internal sealed class LocalApiForwarder : IDisposable
 
 				var catalog = ParseUpstreamModelCatalog(responseBody, providerContext);
 				if (catalog.Count > 0)
+				{
+					LogInfo($"model catalog accepted: provider='{providerContext.Provider.Name}' uri={candidate.RequestUri} models={catalog.Count}");
 					return catalog;
+				}
 
 				attempts.Add($"{providerContext.Provider.Name}: {candidate.RequestUri} -> empty catalog");
 			}
+			catch (OperationCanceledException)
+			{
+				throw;
+			}
+			catch (Exception ex)
+			{
+				attempts.Add($"{providerContext.Provider.Name}: {candidate.RequestUri} -> {ex.Message}");
+				LogWarning($"model catalog request failed: provider='{providerContext.Provider.Name}' uri={candidate.RequestUri} error={ex.Message}");
+			}
+		}
+
+		LogWarning($"model catalog probe exhausted: provider='{providerContext.Provider.Name}'");
 
         return [];
 	}
@@ -3690,19 +3712,27 @@ internal sealed class LocalApiForwarder : IDisposable
 		if (parsed is null)
 			throw new InvalidOperationException("Upstream models payload was empty.");
 
+		LogDebug($"model catalog payload: provider='{providerContext.Provider.Name}' shape={DescribeJsonNode(parsed)}");
+
 		var models = new Dictionary<string, ModelCatalogEntry>(StringComparer.OrdinalIgnoreCase);
+		var skippedEntries = 0;
 		if (parsed is JsonObject parsedObject)
 		{
-			AddModelCatalogEntries(models, parsedObject["data"] as JsonArray, providerContext);
-			AddModelCatalogEntries(models, parsedObject["models"] as JsonArray, providerContext);
+			AddModelCatalogEntries(models, parsedObject["data"] as JsonArray, providerContext, ref skippedEntries);
+			AddModelCatalogEntries(models, parsedObject["models"] as JsonArray, providerContext, ref skippedEntries);
 		}
 		else if (parsed is JsonArray parsedArray)
 		{
-			AddModelCatalogEntries(models, parsedArray, providerContext);
+			AddModelCatalogEntries(models, parsedArray, providerContext, ref skippedEntries);
 		}
 
 		if (models.Count == 0)
+		{
+			LogWarning($"model catalog payload contained no readable model ids: provider='{providerContext.Provider.Name}' shape={DescribeJsonNode(parsed)} preview={TruncateForLog(responseBody)}");
 			throw new InvalidOperationException("Upstream models payload did not include any model IDs.");
+		}
+
+		LogInfo($"model catalog parsed: provider='{providerContext.Provider.Name}' models={models.Count} skipped={skippedEntries}");
 
 		return models.Values
 			.OrderBy(static model => model.LocalName, StringComparer.OrdinalIgnoreCase)
@@ -3712,7 +3742,8 @@ internal sealed class LocalApiForwarder : IDisposable
 	private void AddModelCatalogEntries(
 		IDictionary<string, ModelCatalogEntry> catalog,
 		JsonArray? source,
-		GatewayProviderRuntimeContext providerContext)
+		GatewayProviderRuntimeContext providerContext,
+		ref int skippedEntries)
 	{
 		if (source is null)
 			return;
@@ -3721,7 +3752,10 @@ internal sealed class LocalApiForwarder : IDisposable
 		{
 			var modelId = TryReadModelId(item);
 			if (string.IsNullOrWhiteSpace(modelId))
+			{
+				skippedEntries++;
 				continue;
+			}
 
 			var normalizedId = ResolveGeneratedUpstreamModelAliasOrSelf(modelId, providerContext);
 			var localName = BuildAdvertisedUpstreamLocalName(normalizedId, null, providerContext);
@@ -4403,38 +4437,47 @@ internal sealed class LocalApiForwarder : IDisposable
 
 	private static string? TryReadString(JsonNode? node)
 	{
-		if (node is null)
+		if (node is not JsonValue value)
 			return null;
 
-		try
-		{
-			return node.GetValue<string>();
-		}
-		catch
-		{
-			return null;
-		}
+		if (value.TryGetValue<string>(out var stringValue))
+			return stringValue;
+		if (value.TryGetValue<bool>(out var boolValue))
+			return boolValue ? bool.TrueString : bool.FalseString;
+		if (value.TryGetValue<int>(out var intValue))
+			return intValue.ToString(CultureInfo.InvariantCulture);
+		if (value.TryGetValue<long>(out var longValue))
+			return longValue.ToString(CultureInfo.InvariantCulture);
+		if (value.TryGetValue<double>(out var doubleValue))
+			return doubleValue.ToString(CultureInfo.InvariantCulture);
+		if (value.TryGetValue<decimal>(out var decimalValue))
+			return decimalValue.ToString(CultureInfo.InvariantCulture);
+
+		return null;
 	}
 
 	private static long? TryReadInt64(JsonNode? node)
 	{
-		if (node is null)
+		if (node is not JsonValue value)
 			return null;
 
-		try
+		if (value.TryGetValue<long>(out var longValue))
+			return longValue;
+		if (value.TryGetValue<int>(out var intValue))
+			return intValue;
+		if (value.TryGetValue<double>(out var doubleValue)
+			&& double.IsFinite(doubleValue)
+			&& doubleValue >= long.MinValue
+			&& doubleValue <= long.MaxValue)
 		{
-			return node.GetValue<long>();
+			return (long)Math.Round(doubleValue, MidpointRounding.AwayFromZero);
 		}
-		catch
+		if (value.TryGetValue<float>(out var floatValue)
+			&& float.IsFinite(floatValue)
+			&& floatValue >= long.MinValue
+			&& floatValue <= long.MaxValue)
 		{
-		}
-
-		try
-		{
-			return node.GetValue<int>();
-		}
-		catch
-		{
+			return (long)Math.Round(floatValue, MidpointRounding.AwayFromZero);
 		}
 
 		var stringValue = TryReadString(node);
@@ -4446,16 +4489,15 @@ internal sealed class LocalApiForwarder : IDisposable
 
 	private static bool? TryReadBool(JsonNode? node)
 	{
-		if (node is null)
+		if (node is not JsonValue value)
 			return null;
 
-		try
-		{
-			return node.GetValue<bool>();
-		}
-		catch
-		{
-		}
+		if (value.TryGetValue<bool>(out var boolValue))
+			return boolValue;
+		if (value.TryGetValue<int>(out var intValue))
+			return intValue != 0;
+		if (value.TryGetValue<long>(out var longValue))
+			return longValue != 0;
 
 		var stringValue = TryReadString(node);
 		return bool.TryParse(stringValue, out var parsed) ? parsed : null;
@@ -4463,24 +4505,19 @@ internal sealed class LocalApiForwarder : IDisposable
 
 	private static double? TryReadDouble(JsonNode? node)
 	{
-		if (node is null)
+		if (node is not JsonValue value)
 			return null;
 
-		try
-		{
-			return node.GetValue<double>();
-		}
-		catch
-		{
-		}
-
-		try
-		{
-			return node.GetValue<float>();
-		}
-		catch
-		{
-		}
+		if (value.TryGetValue<double>(out var doubleValue))
+			return doubleValue;
+		if (value.TryGetValue<float>(out var floatValue))
+			return floatValue;
+		if (value.TryGetValue<decimal>(out var decimalValue))
+			return (double)decimalValue;
+		if (value.TryGetValue<long>(out var longValue))
+			return longValue;
+		if (value.TryGetValue<int>(out var intValue))
+			return intValue;
 
 		var stringValue = TryReadString(node);
 		if (string.IsNullOrWhiteSpace(stringValue))
@@ -4493,6 +4530,18 @@ internal sealed class LocalApiForwarder : IDisposable
 		return double.TryParse(normalized, NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed)
 			? parsed
 			: null;
+	}
+
+	private static string DescribeJsonNode(JsonNode? node)
+	{
+		return node switch
+		{
+			null => "null",
+			JsonArray array => $"array(count={array.Count})",
+			JsonObject obj => $"object(keys={string.Join(", ", obj.Select(static property => property.Key).Take(6))}{(obj.Count > 6 ? ", ..." : string.Empty)})",
+			JsonValue => "value",
+			_ => node.GetType().Name
+		};
 	}
 
 	private static long? TryParseScaledLong(string? value)

@@ -19,6 +19,10 @@
 > - Incoming Ollama Gateway requests are now persisted as one log file per request ID under the request log directory.
 > - Dead `Local API` designer fields and their compatibility-only MainForm code have been removed, along with the related MainForm nullability warnings.
 > - Provider base URL edits are now written back by the control's actual provider identity, preventing tab-switch timing from causing one provider to fetch another provider's models.
+> - Model catalog JSON metadata parsing no longer relies on exception-driven type probing, which avoids repeated `System.Text.Json` first-chance exceptions while refreshing models.
+> - App logs now default to showing debug entries and writing log files under the app log directory for easier gateway diagnostics.
+> - App log file writing now uses the active logging settings snapshot instead of reading the UI checkbox from a background flush thread, so selecting `Write To Directory` reliably produces log files.
+> - Provider API keys are now stored strictly by `provider name + base URL`; old provider-id based credential targets are no longer read.
 
 ## 项目简介
 

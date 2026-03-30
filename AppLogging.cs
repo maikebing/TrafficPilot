@@ -28,7 +28,7 @@ internal sealed record AppLogEntry(DateTime Timestamp, AppLogLevel Level, string
 internal sealed class AppLoggingSettings
 {
 	[JsonPropertyName("enableDebug")]
-	public bool EnableDebug { get; set; } = false;
+	public bool EnableDebug { get; set; } = true;
 
 	[JsonPropertyName("enableInformation")]
 	public bool EnableInformation { get; set; } = true;
@@ -40,7 +40,7 @@ internal sealed class AppLoggingSettings
 	public bool EnableError { get; set; } = true;
 
 	[JsonPropertyName("writeToDirectory")]
-	public bool WriteToDirectory { get; set; } = false;
+	public bool WriteToDirectory { get; set; } = true;
 
 	public bool IsEnabled(AppLogLevel level)
 	{
