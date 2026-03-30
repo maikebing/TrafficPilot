@@ -7,19 +7,19 @@ internal partial class GatewayProviderSettingsControl : UserControl
 		InitializeComponent();
 	}
 
-	public TextBox BaseUrlTextBox => _txtBaseUrlEditor;
-	public TextBox ApiKeyTextBox => _txtApiKey;
+  public TextBox BaseUrlInput => _txtBaseUrl;
+	public TextBox ApiKeyInput => _txtApiKey;
 
-	public void ApplySimpleMode(string providerLabel, string suffixHint, string baseUrlPlaceholder)
+ public void ApplyProviderPreset(string providerLabel, string suffixHint, string baseUrlPlaceholder)
 	{
-      _grpBasic.Text = $"{providerLabel} Connection";
+       _grpBasic.Text = $"{providerLabel} Connection";
 		_lblProviderUrl.Text = "Provider Base URL:";
-		_txtBaseUrlEditor.PlaceholderText = baseUrlPlaceholder;
+     _txtBaseUrl.PlaceholderText = baseUrlPlaceholder;
 
-		_lblDisplayNameEditor.Text = "Model Suffix:";
-		_txtDisplayNameEditor.ReadOnly = true;
-		_txtDisplayNameEditor.TabStop = false;
-		_txtDisplayNameEditor.Text = suffixHint;
-		_txtDisplayNameEditor.BackColor = SystemColors.Control;
+       _lblModelSuffix.Text = "Model Suffix:";
+		_txtModelSuffix.ReadOnly = true;
+		_txtModelSuffix.TabStop = false;
+		_txtModelSuffix.Text = suffixHint;
+		_txtModelSuffix.BackColor = SystemColors.Control;
 	}
 }

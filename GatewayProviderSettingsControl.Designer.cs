@@ -20,11 +20,11 @@ partial class GatewayProviderSettingsControl
 		_grpBasic = new GroupBox();
 		_basicPanel = new TableLayoutPanel();
 		_lblProviderUrl = new Label();
-		_txtBaseUrlEditor = new TextBox();
+      _txtBaseUrl = new TextBox();
 		_lblApiKey = new Label();
 		_txtApiKey = new TextBox();
-		_lblDisplayNameEditor = new Label();
-		_txtDisplayNameEditor = new TextBox();
+        _lblModelSuffix = new Label();
+		_txtModelSuffix = new TextBox();
 		_rootPanel.SuspendLayout();
 		_grpBasic.SuspendLayout();
 		_basicPanel.SuspendLayout();
@@ -61,11 +61,11 @@ partial class GatewayProviderSettingsControl
 		_basicPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 150F));
 		_basicPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
 		_basicPanel.Controls.Add(_lblProviderUrl, 0, 0);
-		_basicPanel.Controls.Add(_txtBaseUrlEditor, 1, 0);
+      _basicPanel.Controls.Add(_txtBaseUrl, 1, 0);
 		_basicPanel.Controls.Add(_lblApiKey, 0, 1);
 		_basicPanel.Controls.Add(_txtApiKey, 1, 1);
-		_basicPanel.Controls.Add(_lblDisplayNameEditor, 0, 2);
-		_basicPanel.Controls.Add(_txtDisplayNameEditor, 1, 2);
+      _basicPanel.Controls.Add(_lblModelSuffix, 0, 2);
+		_basicPanel.Controls.Add(_txtModelSuffix, 1, 2);
 		_basicPanel.Dock = DockStyle.Fill;
 		_basicPanel.Location = new Point(3, 19);
 		_basicPanel.Name = "_basicPanel";
@@ -85,15 +85,15 @@ partial class GatewayProviderSettingsControl
 		_lblProviderUrl.Text = "Provider Base URL:";
 		_lblProviderUrl.TextAlign = ContentAlignment.MiddleRight;
 		// 
-		// _txtBaseUrlEditor
+        // _txtBaseUrl
 		// 
-		_txtBaseUrlEditor.Dock = DockStyle.Fill;
-		_txtBaseUrlEditor.Location = new Point(153, 5);
-		_txtBaseUrlEditor.Margin = new Padding(3, 5, 3, 5);
-		_txtBaseUrlEditor.Name = "_txtBaseUrlEditor";
-		_txtBaseUrlEditor.PlaceholderText = "https://api.openai.com/v1/";
-		_txtBaseUrlEditor.Size = new Size(551, 23);
-		_txtBaseUrlEditor.TabIndex = 1;
+        _txtBaseUrl.Dock = DockStyle.Fill;
+		_txtBaseUrl.Location = new Point(153, 5);
+		_txtBaseUrl.Margin = new Padding(3, 5, 3, 5);
+		_txtBaseUrl.Name = "_txtBaseUrl";
+		_txtBaseUrl.PlaceholderText = "https://api.openai.com/v1/";
+		_txtBaseUrl.Size = new Size(551, 23);
+		_txtBaseUrl.TabIndex = 1;
 		// 
 		// _lblApiKey
 		// 
@@ -114,23 +114,23 @@ partial class GatewayProviderSettingsControl
 		_txtApiKey.Size = new Size(551, 23);
 		_txtApiKey.TabIndex = 3;
 		// 
-		// _lblDisplayNameEditor
+        // _lblModelSuffix
 		// 
-		_lblDisplayNameEditor.Anchor = AnchorStyles.Left | AnchorStyles.Right;
-		_lblDisplayNameEditor.Location = new Point(3, 68);
-		_lblDisplayNameEditor.Name = "_lblDisplayNameEditor";
-		_lblDisplayNameEditor.Size = new Size(144, 23);
-     _lblDisplayNameEditor.Text = "Model Suffix:";
-		_lblDisplayNameEditor.TextAlign = ContentAlignment.MiddleRight;
+      _lblModelSuffix.Anchor = AnchorStyles.Left | AnchorStyles.Right;
+		_lblModelSuffix.Location = new Point(3, 68);
+		_lblModelSuffix.Name = "_lblModelSuffix";
+		_lblModelSuffix.Size = new Size(144, 23);
+		_lblModelSuffix.Text = "Model Suffix:";
+        _lblModelSuffix.TextAlign = ContentAlignment.MiddleRight;
 		// 
-		// _txtDisplayNameEditor
+        // _txtModelSuffix
 		// 
-		_txtDisplayNameEditor.Dock = DockStyle.Fill;
-		_txtDisplayNameEditor.Location = new Point(153, 68);
-		_txtDisplayNameEditor.Name = "_txtDisplayNameEditor";
-		_txtDisplayNameEditor.ReadOnly = true;
-		_txtDisplayNameEditor.Size = new Size(551, 23);
-		_txtDisplayNameEditor.TabIndex = 5;
+        _txtModelSuffix.Dock = DockStyle.Fill;
+		_txtModelSuffix.Location = new Point(153, 68);
+		_txtModelSuffix.Name = "_txtModelSuffix";
+		_txtModelSuffix.ReadOnly = true;
+		_txtModelSuffix.Size = new Size(551, 23);
+		_txtModelSuffix.TabIndex = 5;
 		// 
 		// GatewayProviderSettingsControl
 		// 
@@ -150,9 +150,9 @@ partial class GatewayProviderSettingsControl
 	private GroupBox _grpBasic;
 	private TableLayoutPanel _basicPanel;
 	private Label _lblProviderUrl;
-	private TextBox _txtBaseUrlEditor;
+  private TextBox _txtBaseUrl;
 	private Label _lblApiKey;
 	private TextBox _txtApiKey;
-	private Label _lblDisplayNameEditor;
-	private TextBox _txtDisplayNameEditor;
+    private Label _lblModelSuffix;
+	private TextBox _txtModelSuffix;
 }

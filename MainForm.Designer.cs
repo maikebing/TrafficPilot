@@ -182,7 +182,6 @@ partial class MainForm
     private TextBox? _txtLocalApiAdditionalHeaders;
     private Label? _lblLocalApiModelMappings;
     private TextBox? _txtLocalApiModelMappings;
-    private TextBox? _txtGatewayProviderBaseUrl2;
     private Label? _lblLocalApiDiagnostics;
     private FlowLayoutPanel? _localApiLoggingPanel;
     private CheckBox? _chkLocalApiRequestResponseLogging;
