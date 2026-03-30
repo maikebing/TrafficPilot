@@ -39,6 +39,44 @@ internal partial class GatewayProviderSettingsControl : UserControl
 	public TextBox ModelMetadataTextBox => _txtModelMetadata;
 	public Button CopyModelMetadataButton => _btnCopyModelMetadata;
 
+	public void ApplySimpleMode(string providerLabel, string suffixHint, string baseUrlPlaceholder)
+	{
+		_grpBasic.Text = "Connection";
+		_lblProviderUrl.Text = "Provider Base URL:";
+		_txtBaseUrlEditor.PlaceholderText = baseUrlPlaceholder;
+		_txtBaseUrl.PlaceholderText = baseUrlPlaceholder;
+
+		_lblDisplayNameEditor.Text = "Model Suffix:";
+		_txtDisplayNameEditor.ReadOnly = true;
+		_txtDisplayNameEditor.TabStop = false;
+		_txtDisplayNameEditor.Text = suffixHint;
+		_txtDisplayNameEditor.BackColor = SystemColors.Control;
+		_txtDisplayName.ReadOnly = true;
+		_txtDisplayName.Text = providerLabel;
+
+		_btnRefreshModels.Visible = false;
+		_btnRefreshModelsApply.Visible = false;
+		_btnCopyModelMetadata.Visible = false;
+		_btnDetectProvider.Visible = false;
+		_lblModelPreview.Visible = false;
+		_lstModelPreview.Visible = false;
+		_lblModelMetadata.Visible = false;
+		_txtModelMetadata.Visible = false;
+		_chkShowAdvanced.Checked = false;
+		_chkShowAdvanced.Visible = false;
+		_grpAdvanced.Visible = false;
+
+		if (_basicPanel.RowStyles.Count >= 6)
+		{
+			_basicPanel.RowStyles[3].Height = 0;
+			_basicPanel.RowStyles[3].SizeType = SizeType.Absolute;
+			_basicPanel.RowStyles[4].Height = 0;
+			_basicPanel.RowStyles[4].SizeType = SizeType.Absolute;
+			_basicPanel.RowStyles[5].Height = 0;
+			_basicPanel.RowStyles[5].SizeType = SizeType.Absolute;
+		}
+	}
+
 	private void BaseUrlEditor_TextChanged(object? sender, EventArgs e)
 	{
 		SyncText(_txtBaseUrlEditor, _txtBaseUrl);

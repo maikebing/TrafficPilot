@@ -35,6 +35,7 @@ internal class ProxyConfigModel
 	public OllamaGatewaySettings? OllamaGateway { get; set; }
 
 	[JsonPropertyName("localApiForwarder")]
+	[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
 	public LocalApiForwarderSettings? LocalApiForwarder { get; set; }
 
 	public ProxyConfigModel() { }
@@ -159,6 +160,9 @@ internal class OllamaGatewaySettings
 
 	[JsonPropertyName("geminiProvider")]
 	public GeminiGatewayProviderSettings GeminiProvider { get; set; } = new();
+
+	[JsonPropertyName("xaiProvider")]
+	public XAiGatewayProviderSettings XAiProvider { get; set; } = new();
 
 	[JsonPropertyName("requestResponseLogging")]
 	public LocalApiRequestResponseLoggingSettings RequestResponseLogging { get; set; } = new();
@@ -433,6 +437,86 @@ internal sealed class GeminiGatewayProviderSettings : IGatewayProviderModel
 	}
 }
 
+internal sealed class XAiGatewayProviderSettings : IGatewayProviderModel
+{
+	[JsonPropertyName("id")]
+	public string Id { get; set; } = "xai";
+
+	[JsonPropertyName("enabled")]
+	public bool Enabled { get; set; } = true;
+
+	[JsonPropertyName("protocol")]
+	public string Protocol { get; set; } = "OpenAICompatible";
+
+	[JsonPropertyName("name")]
+	public string Name { get; set; } = "xAI";
+
+	[JsonPropertyName("baseUrl")]
+	public string BaseUrl { get; set; } = "https://api.x.ai/v1/";
+
+	[JsonPropertyName("defaultModel")]
+	public string DefaultModel { get; set; } = string.Empty;
+
+	[JsonPropertyName("defaultEmbeddingModel")]
+	public string DefaultEmbeddingModel { get; set; } = string.Empty;
+
+	[JsonPropertyName("cachedModels")]
+	public List<string> CachedModels { get; set; } = [];
+
+	[JsonPropertyName("cachedEmbeddingModels")]
+	public List<string> CachedEmbeddingModels { get; set; } = [];
+
+	[JsonPropertyName("cachedMessageModels")]
+	public List<string> CachedMessageModels { get; set; } = [];
+
+	[JsonPropertyName("cachedOtherModels")]
+	public List<string> CachedOtherModels { get; set; } = [];
+
+	[JsonPropertyName("cachedModerationModels")]
+	public List<string> CachedModerationModels { get; set; } = [];
+
+	[JsonPropertyName("cachedUnknownModels")]
+	public List<string> CachedUnknownModels { get; set; } = [];
+
+	[JsonPropertyName("cachedModelSummaries")]
+	public Dictionary<string, string> CachedModelSummaries { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+
+	[JsonPropertyName("authType")]
+	public string AuthType { get; set; } = "Bearer";
+
+	[JsonPropertyName("authHeaderName")]
+	public string AuthHeaderName { get; set; } = "Authorization";
+
+	[JsonPropertyName("chatEndpoint")]
+	public string ChatEndpoint { get; set; } = "chat/completions";
+
+	[JsonPropertyName("embeddingsEndpoint")]
+	public string EmbeddingsEndpoint { get; set; } = string.Empty;
+
+	[JsonPropertyName("responsesEndpoint")]
+	public string ResponsesEndpoint { get; set; } = "responses";
+
+	[JsonPropertyName("additionalHeaders")]
+	public List<LocalApiHeaderSetting> AdditionalHeaders { get; set; } = [];
+
+	[JsonPropertyName("routes")]
+	public List<GatewayRouteSettings> Routes { get; set; } = [];
+
+	[JsonPropertyName("capabilities")]
+	public GatewayProviderCapabilitySettings Capabilities { get; set; } = new();
+
+	public XAiGatewayProviderSettings()
+	{
+		Capabilities = new GatewayProviderCapabilitySettings
+		{
+			SupportsChat = true,
+			SupportsEmbeddings = false,
+			SupportsResponses = true,
+			SupportsStreaming = true
+		};
+	}
+}
+
 internal static class GatewayProviderModelHelpers
 {
 	public static string NormalizeProviderId(string? providerId)
@@ -443,6 +527,9 @@ internal static class GatewayProviderModelHelpers
 		return providerId.Trim().ToLowerInvariant() switch
 		{
 			"gemini" => "google",
+			"x.ai" => "xai",
+			"x-ai" => "xai",
+			"grok" => "xai",
 			var value => value
 		};
 	}
@@ -453,6 +540,7 @@ internal static class GatewayProviderModelHelpers
 		yield return settings.OpenAIProvider ?? new OpenAiGatewayProviderSettings();
 		yield return settings.AnthropicProvider ?? new AnthropicGatewayProviderSettings();
 		yield return settings.GeminiProvider ?? new GeminiGatewayProviderSettings();
+		yield return settings.XAiProvider ?? new XAiGatewayProviderSettings();
 	}
 
 	public static IGatewayProviderModel? Find(OllamaGatewaySettings? settings, string? providerId)
@@ -465,6 +553,7 @@ internal static class GatewayProviderModelHelpers
 			"openai" => settings.OpenAIProvider,
 			"anthropic" => settings.AnthropicProvider,
 			"google" => settings.GeminiProvider,
+			"xai" => settings.XAiProvider,
 			_ => null
 		};
 	}
@@ -492,6 +581,14 @@ internal static class GatewayProviderModelHelpers
 			return "google";
 		}
 
+		if (combined.Contains("x.ai", StringComparison.OrdinalIgnoreCase)
+			|| combined.Contains("api.x.ai", StringComparison.OrdinalIgnoreCase)
+			|| combined.Contains("xai", StringComparison.OrdinalIgnoreCase)
+			|| combined.Contains("grok", StringComparison.OrdinalIgnoreCase))
+		{
+			return "xai";
+		}
+
 		return "openai";
 	}
 
@@ -501,9 +598,58 @@ internal static class GatewayProviderModelHelpers
 		settings.OpenAIProvider ??= new OpenAiGatewayProviderSettings();
 		settings.AnthropicProvider ??= new AnthropicGatewayProviderSettings();
 		settings.GeminiProvider ??= new GeminiGatewayProviderSettings();
+		settings.XAiProvider ??= new XAiGatewayProviderSettings();
 		NormalizeProvider(settings.OpenAIProvider, "openai");
 		NormalizeProvider(settings.AnthropicProvider, "anthropic");
 		NormalizeProvider(settings.GeminiProvider, "google");
+		NormalizeProvider(settings.XAiProvider, "xai");
+	}
+
+	public static string GetPreferredModelSuffix(string? providerId)
+	{
+		return NormalizeProviderId(providerId) switch
+		{
+			"openai" => "openai",
+			"anthropic" => "anthropic",
+			"google" => "gemini",
+			"xai" => "xai",
+			_ => "upstream"
+		};
+	}
+
+	public static IReadOnlyList<string> GetModelSuffixAliases(string? providerId)
+	{
+		return NormalizeProviderId(providerId) switch
+		{
+			"openai" => ["openai", "oai", "oa"],
+			"anthropic" => ["anthropic", "claude", "ap"],
+			"google" => ["gemini", "google", "gem", "ggl"],
+			"xai" => ["xai", "grok", "x"],
+			_ => []
+		};
+	}
+
+	public static string? TryResolveProviderIdFromModelName(string? modelName)
+	{
+		if (string.IsNullOrWhiteSpace(modelName))
+			return null;
+
+		var trimmed = modelName.Trim();
+		var suffixIndex = trimmed.LastIndexOf('@');
+		if (suffixIndex <= 0 || suffixIndex >= trimmed.Length - 1)
+			return null;
+
+		var suffix = trimmed[(suffixIndex + 1)..].Trim();
+		if (suffix.Length == 0)
+			return null;
+
+		foreach (var providerId in new[] { "openai", "anthropic", "google", "xai" })
+		{
+			if (GetModelSuffixAliases(providerId).Contains(suffix, StringComparer.OrdinalIgnoreCase))
+				return providerId;
+		}
+
+		return null;
 	}
 
 	public static void ApplyLegacyProvider(OllamaGatewaySettings settings, LegacyGatewayProviderModel legacyProvider)
@@ -863,7 +1009,8 @@ internal sealed class ProxyConfigManager
 		{
 			OpenAIProvider = new OpenAiGatewayProviderSettings(),
 			AnthropicProvider = new AnthropicGatewayProviderSettings(),
-			GeminiProvider = new GeminiGatewayProviderSettings()
+			GeminiProvider = new GeminiGatewayProviderSettings(),
+			XAiProvider = new XAiGatewayProviderSettings()
 		};
 	}
 
@@ -976,6 +1123,7 @@ internal sealed class ProxyConfigManager
 		settings.OpenAIProvider.Enabled = false;
 		settings.AnthropicProvider.Enabled = false;
 		settings.GeminiProvider.Enabled = false;
+		settings.XAiProvider.Enabled = false;
 
 		var targetProvider = GatewayProviderModelHelpers.Find(settings, providerId) ?? settings.OpenAIProvider;
 		targetProvider.Id = providerId;

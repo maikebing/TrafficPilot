@@ -3,6 +3,12 @@
 
 [更新日志](CHANGELOG.md)
 
+> 2026-03-30 update:
+> - Local gateway now exposes Ollama-compatible endpoints only.
+> - Built-in providers: `OpenAI`, `Anthropic`, `Gemini`, `xAI`.
+> - Model routing is suffix-based: `model@openai`, `model@anthropic`, `model@gemini`, `model@xai`.
+> - Supported shorthand aliases: `@oai`, `@claude`, `@google`, `@grok`.
+
 ## 项目简介
 
 由人类指导 AI 编写的 TrafficPilot 是一款 Windows 平台的网络流量代理转发工具，能够将指定进程的网络流量重定向到代理服务器以及进行 DNS 覆写。该工具提供图形化配置界面、系统托盘驻留和实时日志统计功能，特别适合为无法直接设置代理的软件转发网络请求。在多网络环境下，该工具可以让不同的软件使用不同的网络出口，非常实用。

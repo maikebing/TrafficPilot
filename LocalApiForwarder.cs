@@ -4,6 +4,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Globalization;
+using System.Text.RegularExpressions;
 
 namespace TrafficPilot;
 
@@ -69,9 +70,20 @@ internal sealed class LocalApiForwarder : IDisposable
 	}
 
 	public LocalApiForwarder(LocalApiForwarderSettings settings, string? apiKey)
+		: this(BuildCompatibilitySettings(settings), ProxyConfigManager.BuildGatewaySettingsFromLegacy(settings), apiKey)
+	{
+	}
+
+	public LocalApiForwarder(OllamaGatewaySettings gatewaySettings, string? apiKey = null)
+		: this(BuildCompatibilitySettings(gatewaySettings), gatewaySettings, apiKey)
+	{
+	}
+
+	private LocalApiForwarder(LocalApiForwarderSettings settings, OllamaGatewaySettings gatewaySettings, string? apiKey)
 	{
 		_settings = settings ?? throw new ArgumentNullException(nameof(settings));
-		_gatewaySettings = ProxyConfigManager.BuildGatewaySettingsFromLegacy(settings);
+		_gatewaySettings = gatewaySettings ?? throw new ArgumentNullException(nameof(gatewaySettings));
+		GatewayProviderModelHelpers.Normalize(_gatewaySettings);
 		_apiKey = apiKey?.Trim() ?? string.Empty;
 		_httpClient = new HttpClient
 		{
@@ -83,12 +95,37 @@ internal sealed class LocalApiForwarder : IDisposable
 			_loadedModels.Add(modelName);
 	}
 
+	private static LocalApiForwarderSettings BuildCompatibilitySettings(LocalApiForwarderSettings settings)
+	{
+		settings ??= new LocalApiForwarderSettings();
+		settings.Provider ??= new LocalApiProviderSettings();
+		settings.RequestResponseLogging ??= new LocalApiRequestResponseLoggingSettings();
+		settings.ModelMappings ??= [];
+		return settings;
+	}
+
+	private static LocalApiForwarderSettings BuildCompatibilitySettings(OllamaGatewaySettings gatewaySettings)
+	{
+		gatewaySettings ??= new OllamaGatewaySettings();
+		GatewayProviderModelHelpers.Normalize(gatewaySettings);
+		return new LocalApiForwarderSettings
+		{
+			Enabled = gatewaySettings.Enabled,
+			OllamaPort = gatewaySettings.OllamaPort,
+			FoundryPort = gatewaySettings.OpenAiPort,
+			RequestResponseLogging = gatewaySettings.RequestResponseLogging ?? new LocalApiRequestResponseLoggingSettings(),
+			IncludeErrorDiagnostics = gatewaySettings.IncludeErrorDiagnostics,
+			Provider = new LocalApiProviderSettings(),
+			ModelMappings = []
+		};
+	}
+
 	public Task StartAsync()
 	{
 		if (!_settings.Enabled)
 			return Task.CompletedTask;
 
-		ValidateSettings(_settings);
+		ValidateSettings(_gatewaySettings);
 		LogStartupConfiguration();
 
 		foreach (var port in GetDistinctPorts())
@@ -131,7 +168,7 @@ internal sealed class LocalApiForwarder : IDisposable
 		LogInfo(
 			$"startup config: provider='{provider.Name}', protocol={provider.Protocol}, baseUrl={provider.BaseUrl}, defaultModel={FormatSettingValue(provider.DefaultModel)}, embeddingModel={FormatSettingValue(provider.DefaultEmbeddingModel)}");
 		LogInfo(
-			$"startup ports: ollama={_settings.OllamaPort}, foundry={_settings.FoundryPort}, providers={_providerContexts.Count}, modelMappings={routeCount}");
+			$"startup ports: ollama={_settings.OllamaPort}, providers={_providerContexts.Count}, modelMappings={routeCount}");
 	}
 
 	private static Dictionary<string, GatewayProviderRuntimeContext> BuildProviderContexts(OllamaGatewaySettings gatewaySettings, string fallbackApiKey)
@@ -143,7 +180,10 @@ internal sealed class LocalApiForwarder : IDisposable
 			if (string.IsNullOrWhiteSpace(provider.Id))
 				continue;
 
-			var providerApiKey = CredentialManager.LoadToken(CredentialManager.GetLocalApiTargetName(provider.Name)) ?? fallbackApiKey;
+			var providerApiKey =
+				CredentialManager.LoadToken(CredentialManager.GetLocalApiTargetName(provider.Id))
+				?? CredentialManager.LoadToken(CredentialManager.GetLocalApiTargetName(provider.Name))
+				?? fallbackApiKey;
 			var routeMap = provider.Routes
 				.Where(static route => !string.IsNullOrWhiteSpace(route.LocalModel) && !string.IsNullOrWhiteSpace(route.UpstreamModel))
 				.GroupBy(static route => route.LocalModel.Trim(), StringComparer.OrdinalIgnoreCase)
@@ -155,7 +195,7 @@ internal sealed class LocalApiForwarder : IDisposable
 			contexts[provider.Id] = new GatewayProviderRuntimeContext(
 				provider,
 				providerApiKey,
-				BuildProviderModelAlias(provider.Name, provider.BaseUrl),
+				GatewayProviderModelHelpers.GetPreferredModelSuffix(provider.Id),
 				routeMap);
 		}
 
@@ -165,7 +205,7 @@ internal sealed class LocalApiForwarder : IDisposable
 			contexts[provider.Id] = new GatewayProviderRuntimeContext(
 				provider,
 				fallbackApiKey,
-				BuildProviderModelAlias(provider.Name, provider.BaseUrl),
+				GatewayProviderModelHelpers.GetPreferredModelSuffix(provider.Id),
 				new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase));
 		}
 
@@ -182,10 +222,24 @@ internal sealed class LocalApiForwarder : IDisposable
 	{
 		if (!string.IsNullOrWhiteSpace(localModel))
 		{
+			var directProviderId = GatewayProviderModelHelpers.TryResolveProviderIdFromModelName(localModel);
+			if (!string.IsNullOrWhiteSpace(directProviderId)
+				&& _providerContexts.TryGetValue(directProviderId, out var directContext)
+				&& directContext.Provider.Enabled)
+			{
+				return directContext;
+			}
+
+			var normalizedModel = localModel.Trim();
+			var strippedModel = StripKnownProviderSuffix(normalizedModel);
 			foreach (var context in _providerContexts.Values)
 			{
-				if (context.ModelRouteMap.ContainsKey(localModel.Trim()))
+				if (context.Provider.Enabled
+					&& (context.ModelRouteMap.ContainsKey(normalizedModel)
+					|| (!string.IsNullOrWhiteSpace(strippedModel) && context.ModelRouteMap.ContainsKey(strippedModel))))
+				{
 					return context;
+				}
 			}
 		}
 
@@ -222,19 +276,34 @@ internal sealed class LocalApiForwarder : IDisposable
 	{
 		if (settings.OllamaPort == 0)
 			throw new InvalidOperationException("Ollama port must be greater than zero.");
-		if (settings.FoundryPort == 0)
-			throw new InvalidOperationException("Foundry port must be greater than zero.");
-		if (settings.Provider is null)
-			throw new InvalidOperationException("A third-party provider must be configured.");
-		if (string.IsNullOrWhiteSpace(settings.Provider.BaseUrl))
-			throw new InvalidOperationException("The third-party provider Base URL is required.");
-		if (!Uri.TryCreate(settings.Provider.BaseUrl, UriKind.Absolute, out var baseUri)
+	}
+
+	private static void ValidateSettings(OllamaGatewaySettings settings)
+	{
+		if (settings.OllamaPort == 0)
+			throw new InvalidOperationException("Ollama port must be greater than zero.");
+
+		var enabledProviders = GatewayProviderModelHelpers.Enumerate(settings)
+			.Where(static provider => provider.Enabled)
+			.ToList();
+		if (enabledProviders.Count == 0)
+			throw new InvalidOperationException("At least one upstream provider must be enabled.");
+
+		foreach (var provider in enabledProviders)
+		{
+			if (string.IsNullOrWhiteSpace(provider.BaseUrl))
+				throw new InvalidOperationException($"Provider '{provider.Name}' requires a Base URL.");
+
+			if (!Uri.TryCreate(provider.BaseUrl, UriKind.Absolute, out var baseUri)
 			|| (baseUri.Scheme != Uri.UriSchemeHttp && baseUri.Scheme != Uri.UriSchemeHttps))
-			throw new InvalidOperationException("The third-party provider Base URL must be an absolute HTTP or HTTPS address.");
+			{
+				throw new InvalidOperationException($"Provider '{provider.Name}' Base URL must be an absolute HTTP or HTTPS address.");
+			}
+		}
 	}
 
 	private IEnumerable<ushort> GetDistinctPorts() =>
-		new[] { _settings.OllamaPort, _settings.FoundryPort }.Distinct();
+		new[] { _settings.OllamaPort };
 
 	private async Task AcceptLoopAsync(HttpListener listener, CancellationToken ct)
 	{
@@ -307,80 +376,6 @@ internal sealed class LocalApiForwarder : IDisposable
 				return;
 			}
 
-			if (HttpMethodsEqual(context.Request.HttpMethod, "GET") && path.Equals("/openai/status", StringComparison.OrdinalIgnoreCase))
-			{
-				await WriteJsonAsync(context.Response, HttpStatusCode.OK, BuildFoundryLocalStatusResponse());
-				return;
-			}
-
-			if (HttpMethodsEqual(context.Request.HttpMethod, "GET") && path.Equals("/openai/models", StringComparison.OrdinalIgnoreCase))
-			{
-				await WriteJsonAsync(context.Response, HttpStatusCode.OK, await BuildFoundryLocalModelsResponseAsync(ct));
-				return;
-			}
-
-			if (HttpMethodsEqual(context.Request.HttpMethod, "GET") && path.Equals("/openai/loadedmodels", StringComparison.OrdinalIgnoreCase))
-			{
-				await WriteJsonAsync(context.Response, HttpStatusCode.OK, BuildFoundryLocalModelsResponse(GetLoadedModelNames()));
-				return;
-			}
-
-			if (HttpMethodsEqual(context.Request.HttpMethod, "GET") && path.Equals("/foundry/list", StringComparison.OrdinalIgnoreCase))
-			{
-				await WriteJsonAsync(context.Response, HttpStatusCode.OK, await BuildFoundryLocalCatalogResponseAsync(ct));
-				return;
-			}
-
-			if (HttpMethodsEqual(context.Request.HttpMethod, "GET") && path.Equals("/openai/unloadall", StringComparison.OrdinalIgnoreCase))
-			{
-				ClearLoadedModels();
-				await WriteEmptyAsync(context.Response, HttpStatusCode.OK);
-				return;
-			}
-
-			if (HttpMethodsEqual(context.Request.HttpMethod, "GET") && TryExtractModelName(path, "/openai/load/", out var modelToLoad))
-			{
-				MarkModelLoaded(modelToLoad);
-				await WriteEmptyAsync(context.Response, HttpStatusCode.OK);
-				return;
-			}
-
-			if (HttpMethodsEqual(context.Request.HttpMethod, "GET") && TryExtractModelName(path, "/openai/unload/", out var modelToUnload))
-			{
-				MarkModelUnloaded(modelToUnload);
-				await WriteEmptyAsync(context.Response, HttpStatusCode.OK);
-				return;
-			}
-
-			if (HttpMethodsEqual(context.Request.HttpMethod, "GET") && path.Equals("/openai/getgpudevice", StringComparison.OrdinalIgnoreCase))
-			{
-				await WritePlainTextAsync(context.Response, HttpStatusCode.OK, "0", "application/json");
-				return;
-			}
-
-			if (HttpMethodsEqual(context.Request.HttpMethod, "GET") && TryExtractModelName(path, "/openai/setgpudevice/", out _))
-			{
-				await WriteEmptyAsync(context.Response, HttpStatusCode.OK);
-				return;
-			}
-
-			if (HttpMethodsEqual(context.Request.HttpMethod, "GET")
-				&& (path.Equals("/v1/models", StringComparison.OrdinalIgnoreCase)
-					|| path.Equals("/models", StringComparison.OrdinalIgnoreCase)))
-			{
-				await WriteJsonAsync(context.Response, HttpStatusCode.OK, await BuildOpenAiModelsResponseAsync(ct));
-				return;
-			}
-
-			if (HttpMethodsEqual(context.Request.HttpMethod, "GET")
-				&& (TryExtractModelName(path, "/v1/models/", out var singleModelId)
-					|| TryExtractModelName(path, "/models/", out singleModelId)
-					|| TryExtractModelName(path, "/openai/models/", out singleModelId)))
-			{
-				await HandleGetSingleModelAsync(context, singleModelId, ct);
-				return;
-			}
-
 			if (HttpMethodsEqual(context.Request.HttpMethod, "HEAD"))
 			{
 				await WriteEmptyAsync(context.Response, HttpStatusCode.OK);
@@ -407,39 +402,31 @@ internal sealed class LocalApiForwarder : IDisposable
 				return;
 			}
 
-			if (HttpMethodsEqual(context.Request.HttpMethod, "POST")
-				&& (path.Equals("/v1/chat/completions", StringComparison.OrdinalIgnoreCase)
-					|| path.Equals("/chat/completions", StringComparison.OrdinalIgnoreCase)
-					|| path.Equals("/openai/chat/completions", StringComparison.OrdinalIgnoreCase)))
+			if (path.StartsWith("/v1/", StringComparison.OrdinalIgnoreCase)
+				|| path.StartsWith("/openai/", StringComparison.OrdinalIgnoreCase)
+				|| path.Equals("/models", StringComparison.OrdinalIgnoreCase)
+				|| path.Equals("/responses", StringComparison.OrdinalIgnoreCase)
+				|| path.Equals("/embeddings", StringComparison.OrdinalIgnoreCase)
+				|| path.Equals("/chat/completions", StringComparison.OrdinalIgnoreCase))
 			{
-				await HandleOpenAiChatAsync(context, ct);
+				await WriteErrorAsync(
+					context.Response,
+					path,
+					HttpStatusCode.NotFound,
+					$"TrafficPilot now exposes Ollama-compatible endpoints only. Use /api/tags, /api/chat, /api/generate, /api/embed, or /api/show instead of {path}.",
+					"ollama",
+					null,
+					null,
+					null);
 				return;
 			}
 
-			if (HttpMethodsEqual(context.Request.HttpMethod, "POST")
-				&& (path.Equals("/v1/embeddings", StringComparison.OrdinalIgnoreCase)
-					|| path.Equals("/embeddings", StringComparison.OrdinalIgnoreCase)
-					|| path.Equals("/openai/embeddings", StringComparison.OrdinalIgnoreCase)))
-			{
-				await HandleOpenAiEmbeddingsAsync(context, ct);
-				return;
-			}
-
-			if (HttpMethodsEqual(context.Request.HttpMethod, "POST")
-				&& (path.Equals("/v1/responses", StringComparison.OrdinalIgnoreCase)
-					|| path.Equals("/responses", StringComparison.OrdinalIgnoreCase)))
-			{
-				await HandleOpenAiResponsesAsync(context, ct);
-				return;
-			}
-
-			await WriteErrorAsync(context.Response, path, HttpStatusCode.NotFound, $"Unsupported local API path: {path}", "openai", null, null, null);
+			await WriteErrorAsync(context.Response, path, HttpStatusCode.NotFound, $"Unsupported local API path: {path}", "ollama", null, null, null);
 		}
 		catch (Exception ex) when (ex is not OperationCanceledException)
 		{
 			LogInfo($"request #{requestId} failed on {path}: {ex.Message}");
-			var style = path.StartsWith("/api/", StringComparison.OrdinalIgnoreCase) ? "ollama" : "openai";
-			await WriteErrorAsync(context.Response, path, HttpStatusCode.BadGateway, ex.Message, style, null, null, null);
+			await WriteErrorAsync(context.Response, path, HttpStatusCode.BadGateway, ex.Message, "ollama", null, null, null);
 		}
 	}
 
@@ -449,7 +436,7 @@ internal sealed class LocalApiForwarder : IDisposable
 		MarkModelLoaded(modelId);
 
 		var catalogEntry = await GetAdvertisedModelCatalogEntryAsync(modelId, ct);
-		var ownedBy = catalogEntry?.OwnedBy ?? _settings.Provider.Name;
+		var ownedBy = catalogEntry?.OwnedBy ?? GetDefaultProviderContext().Provider.Name;
 		var created = catalogEntry?.CreatedUnixTime ?? DateTimeOffset.UtcNow.ToUnixTimeSeconds();
 
 		var modelObject = new JsonObject
@@ -955,22 +942,27 @@ internal sealed class LocalApiForwarder : IDisposable
 	private void ApplyAuthentication(HttpRequestMessage request, GatewayProviderRuntimeContext providerContext)
 	{
 		if (string.IsNullOrWhiteSpace(providerContext.ApiKey))
+		{
+			if (IsAnthropicProtocol(providerContext))
+				request.Headers.TryAddWithoutValidation("anthropic-version", "2023-06-01");
 			return;
+		}
 
 		var authType = (providerContext.Provider.AuthType ?? "Bearer").Trim();
 		if (authType.Equals("Bearer", StringComparison.OrdinalIgnoreCase))
 		{
 			request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", providerContext.ApiKey);
-			return;
 		}
-
-		if (authType.Equals("Header", StringComparison.OrdinalIgnoreCase))
+		else if (authType.Equals("Header", StringComparison.OrdinalIgnoreCase))
 		{
 			var headerName = string.IsNullOrWhiteSpace(providerContext.Provider.AuthHeaderName)
 				? "x-api-key"
 				: providerContext.Provider.AuthHeaderName.Trim();
 			request.Headers.TryAddWithoutValidation(headerName, providerContext.ApiKey);
 		}
+
+		if (IsAnthropicProtocol(providerContext))
+			request.Headers.TryAddWithoutValidation("anthropic-version", "2023-06-01");
 	}
 
 
@@ -1000,8 +992,14 @@ internal sealed class LocalApiForwarder : IDisposable
 	{
 		if (!string.IsNullOrWhiteSpace(localModel))
 		{
-			if (providerContext.ModelRouteMap.TryGetValue(localModel.Trim(), out var routedUpstreamModel))
+			var normalizedLocalModel = localModel.Trim();
+			var strippedLocalModel = StripKnownProviderSuffix(normalizedLocalModel);
+			if (providerContext.ModelRouteMap.TryGetValue(normalizedLocalModel, out var routedUpstreamModel)
+				|| (!string.Equals(strippedLocalModel, normalizedLocalModel, StringComparison.OrdinalIgnoreCase)
+					&& providerContext.ModelRouteMap.TryGetValue(strippedLocalModel, out routedUpstreamModel)))
+			{
 				return routedUpstreamModel;
+			}
 
 			return ResolveGeneratedUpstreamModelAliasOrSelf(localModel, providerContext);
 		}
@@ -1021,8 +1019,14 @@ internal sealed class LocalApiForwarder : IDisposable
 	{
 		if (!string.IsNullOrWhiteSpace(localModel))
 		{
-			if (providerContext.ModelRouteMap.TryGetValue(localModel.Trim(), out var routedUpstreamModel))
+			var normalizedLocalModel = localModel.Trim();
+			var strippedLocalModel = StripKnownProviderSuffix(normalizedLocalModel);
+			if (providerContext.ModelRouteMap.TryGetValue(normalizedLocalModel, out var routedUpstreamModel)
+				|| (!string.Equals(strippedLocalModel, normalizedLocalModel, StringComparison.OrdinalIgnoreCase)
+					&& providerContext.ModelRouteMap.TryGetValue(strippedLocalModel, out routedUpstreamModel)))
+			{
 				return routedUpstreamModel;
+			}
 
 			return ResolveGeneratedUpstreamModelAliasOrSelf(localModel, providerContext);
 		}
@@ -1048,7 +1052,17 @@ internal sealed class LocalApiForwarder : IDisposable
 		if (!string.IsNullOrWhiteSpace(catalogMatch))
 			return catalogMatch;
 
-		foreach (var alias in GetProviderModelAliasCandidates(providerContext.Provider.Name, providerContext.Provider.BaseUrl))
+		var strippedModel = StripKnownProviderSuffix(normalizedModel);
+		if (!string.Equals(strippedModel, normalizedModel, StringComparison.OrdinalIgnoreCase))
+		{
+			catalogMatch = TryResolveCatalogMappedUpstreamModel(strippedModel, providerContext);
+			if (!string.IsNullOrWhiteSpace(catalogMatch))
+				return catalogMatch;
+		}
+
+		foreach (var alias in GatewayProviderModelHelpers.GetModelSuffixAliases(providerContext.Provider.Id)
+			.Concat(GetProviderModelAliasCandidates(providerContext.Provider.Name, providerContext.Provider.BaseUrl))
+			.Distinct(StringComparer.OrdinalIgnoreCase))
 		{
 			var aliasSuffix = $"@{alias}";
 			if (!normalizedModel.EndsWith(aliasSuffix, StringComparison.OrdinalIgnoreCase))
@@ -1059,7 +1073,30 @@ internal sealed class LocalApiForwarder : IDisposable
 				return upstreamModel;
 		}
 
-		return normalizedModel;
+		return strippedModel;
+	}
+
+	private static string StripKnownProviderSuffix(string? modelName)
+	{
+		if (string.IsNullOrWhiteSpace(modelName))
+			return string.Empty;
+
+		var trimmed = modelName.Trim();
+		var providerId = GatewayProviderModelHelpers.TryResolveProviderIdFromModelName(trimmed);
+		if (string.IsNullOrWhiteSpace(providerId))
+			return trimmed;
+
+		foreach (var alias in GatewayProviderModelHelpers.GetModelSuffixAliases(providerId))
+		{
+			var suffix = $"@{alias}";
+			if (!trimmed.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
+				continue;
+
+			var upstreamModel = trimmed[..^suffix.Length].Trim();
+			return string.IsNullOrWhiteSpace(upstreamModel) ? trimmed : upstreamModel;
+		}
+
+		return trimmed;
 	}
 
 	private string BuildAdvertisedUpstreamLocalName(string upstreamModel)
@@ -1112,15 +1149,16 @@ internal sealed class LocalApiForwarder : IDisposable
 		if (messages.Count == 0)
 			throw new InvalidOperationException("Ollama generate requests must include a prompt.");
 
+		var upstreamModel = ResolveUpstreamChatModel(localModel);
 		var upstream = new JsonObject
 		{
-			["model"] = ResolveUpstreamChatModel(localModel),
+			["model"] = upstreamModel,
 			["messages"] = messages,
 			["stream"] = source["stream"]?.GetValue<bool>() ?? false
 		};
 
 		CopyCommonGenerationOptions(source, upstream);
-		return upstream;
+		return RewriteUpstreamModelReferences(upstream, localModel, upstreamModel);
 	}
 
 	private JsonObject BuildUpstreamChatRequestFromChat(JsonObject source)
@@ -1129,15 +1167,16 @@ internal sealed class LocalApiForwarder : IDisposable
 		if (source["messages"] is not JsonArray messages || messages.Count == 0)
 			throw new InvalidOperationException("Ollama chat requests must include messages.");
 
+		var upstreamModel = ResolveUpstreamChatModel(localModel);
 		var upstream = new JsonObject
 		{
-			["model"] = ResolveUpstreamChatModel(localModel),
+			["model"] = upstreamModel,
 			["messages"] = ConvertOllamaMessagesToOpenAiMessages(messages),
 			["stream"] = source["stream"]?.GetValue<bool>() ?? false
 		};
 
 		CopyCommonGenerationOptions(source, upstream);
-		return upstream;
+		return RewriteUpstreamModelReferences(upstream, localModel, upstreamModel);
 	}
 
 	private JsonArray ConvertOllamaMessagesToOpenAiMessages(JsonArray sourceMessages)
@@ -1350,11 +1389,12 @@ internal sealed class LocalApiForwarder : IDisposable
 			?? source["prompt"]?.DeepClone()
 			?? throw new InvalidOperationException("Ollama embeddings requests must include input or prompt.");
 
-		return new JsonObject
+		var upstreamModel = ResolveUpstreamEmbeddingsModel(localModel);
+		return RewriteUpstreamModelReferences(new JsonObject
 		{
-			["model"] = ResolveUpstreamEmbeddingsModel(localModel),
+			["model"] = upstreamModel,
 			["input"] = input
-		};
+		}, localModel, upstreamModel);
 	}
 
 	private JsonObject BuildOpenAiChatRequestFromResponses(JsonObject source, bool stream = false)
@@ -1373,9 +1413,10 @@ internal sealed class LocalApiForwarder : IDisposable
 			messages.Insert(0, systemMessage);
 		}
 
+		var upstreamModel = ResolveUpstreamChatModel(model);
 		var request = new JsonObject
 		{
-			["model"] = ResolveUpstreamChatModel(model),
+			["model"] = upstreamModel,
 			["messages"] = messages,
 			["stream"] = stream
 		};
@@ -1396,7 +1437,7 @@ internal sealed class LocalApiForwarder : IDisposable
 		if (source["max_output_tokens"] is not null)
 			request["max_tokens"] = source["max_output_tokens"]!.DeepClone();
 
-		return request;
+		return RewriteUpstreamModelReferences(request, model, upstreamModel);
 	}
 
 	private JsonArray BuildMessagesArrayFromResponsesInput(JsonNode? inputNode)
@@ -2055,7 +2096,84 @@ internal sealed class LocalApiForwarder : IDisposable
 		if (allowTools && source["tools"] is JsonArray tools && tools.Count > 0)
 			request["tools"] = ConvertOpenAiToolsToAnthropic(tools);
 
+		return RewriteUpstreamModelReferences(request, source["model"]?.GetValue<string>(), upstreamModel);
+	}
+
+	private JsonObject RewriteUpstreamModelReferences(JsonObject request, string? localModel, string upstreamModel)
+	{
+		var normalizedLocalModel = string.IsNullOrWhiteSpace(localModel) ? string.Empty : localModel.Trim();
+		var normalizedUpstreamModel = string.IsNullOrWhiteSpace(upstreamModel) ? string.Empty : upstreamModel.Trim();
+		if (normalizedUpstreamModel.Length == 0)
+			return request;
+
+		RewriteUpstreamModelReferencesInNode(request, normalizedLocalModel, normalizedUpstreamModel);
 		return request;
+	}
+
+	private void RewriteUpstreamModelReferencesInNode(JsonNode? node, string localModel, string upstreamModel)
+	{
+		if (node is JsonObject obj)
+		{
+			foreach (var property in obj.ToList())
+			{
+				if (property.Value is JsonValue value && value.TryGetValue<string>(out var stringValue))
+				{
+					obj[property.Key] = ShouldForceUpstreamModelValue(property.Key)
+						? upstreamModel
+						: RewriteModelReferenceString(stringValue, localModel, upstreamModel);
+					continue;
+				}
+
+				RewriteUpstreamModelReferencesInNode(property.Value, localModel, upstreamModel);
+			}
+
+			return;
+		}
+
+		if (node is JsonArray array)
+		{
+			for (var index = 0; index < array.Count; index++)
+			{
+				if (array[index] is JsonValue value && value.TryGetValue<string>(out var stringValue))
+				{
+					array[index] = RewriteModelReferenceString(stringValue, localModel, upstreamModel);
+					continue;
+				}
+
+				RewriteUpstreamModelReferencesInNode(array[index], localModel, upstreamModel);
+			}
+		}
+	}
+
+	private static bool ShouldForceUpstreamModelValue(string propertyName)
+	{
+		return propertyName.Equals("model", StringComparison.OrdinalIgnoreCase)
+			|| propertyName.Equals("model_name", StringComparison.OrdinalIgnoreCase)
+			|| propertyName.Equals("target_model", StringComparison.OrdinalIgnoreCase);
+	}
+
+	private static string RewriteModelReferenceString(string text, string localModel, string upstreamModel)
+	{
+		if (string.IsNullOrWhiteSpace(text))
+			return text;
+
+		var rewritten = text;
+		if (!string.IsNullOrWhiteSpace(localModel))
+		{
+			rewritten = Regex.Replace(
+				rewritten,
+				Regex.Escape(localModel),
+				upstreamModel,
+				RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+		}
+
+		rewritten = Regex.Replace(
+			rewritten,
+			@"(?<=^|[\s""'`(\[{<])([A-Za-z0-9._:/-]+)@(openai|oai|oa|anthropic|claude|ap|gemini|google|gem|ggl|xai|grok|x)(?=$|[\s""'`)\]}>:,.!?])",
+			static match => match.Groups[1].Value,
+			RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+
+		return rewritten;
 	}
 
 	private JsonArray ConvertOpenAiToolsToAnthropic(JsonArray tools)
@@ -4202,16 +4320,24 @@ internal sealed class LocalApiForwarder : IDisposable
 		if (string.IsNullOrWhiteSpace(localModel))
 			return null;
 
+		var normalizedLocalModel = localModel.Trim();
+		var strippedLocalModel = StripKnownProviderSuffix(normalizedLocalModel);
+
 		var cachedMatch = _cachedModelCatalog.FirstOrDefault(model =>
-			model.LocalName.Equals(localModel, StringComparison.OrdinalIgnoreCase));
+			model.LocalName.Equals(normalizedLocalModel, StringComparison.OrdinalIgnoreCase)
+			|| model.LocalName.Equals(strippedLocalModel, StringComparison.OrdinalIgnoreCase));
 		if (cachedMatch is not null && !string.IsNullOrWhiteSpace(cachedMatch.UpstreamModel))
 			return cachedMatch.UpstreamModel;
 
 		// Check model mappings directly instead of calling BuildConfiguredModelCatalog(),
 		// which would cause infinite recursion via AddConfiguredModelCatalogEntry �?
 		// ResolveGeneratedUpstreamModelAliasOrSelf �? TryResolveCatalogMappedUpstreamModel.
-		if (providerContext.ModelRouteMap.TryGetValue(localModel, out var routeUpstreamModel))
+		if (providerContext.ModelRouteMap.TryGetValue(normalizedLocalModel, out var routeUpstreamModel)
+			|| (!string.Equals(strippedLocalModel, normalizedLocalModel, StringComparison.OrdinalIgnoreCase)
+				&& providerContext.ModelRouteMap.TryGetValue(strippedLocalModel, out routeUpstreamModel)))
+		{
 			return routeUpstreamModel.Trim();
+		}
 
 		return null;
 	}

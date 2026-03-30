@@ -54,10 +54,10 @@ internal sealed class ProxyEngine : IDisposable
 
 		if (gatewaySettings?.Enabled == true)
 		{
-			var legacySettings = _options.LocalApiForwarder ?? BuildLegacyLocalApiForwarderSettings(gatewaySettings);
-			var providerName = legacySettings.Provider?.Name ?? "Default";
-			var apiKey = CredentialManager.LoadToken(CredentialManager.GetLocalApiTargetName(providerName));
-			_localApiForwarder = new LocalApiForwarder(legacySettings, apiKey);
+			var defaultProvider = GatewayProviderModelHelpers.GetDefault(gatewaySettings);
+			var apiKey = CredentialManager.LoadToken(CredentialManager.GetLocalApiTargetName(defaultProvider.Id))
+				?? CredentialManager.LoadToken(CredentialManager.GetLocalApiTargetName(defaultProvider.Name));
+			_localApiForwarder = new LocalApiForwarder(gatewaySettings, apiKey);
 			_localApiForwarder.OnLog += LogInfo;
 			await _localApiForwarder.StartAsync();
 		}
@@ -229,41 +229,6 @@ internal sealed class ProxyEngine : IDisposable
 		if (_winDivertHandle != IntPtr.Zero && _winDivertHandle != new IntPtr(-1))
 			WinDivertNative.WinDivertClose(_winDivertHandle);
 	}
-
-	private static LocalApiForwarderSettings BuildLegacyLocalApiForwarderSettings(OllamaGatewaySettings gatewaySettings)
-	{
-		var provider = GatewayProviderModelHelpers.GetDefault(gatewaySettings);
-		return new LocalApiForwarderSettings
-		{
-			Enabled = gatewaySettings.Enabled,
-			OllamaPort = gatewaySettings.OllamaPort,
-			FoundryPort = gatewaySettings.OpenAiPort,
-			Provider = new LocalApiProviderSettings
-			{
-				Protocol = provider.Protocol,
-				Name = provider.Name,
-				BaseUrl = provider.BaseUrl,
-				DefaultModel = provider.DefaultModel,
-				DefaultEmbeddingModel = provider.DefaultEmbeddingModel,
-				AuthType = provider.AuthType,
-				AuthHeaderName = provider.AuthHeaderName,
-				ChatEndpoint = provider.ChatEndpoint,
-				EmbeddingsEndpoint = provider.EmbeddingsEndpoint,
-				ResponsesEndpoint = provider.ResponsesEndpoint,
-				AdditionalHeaders = provider.AdditionalHeaders ?? []
-			},
-			ModelMappings = provider.Routes
-				.Select(static route => new LocalApiModelMapping
-				{
-					LocalModel = route.LocalModel,
-					UpstreamModel = route.UpstreamModel
-				})
-				.ToList(),
-			RequestResponseLogging = gatewaySettings.RequestResponseLogging,
-			IncludeErrorDiagnostics = gatewaySettings.IncludeErrorDiagnostics
-		};
-	}
-
 	private async Task PacketProcessingLoopAsync(CancellationToken ct)
 	{
 		var selfPid = Environment.ProcessId;
