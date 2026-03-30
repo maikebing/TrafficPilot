@@ -7,6 +7,7 @@
 > - Local gateway now exposes Ollama-compatible endpoints only.
 > - Built-in providers: `OpenAI`, `Anthropic`, `Gemini`, `xAI`.
 > - Model routing is suffix-based: `model@openai`, `model@anthropic`, `model@gemini`, `model@xai`.
+> - Explicit routes, provider probing, Foundry/OpenAI local compatibility, and legacy `localApiForwarder` config are being removed from the active path.
 > - Supported shorthand aliases: `@oai`, `@claude`, `@google`, `@grok`.
 
 ## 项目简介

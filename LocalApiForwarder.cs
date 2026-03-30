@@ -19,7 +19,7 @@ internal sealed class LocalApiForwarder : IDisposable
 	private const long DefaultContextLength = 100_000;
 	private const long DefaultMaxOutputTokens = 8_192;
 
-	private readonly LocalApiForwarderSettings _settings;
+	private readonly ListenerSettings _settings;
 	private readonly OllamaGatewaySettings _gatewaySettings;
 	private readonly string _apiKey;
 	private readonly HttpClient _httpClient;
@@ -38,11 +38,16 @@ internal sealed class LocalApiForwarder : IDisposable
 
 	public event Action<string>? OnLog;
 
+	private sealed record ListenerSettings(
+		bool Enabled,
+		ushort OllamaPort,
+		LocalApiRequestResponseLoggingSettings RequestResponseLogging,
+		bool IncludeErrorDiagnostics);
+
 	private sealed record GatewayProviderRuntimeContext(
 		IGatewayProviderModel Provider,
 		string ApiKey,
-		string ProviderAlias,
-		IReadOnlyDictionary<string, string> ModelRouteMap);
+		string ProviderAlias);
 
 	private sealed record ModelCatalogEntry(
 		string LocalName,
@@ -69,17 +74,12 @@ internal sealed class LocalApiForwarder : IDisposable
 		public StringBuilder Arguments { get; } = new();
 	}
 
-	public LocalApiForwarder(LocalApiForwarderSettings settings, string? apiKey)
-		: this(BuildCompatibilitySettings(settings), ProxyConfigManager.BuildGatewaySettingsFromLegacy(settings), apiKey)
-	{
-	}
-
 	public LocalApiForwarder(OllamaGatewaySettings gatewaySettings, string? apiKey = null)
-		: this(BuildCompatibilitySettings(gatewaySettings), gatewaySettings, apiKey)
+		: this(BuildListenerSettings(gatewaySettings), gatewaySettings, apiKey)
 	{
 	}
 
-	private LocalApiForwarder(LocalApiForwarderSettings settings, OllamaGatewaySettings gatewaySettings, string? apiKey)
+	private LocalApiForwarder(ListenerSettings settings, OllamaGatewaySettings gatewaySettings, string? apiKey)
 	{
 		_settings = settings ?? throw new ArgumentNullException(nameof(settings));
 		_gatewaySettings = gatewaySettings ?? throw new ArgumentNullException(nameof(gatewaySettings));
@@ -95,29 +95,15 @@ internal sealed class LocalApiForwarder : IDisposable
 			_loadedModels.Add(modelName);
 	}
 
-	private static LocalApiForwarderSettings BuildCompatibilitySettings(LocalApiForwarderSettings settings)
-	{
-		settings ??= new LocalApiForwarderSettings();
-		settings.Provider ??= new LocalApiProviderSettings();
-		settings.RequestResponseLogging ??= new LocalApiRequestResponseLoggingSettings();
-		settings.ModelMappings ??= [];
-		return settings;
-	}
-
-	private static LocalApiForwarderSettings BuildCompatibilitySettings(OllamaGatewaySettings gatewaySettings)
+	private static ListenerSettings BuildListenerSettings(OllamaGatewaySettings gatewaySettings)
 	{
 		gatewaySettings ??= new OllamaGatewaySettings();
 		GatewayProviderModelHelpers.Normalize(gatewaySettings);
-		return new LocalApiForwarderSettings
-		{
-			Enabled = gatewaySettings.Enabled,
-			OllamaPort = gatewaySettings.OllamaPort,
-			FoundryPort = gatewaySettings.OpenAiPort,
-			RequestResponseLogging = gatewaySettings.RequestResponseLogging ?? new LocalApiRequestResponseLoggingSettings(),
-			IncludeErrorDiagnostics = gatewaySettings.IncludeErrorDiagnostics,
-			Provider = new LocalApiProviderSettings(),
-			ModelMappings = []
-		};
+		return new ListenerSettings(
+			gatewaySettings.Enabled,
+			gatewaySettings.OllamaPort,
+			gatewaySettings.RequestResponseLogging ?? new LocalApiRequestResponseLoggingSettings(),
+			gatewaySettings.IncludeErrorDiagnostics);
 	}
 
 	public Task StartAsync()
@@ -164,11 +150,10 @@ internal sealed class LocalApiForwarder : IDisposable
 	private void LogStartupConfiguration()
 	{
 		var provider = GetDefaultProviderContext().Provider;
-		var routeCount = GatewayProviderModelHelpers.Enumerate(_gatewaySettings).Sum(static providerModel => providerModel.Routes.Count);
 		LogInfo(
 			$"startup config: provider='{provider.Name}', protocol={provider.Protocol}, baseUrl={provider.BaseUrl}, defaultModel={FormatSettingValue(provider.DefaultModel)}, embeddingModel={FormatSettingValue(provider.DefaultEmbeddingModel)}");
 		LogInfo(
-			$"startup ports: ollama={_settings.OllamaPort}, providers={_providerContexts.Count}, modelMappings={routeCount}");
+			$"startup ports: ollama={_settings.OllamaPort}, providers={_providerContexts.Count}");
 	}
 
 	private static Dictionary<string, GatewayProviderRuntimeContext> BuildProviderContexts(OllamaGatewaySettings gatewaySettings, string fallbackApiKey)
@@ -184,19 +169,10 @@ internal sealed class LocalApiForwarder : IDisposable
 				CredentialManager.LoadToken(CredentialManager.GetLocalApiTargetName(provider.Id))
 				?? CredentialManager.LoadToken(CredentialManager.GetLocalApiTargetName(provider.Name))
 				?? fallbackApiKey;
-			var routeMap = provider.Routes
-				.Where(static route => !string.IsNullOrWhiteSpace(route.LocalModel) && !string.IsNullOrWhiteSpace(route.UpstreamModel))
-				.GroupBy(static route => route.LocalModel.Trim(), StringComparer.OrdinalIgnoreCase)
-				.ToDictionary(
-					static group => group.Key,
-					static group => group.First().UpstreamModel.Trim(),
-					StringComparer.OrdinalIgnoreCase);
-
 			contexts[provider.Id] = new GatewayProviderRuntimeContext(
 				provider,
 				providerApiKey,
-				GatewayProviderModelHelpers.GetPreferredModelSuffix(provider.Id),
-				routeMap);
+				GatewayProviderModelHelpers.GetPreferredModelSuffix(provider.Id));
 		}
 
 		if (contexts.Count == 0)
@@ -205,8 +181,7 @@ internal sealed class LocalApiForwarder : IDisposable
 			contexts[provider.Id] = new GatewayProviderRuntimeContext(
 				provider,
 				fallbackApiKey,
-				GatewayProviderModelHelpers.GetPreferredModelSuffix(provider.Id),
-				new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase));
+				GatewayProviderModelHelpers.GetPreferredModelSuffix(provider.Id));
 		}
 
 		return contexts;
@@ -228,18 +203,6 @@ internal sealed class LocalApiForwarder : IDisposable
 				&& directContext.Provider.Enabled)
 			{
 				return directContext;
-			}
-
-			var normalizedModel = localModel.Trim();
-			var strippedModel = StripKnownProviderSuffix(normalizedModel);
-			foreach (var context in _providerContexts.Values)
-			{
-				if (context.Provider.Enabled
-					&& (context.ModelRouteMap.ContainsKey(normalizedModel)
-					|| (!string.IsNullOrWhiteSpace(strippedModel) && context.ModelRouteMap.ContainsKey(strippedModel))))
-				{
-					return context;
-				}
 			}
 		}
 
@@ -270,12 +233,6 @@ internal sealed class LocalApiForwarder : IDisposable
 		_httpClient.Dispose();
 		_modelCatalogSyncLock.Dispose();
 		_cts.Dispose();
-	}
-
-	private static void ValidateSettings(LocalApiForwarderSettings settings)
-	{
-		if (settings.OllamaPort == 0)
-			throw new InvalidOperationException("Ollama port must be greater than zero.");
 	}
 
 	private static void ValidateSettings(OllamaGatewaySettings settings)
@@ -991,18 +948,7 @@ internal sealed class LocalApiForwarder : IDisposable
 	private string ResolveUpstreamChatModelCore(string? localModel, GatewayProviderRuntimeContext providerContext)
 	{
 		if (!string.IsNullOrWhiteSpace(localModel))
-		{
-			var normalizedLocalModel = localModel.Trim();
-			var strippedLocalModel = StripKnownProviderSuffix(normalizedLocalModel);
-			if (providerContext.ModelRouteMap.TryGetValue(normalizedLocalModel, out var routedUpstreamModel)
-				|| (!string.Equals(strippedLocalModel, normalizedLocalModel, StringComparison.OrdinalIgnoreCase)
-					&& providerContext.ModelRouteMap.TryGetValue(strippedLocalModel, out routedUpstreamModel)))
-			{
-				return routedUpstreamModel;
-			}
-
 			return ResolveGeneratedUpstreamModelAliasOrSelf(localModel, providerContext);
-		}
 
 		if (!string.IsNullOrWhiteSpace(providerContext.Provider.DefaultModel))
 			return ResolveGeneratedUpstreamModelAliasOrSelf(providerContext.Provider.DefaultModel, providerContext);
@@ -1018,18 +964,7 @@ internal sealed class LocalApiForwarder : IDisposable
 	private string ResolveUpstreamEmbeddingsModelCore(string? localModel, GatewayProviderRuntimeContext providerContext)
 	{
 		if (!string.IsNullOrWhiteSpace(localModel))
-		{
-			var normalizedLocalModel = localModel.Trim();
-			var strippedLocalModel = StripKnownProviderSuffix(normalizedLocalModel);
-			if (providerContext.ModelRouteMap.TryGetValue(normalizedLocalModel, out var routedUpstreamModel)
-				|| (!string.Equals(strippedLocalModel, normalizedLocalModel, StringComparison.OrdinalIgnoreCase)
-					&& providerContext.ModelRouteMap.TryGetValue(strippedLocalModel, out routedUpstreamModel)))
-			{
-				return routedUpstreamModel;
-			}
-
 			return ResolveGeneratedUpstreamModelAliasOrSelf(localModel, providerContext);
-		}
 
 		if (!string.IsNullOrWhiteSpace(providerContext.Provider.DefaultEmbeddingModel))
 			return ResolveGeneratedUpstreamModelAliasOrSelf(providerContext.Provider.DefaultEmbeddingModel, providerContext);
@@ -3477,162 +3412,6 @@ internal sealed class LocalApiForwarder : IDisposable
 		};
 	}
 
-	private JsonObject BuildFoundryLocalStatusResponse()
-	{
-		var loopbackEndpoint = $"http://127.0.0.1:{_settings.FoundryPort}";
-		var localhostEndpoint = $"http://localhost:{_settings.FoundryPort}";
-
-		return new JsonObject
-		{
-			["Endpoints"] = new JsonArray(loopbackEndpoint, localhostEndpoint),
-			["ModelDirPath"] = Path.Combine(
-				Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-				"TrafficPilot",
-				"RemoteModels"),
-			["PipeName"] = "trafficpilot-foundry-local"
-		};
-	}
-
-	private JsonArray BuildFoundryLocalModelsResponse(IEnumerable<string> modelNames)
-	{
-		return new JsonArray(modelNames
-			.Where(static modelName => !string.IsNullOrWhiteSpace(modelName))
-			.Select(static modelName => JsonValue.Create(modelName.Trim()))
-			.ToArray());
-	}
-
-	private async Task<JsonArray> BuildFoundryLocalModelsResponseAsync(CancellationToken ct)
-	{
-		var catalogModelNames = (await GetAdvertisedModelCatalogAsync(ct))
-			.Select(static model => model.LocalName);
-		var allModelNames = catalogModelNames
-			.Concat(GetLoadedModelNames())
-			.Distinct(StringComparer.OrdinalIgnoreCase);
-		return BuildFoundryLocalModelsResponse(allModelNames);
-	}
-
-	private async Task<JsonObject> BuildFoundryLocalCatalogResponseAsync(CancellationToken ct)
-	{
-		var models = new JsonArray();
-		var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-		foreach (var model in await GetAdvertisedModelCatalogAsync(ct))
-		{
-			var providerContext = ResolveProviderContextForModel(model.LocalName);
-			seen.Add(model.LocalName);
-			var modelUri = BuildFoundryModelUri(model.LocalName);
-			models.Add(new JsonObject
-			{
-				["name"] = model.LocalName,
-				["displayName"] = model.LocalName,
-				["providerType"] = "AzureFoundryLocal",
-				["uri"] = modelUri,
-				["publisher"] = providerContext.Provider.Name,
-				["task"] = "chat completion",
-				["version"] = "1",
-				["modelType"] = "OpenAI",
-				["promptTemplate"] = new JsonObject
-				{
-					["system"] = "{{system}}",
-					["user"] = "{{input}}",
-					["assistant"] = "{{output}}",
-					["prompt"] = "{{input}}"
-				},
-				["runtime"] = new JsonObject
-				{
-					["deviceType"] = "CPU",
-					["executionProvider"] = "cpu"
-				},
-				["fileSizeMb"] = 0,
-				["modelSettings"] = new JsonObject
-				{
-					["parameters"] = new JsonArray()
-				},
-				["alias"] = model.LocalName,
-				["description"] = $"Forwarded to {providerContext.Provider.Name} via TrafficPilot.",
-				["supportsToolCalling"] = true,
-				["license"] = "Remote",
-				["licenseDescription"] = $"Remote model forwarded to {providerContext.Provider.Name} via TrafficPilot.",
-				["parentModelUri"] = modelUri,
-				["maxOutputTokens"] = 8192,
-				["minFLVersion"] = "0.0.0",
-				["endpoints"] = new JsonArray
-				{
-					new JsonObject
-					{
-						["protocol"] = "OpenAI",
-						["url"] = $"http://127.0.0.1:{_settings.FoundryPort}/v1",
-						["model"] = model.LocalName
-					}
-				}
-			});
-		}
-
-		foreach (var loadedModel in GetLoadedModelNames())
-		{
-			if (seen.Contains(loadedModel))
-				continue;
-
-			var providerContext = ResolveProviderContextForModel(loadedModel);
-
-			var dynamicUri = BuildFoundryModelUri(loadedModel);
-			models.Add(new JsonObject
-			{
-				["name"] = loadedModel,
-				["displayName"] = loadedModel,
-				["providerType"] = "AzureFoundryLocal",
-				["uri"] = dynamicUri,
-				["publisher"] = providerContext.Provider.Name,
-				["task"] = "chat completion",
-				["version"] = "1",
-				["modelType"] = "OpenAI",
-				["promptTemplate"] = new JsonObject
-				{
-					["system"] = "{{system}}",
-					["user"] = "{{input}}",
-					["assistant"] = "{{output}}",
-					["prompt"] = "{{input}}"
-				},
-				["runtime"] = new JsonObject
-				{
-					["deviceType"] = "CPU",
-					["executionProvider"] = "cpu"
-				},
-				["fileSizeMb"] = 0,
-				["modelSettings"] = new JsonObject
-				{
-					["parameters"] = new JsonArray()
-				},
-				["alias"] = loadedModel,
-				["description"] = $"BYOM forwarded to {providerContext.Provider.Name} via TrafficPilot.",
-				["supportsToolCalling"] = true,
-				["license"] = "Remote",
-				["licenseDescription"] = $"BYOM forwarded to {providerContext.Provider.Name} via TrafficPilot.",
-				["parentModelUri"] = dynamicUri,
-				["maxOutputTokens"] = 8192,
-				["minFLVersion"] = "0.0.0",
-				["endpoints"] = new JsonArray
-				{
-					new JsonObject
-					{
-						["protocol"] = "OpenAI",
-						["url"] = $"http://127.0.0.1:{_settings.FoundryPort}/v1",
-						["model"] = loadedModel
-					}
-				}
-			});
-		}
-
-		return new JsonObject
-		{
-			["models"] = models
-		};
-	}
-
-	private static string BuildFoundryModelUri(string modelName)
-	{
-		return $"azureml://registries/trafficpilot/models/{Uri.EscapeDataString(modelName)}/versions/1";
-	}
-
 	private async Task<JsonObject> BuildOpenAiModelsResponseAsync(CancellationToken ct)
 	{
 		var data = new JsonArray();
@@ -3855,22 +3634,6 @@ internal sealed class LocalApiForwarder : IDisposable
 
 		foreach (var providerContext in _providerContexts.Values)
 		{
-			foreach (var mapping in providerContext.ModelRouteMap)
-			{
-				var localModel = mapping.Key.Trim();
-				var upstreamModel = string.IsNullOrWhiteSpace(mapping.Value)
-					? localModel
-					: mapping.Value.Trim();
-				models[localModel] = CreateModelCatalogEntry(
-					localModel,
-					upstreamModel,
-					providerContext.Provider.Name,
-					createdUnixTime,
-					isAlias: !localModel.Equals(upstreamModel, StringComparison.OrdinalIgnoreCase),
-					metadataSource: null,
-					providerContext);
-			}
-
 			AddConfiguredModelCatalogEntry(models, providerContext.Provider.DefaultModel, createdUnixTime, providerContext);
 			AddConfiguredModelCatalogEntry(models, providerContext.Provider.DefaultEmbeddingModel, createdUnixTime, providerContext);
 		}
@@ -4332,13 +4095,6 @@ internal sealed class LocalApiForwarder : IDisposable
 		// Check model mappings directly instead of calling BuildConfiguredModelCatalog(),
 		// which would cause infinite recursion via AddConfiguredModelCatalogEntry �?
 		// ResolveGeneratedUpstreamModelAliasOrSelf �? TryResolveCatalogMappedUpstreamModel.
-		if (providerContext.ModelRouteMap.TryGetValue(normalizedLocalModel, out var routeUpstreamModel)
-			|| (!string.Equals(strippedLocalModel, normalizedLocalModel, StringComparison.OrdinalIgnoreCase)
-				&& providerContext.ModelRouteMap.TryGetValue(strippedLocalModel, out routeUpstreamModel)))
-		{
-			return routeUpstreamModel.Trim();
-		}
-
 		return null;
 	}
 

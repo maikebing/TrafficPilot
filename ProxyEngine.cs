@@ -47,7 +47,7 @@ internal sealed class ProxyEngine : IDisposable
 	{
 		if (_isRunning) return;
 
-		var gatewaySettings = _options.OllamaGateway ?? ProxyConfigManager.BuildGatewaySettingsFromLegacy(_options.LocalApiForwarder);
+		var gatewaySettings = _options.OllamaGateway;
 
 		if (!_options.ProxyEnabled && !_options.HostsRedirectEnabled && gatewaySettings?.Enabled != true)
 			throw new InvalidOperationException("Proxy, hosts redirect, and local API forwarding are all disabled.");
@@ -176,7 +176,7 @@ internal sealed class ProxyEngine : IDisposable
 
 	public async Task<IReadOnlyList<string>> RefreshLocalApiModelCatalogAsync(CancellationToken ct = default)
 	{
-		var gatewaySettings = _options.OllamaGateway ?? ProxyConfigManager.BuildGatewaySettingsFromLegacy(_options.LocalApiForwarder);
+		var gatewaySettings = _options.OllamaGateway;
 		if (gatewaySettings?.Enabled != true || _localApiForwarder is null)
 			throw new InvalidOperationException("Local API forwarder is not running.");
 
@@ -185,7 +185,7 @@ internal sealed class ProxyEngine : IDisposable
 
 	public async Task<IReadOnlyList<LocalApiAdvertisedModel>> RefreshLocalApiModelCatalogEntriesAsync(CancellationToken ct = default)
 	{
-		var gatewaySettings = _options.OllamaGateway ?? ProxyConfigManager.BuildGatewaySettingsFromLegacy(_options.LocalApiForwarder);
+		var gatewaySettings = _options.OllamaGateway;
 		if (gatewaySettings?.Enabled != true || _localApiForwarder is null)
 			throw new InvalidOperationException("Local API forwarder is not running.");
 

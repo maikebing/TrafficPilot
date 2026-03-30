@@ -369,8 +369,7 @@ internal sealed record ProxyOptions(
 	bool HostsRedirectEnabled = false,
 	string HostsRedirectUrl = GitHub520HostsProvider.DefaultUrl,
 	string HostsRedirectMode = "DnsInterception",
-	OllamaGatewaySettings? OllamaGateway = null,
-	LocalApiForwarderSettings? LocalApiForwarder = null) // "DnsInterception" or "HostsFile"
+	OllamaGatewaySettings? OllamaGateway = null) // "DnsInterception" or "HostsFile"
 {
     internal static readonly string[] DefaultProcessNames =
 	[
@@ -723,11 +722,77 @@ internal static class CredentialManager
 	/// <summary>Returns the Credential Manager target name for a given sync provider.</summary>
 	public static string GetTargetName(string provider)
 	{
+		return GetConfigSyncTokenTargetName(provider);
+	}
+
+	public static string GetConfigSyncTokenTargetName(string provider)
+	{
 		ArgumentNullException.ThrowIfNull(provider);
-		// Only allow known providers to prevent unexpected credential target names
-		if (!provider.Equals("GitHub", StringComparison.Ordinal) &&
-			!provider.Equals("Gitee", StringComparison.Ordinal))
+		ValidateSyncProvider(provider);
+		return $"TrafficPilot_ConfigSync_{provider}_Token";
+	}
+
+	public static string GetConfigSyncRemoteIdTargetName(string provider)
+	{
+		ArgumentNullException.ThrowIfNull(provider);
+		ValidateSyncProvider(provider);
+		return $"TrafficPilot_ConfigSync_{provider}_RemoteId";
+	}
+
+	public static void SaveConfigSyncToken(string provider, string token)
+	{
+		SaveToken(GetConfigSyncTokenTargetName(provider), token);
+	}
+
+	public static string? LoadConfigSyncToken(string provider)
+	{
+		var token = LoadToken(GetConfigSyncTokenTargetName(provider));
+		if (token is not null)
+			return token;
+
+		var legacyTargetName = GetLegacyConfigSyncTargetName(provider);
+		var legacyToken = LoadToken(legacyTargetName);
+		if (legacyToken is null)
+			return null;
+
+		SaveToken(GetConfigSyncTokenTargetName(provider), legacyToken);
+		DeleteToken(legacyTargetName);
+		return legacyToken;
+	}
+
+	public static void DeleteConfigSyncToken(string provider)
+	{
+		DeleteToken(GetConfigSyncTokenTargetName(provider));
+		DeleteToken(GetLegacyConfigSyncTargetName(provider));
+	}
+
+	public static void SaveConfigSyncRemoteId(string provider, string remoteId)
+	{
+		SaveToken(GetConfigSyncRemoteIdTargetName(provider), remoteId);
+	}
+
+	public static string? LoadConfigSyncRemoteId(string provider)
+	{
+		return LoadToken(GetConfigSyncRemoteIdTargetName(provider));
+	}
+
+	public static void DeleteConfigSyncRemoteId(string provider)
+	{
+		DeleteToken(GetConfigSyncRemoteIdTargetName(provider));
+	}
+
+	private static void ValidateSyncProvider(string provider)
+	{
+		if (!provider.Equals("GitHub", StringComparison.Ordinal)
+			&& !provider.Equals("Gitee", StringComparison.Ordinal))
+		{
 			throw new ArgumentException($"Unknown sync provider: {provider}", nameof(provider));
+		}
+	}
+
+	private static string GetLegacyConfigSyncTargetName(string provider)
+	{
+		ValidateSyncProvider(provider);
 		return $"TrafficPilot_ConfigSync_{provider}";
 	}
 

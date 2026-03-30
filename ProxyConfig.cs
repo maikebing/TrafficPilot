@@ -34,10 +34,6 @@ internal class ProxyConfigModel
 	[JsonPropertyName("ollamaGateway")]
 	public OllamaGatewaySettings? OllamaGateway { get; set; }
 
-	[JsonPropertyName("localApiForwarder")]
-	[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-	public LocalApiForwarderSettings? LocalApiForwarder { get; set; }
-
 	public ProxyConfigModel() { }
 
 	public ProxyConfigModel(ProxyOptions opts)
@@ -61,7 +57,6 @@ internal class ProxyConfigModel
 			HostsUrl = opts.HostsRedirectUrl
 		};
 		OllamaGateway = opts.OllamaGateway;
-		LocalApiForwarder = opts.LocalApiForwarder;
 	}
 }
 
@@ -909,7 +904,7 @@ internal sealed class ProxyConfigManager
 				WriteIndented = true,
 				PropertyNamingPolicy = JsonNamingPolicy.CamelCase
 			};
-			var json = JsonSerializer.Serialize(config, options);
+			var json = JsonSerializer.Serialize(CreatePersistedConfig(config), options);
 			File.WriteAllText(path, json);
 		}
 		catch (IOException ex)
@@ -998,8 +993,7 @@ internal sealed class ProxyConfigManager
             {
                 RefreshDomains = [.. ProxyOptions.DefaultRefreshDomains]
 			},
-			OllamaGateway = CreateDefaultGatewaySettings(),
-			LocalApiForwarder = new LocalApiForwarderSettings()
+			OllamaGateway = CreateDefaultGatewaySettings()
 		};
 	}
 
@@ -1018,11 +1012,18 @@ internal sealed class ProxyConfigManager
 	{
 		ArgumentNullException.ThrowIfNull(config);
 
-		var changed = false;
+		var changed = config.OllamaGateway is null;
+		if (config.ConfigSync is { Provider: { Length: > 0 } provider } && !string.IsNullOrWhiteSpace(config.ConfigSync.GistId))
+		{
+			CredentialManager.SaveConfigSyncRemoteId(provider, config.ConfigSync.GistId.Trim());
+			config.ConfigSync.GistId = null;
+			changed = true;
+		}
+
 		using var document = JsonDocument.Parse(json);
 		var root = document.RootElement;
 
-		config.OllamaGateway ??= BuildGatewaySettingsFromLegacy(config.LocalApiForwarder);
+		config.OllamaGateway ??= CreateDefaultGatewaySettings();
 		if (config.OllamaGateway is not null)
 		{
 			if (root.TryGetProperty("ollamaGateway", out var gatewayElement)
@@ -1067,36 +1068,62 @@ internal sealed class ProxyConfigManager
 			changed = true;
 		}
 
-		if (!root.TryGetProperty("localApiForwarder", out var localApiElement))
-		{
-			config.LocalApiForwarder ??= new LocalApiForwarderSettings();
-			return true;
-		}
-
-		config.LocalApiForwarder ??= new LocalApiForwarderSettings();
-		var settings = config.LocalApiForwarder;
-		if (settings is null)
-			return changed;
-
-		settings.Provider ??= new LocalApiProviderSettings();
-		settings.RequestResponseLogging ??= new LocalApiRequestResponseLoggingSettings();
-		settings.ModelMappings ??= [];
-
-		if (!localApiElement.TryGetProperty("enabled", out _))
-		{
-			if (!settings.Enabled)
-			{
-				settings.Enabled = true;
-				changed = true;
-			}
-		}
-		else if (!settings.Enabled && LooksLikeLegacyLocalApiConfig(settings))
-		{
-			settings.Enabled = true;
-			changed = true;
-		}
-
 		return changed;
+	}
+
+	private static object CreatePersistedConfig(ProxyConfigModel config)
+	{
+		return new
+		{
+			config.ConfigName,
+			config.Proxy,
+			config.Targeting,
+			config.HostsRedirect,
+			config.StartOnBoot,
+			config.AutoStartProxy,
+			configSync = CreatePersistedConfigSync(config.ConfigSync),
+			ollamaGateway = CreatePersistedGateway(config.OllamaGateway)
+		};
+	}
+
+	private static object? CreatePersistedConfigSync(ConfigSyncSettings? settings)
+	{
+		if (settings is null || string.IsNullOrWhiteSpace(settings.Provider))
+			return null;
+
+		return new
+		{
+			settings.Provider
+		};
+	}
+
+	private static object? CreatePersistedGateway(OllamaGatewaySettings? settings)
+	{
+		if (settings is null)
+			return null;
+
+		return new
+		{
+			settings.Enabled,
+			settings.OllamaPort,
+			settings.RequestResponseLogging,
+			settings.IncludeErrorDiagnostics,
+			openAIProvider = CreatePersistedProvider(settings.OpenAIProvider),
+			anthropicProvider = CreatePersistedProvider(settings.AnthropicProvider),
+			geminiProvider = CreatePersistedProvider(settings.GeminiProvider),
+			xaiProvider = CreatePersistedProvider(settings.XAiProvider)
+		};
+	}
+
+	private static object CreatePersistedProvider(IGatewayProviderModel provider)
+	{
+		ArgumentNullException.ThrowIfNull(provider);
+
+		return new
+		{
+			provider.Enabled,
+			provider.BaseUrl
+		};
 	}
 
 	internal static OllamaGatewaySettings BuildGatewaySettingsFromLegacy(LocalApiForwarderSettings? legacy)

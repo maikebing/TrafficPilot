@@ -387,7 +387,6 @@ internal partial class MainForm : Form
 		var gatewaySettings = BuildOllamaGatewaySettings();
 		gatewaySettings ??= model.OllamaGateway ?? new OllamaGatewaySettings();
 		ApplyAllGatewayProviderEditorChanges(gatewaySettings);
-		ApplyGatewayRouteEditorChanges(gatewaySettings);
 
 		model.ConfigName = _txtConfigName!.Text.Trim();
 		model.Proxy ??= new ProxySettings();
@@ -411,7 +410,6 @@ internal partial class MainForm : Form
 		model.AutoStartProxy = _chkAutoStartProxy!.Checked;
 		model.ConfigSync = BuildConfigSyncSettings();
 		model.OllamaGateway = gatewaySettings;
-		model.LocalApiForwarder = null;
 
 		return model;
 	}
@@ -442,7 +440,6 @@ internal partial class MainForm : Form
 		string hostsMode = _rdoHostsFile?.Checked == true ? "HostsFile" : "DnsInterception";
 		var gatewaySettings = BuildOllamaGatewaySettings();
 		ApplyAllGatewayProviderEditorChanges(gatewaySettings);
-		ApplyGatewayRouteEditorChanges(gatewaySettings);
 
 		return new ProxyOptions(
 			GetProcessNamesFromUi(),
@@ -454,14 +451,14 @@ internal partial class MainForm : Form
 			hostsEnabled,
 			_txtHostsUrl!.Text.Trim(),
 			hostsMode,
-			gatewaySettings,
-			null
+			gatewaySettings
 		);
 	}
 
 	private void LoadConfigToUI()
 	{
-		_currentConfig.OllamaGateway ??= ProxyConfigManager.BuildGatewaySettingsFromLegacy(_currentConfig.LocalApiForwarder);
+		_currentConfig.OllamaGateway ??= new OllamaGatewaySettings();
+		GatewayProviderModelHelpers.Normalize(_currentConfig.OllamaGateway);
 
 		_chkProxyEnabled!.Checked = _currentConfig.Proxy?.Enabled ?? true;
 		_cmbProxyHost!.Text = _currentConfig.Proxy?.Host ?? "";
@@ -482,8 +479,6 @@ internal partial class MainForm : Form
 		LoadLocalApiForwarderToUi(BuildGatewayCompatibilityLocalApiForwarderSettings(_currentConfig.OllamaGateway));
 		LoadGatewayProviderEnabledStates(_currentConfig.OllamaGateway);
 		LoadGatewayProviderEditor(_currentConfig.OllamaGateway);
-		UpdateGatewayRoutesPreview(_currentConfig.OllamaGateway);
-		LoadGatewayRouteEditor(_currentConfig.OllamaGateway);
 
 		// Load sync settings
 		string syncProvider = _currentConfig.ConfigSync?.Provider ?? "GitHub";
@@ -612,7 +607,7 @@ internal partial class MainForm : Form
 	{
 		AppendLog($"[{DateTime.Now:HH:mm:ss.fff}] [Config] Active config: {_activeConfigPath}");
 
-		var localApi = config.OllamaGateway ?? ProxyConfigManager.BuildGatewaySettingsFromLegacy(config.LocalApiForwarder);
+		var localApi = config.OllamaGateway;
 		if (localApi?.Enabled != true)
 			return;
 
@@ -631,7 +626,7 @@ internal partial class MainForm : Form
 	{
 		var cloned = _currentConfig.OllamaGateway is not null
 			? CloneGatewaySettings(_currentConfig.OllamaGateway)
-			: ProxyConfigManager.BuildGatewaySettingsFromLegacy(BuildLocalApiForwarderSettings());
+			: new OllamaGatewaySettings();
 		if (cloned is null)
 			return null;
 
@@ -647,8 +642,6 @@ internal partial class MainForm : Form
 			gatewaySettings.Enabled = _chkLocalApiForwarderEnabled.Checked;
 		if (_numOllamaPort is not null)
 			gatewaySettings.OllamaPort = (ushort)_numOllamaPort.Value;
-		if (_numFoundryPort is not null)
-			gatewaySettings.OpenAiPort = (ushort)_numFoundryPort.Value;
 
 		gatewaySettings.RequestResponseLogging ??= new LocalApiRequestResponseLoggingSettings();
 		if (_chkLocalApiRequestResponseLogging is not null)
@@ -671,7 +664,6 @@ internal partial class MainForm : Form
 		{
 			Enabled = gatewaySettings.Enabled,
 			OllamaPort = gatewaySettings.OllamaPort,
-			FoundryPort = gatewaySettings.OpenAiPort,
 			Provider = new LocalApiProviderSettings
 			{
 				Protocol = provider.Protocol,
@@ -948,7 +940,6 @@ internal partial class MainForm : Form
 		editor.BaseUrlTextBox.TextChanged += TxtGatewayProviderBaseUrl2_TextChanged;
 		editor.SupportsEmbeddingsCheckBox.CheckedChanged += ChkGatewaySupportsEmbeddings_CheckedChanged;
 		editor.ShowAdvancedCheckBox.CheckedChanged += ChkGatewayProviderShowAdvanced_CheckedChanged;
-		editor.DetectButton.Click += BtnGatewayDetectProvider_Click;
 		editor.RefreshModelsButton.Click += BtnGatewayRefreshProviderModels_Click;
 		editor.RefreshModelsApplyButton.Click += BtnGatewayRefreshProviderModelsApply_Click;
 		editor.ModelPreviewListBox.SelectedIndexChanged += GatewayProviderModelPreview_SelectedIndexChanged;
@@ -1125,8 +1116,6 @@ internal partial class MainForm : Form
 			return;
 
 		ApplyGatewayProviderEditorChanges(_currentConfig.OllamaGateway);
-		LoadGatewayRouteEditor(_currentConfig.OllamaGateway);
-		UpdateGatewayRoutesPreview(_currentConfig.OllamaGateway);
 		UpdateGatewayOverviewProviderList(_currentConfig.OllamaGateway);
 
 		var selectedProviderId = GetGatewayProviderId(_gatewayTabControl?.SelectedTab);
@@ -1157,7 +1146,6 @@ internal partial class MainForm : Form
 			return;
 
 		ApplyGatewayProviderEditorChanges(_currentConfig.OllamaGateway);
-		UpdateGatewayRoutesPreview(_currentConfig.OllamaGateway);
 		UpdateGatewayOverviewProviderList(_currentConfig.OllamaGateway);
 	}
 
@@ -1328,7 +1316,6 @@ internal partial class MainForm : Form
 			return;
 
 		ApplyGatewayProviderEditorChanges(gatewaySettings);
-		ApplyGatewayRouteEditorChanges(gatewaySettings);
 
 		var provider = FindGatewayProvider(gatewaySettings, providerId);
 		if (provider is null)
@@ -1339,8 +1326,6 @@ internal partial class MainForm : Form
 		LoadGatewayProviderEnabledStates(gatewaySettings);
 		LoadGatewayProviderEditor(gatewaySettings);
 		SelectGatewayProviderTab(providerId);
-		LoadGatewayRouteEditor(gatewaySettings);
-		UpdateGatewayRoutesPreview(gatewaySettings);
 		UpdateGatewayOverviewProviderList(gatewaySettings);
 	}
 
@@ -3016,7 +3001,7 @@ internal partial class MainForm : Form
 			var persistedConfig = PersistCurrentConfig();
 			LogRuntimeConfigSnapshot(persistedConfig);
 
-			var gatewaySettings = persistedConfig.OllamaGateway ?? ProxyConfigManager.BuildGatewaySettingsFromLegacy(persistedConfig.LocalApiForwarder);
+			var gatewaySettings = persistedConfig.OllamaGateway;
 
 			IReadOnlyList<LocalApiAdvertisedModel> models;
 			if (_engine?.IsRunning == true && _engine.IsLocalApiForwarderRunning)
@@ -3314,7 +3299,7 @@ internal partial class MainForm : Form
 			|| _numLocalApiMaxBodyChars is null
 			|| _txtLocalApiModelMappings is null)
 		{
-			return CloneLocalApiForwarderSettings(_currentConfig.LocalApiForwarder);
+			return new LocalApiForwarderSettings();
 		}
 
 		var providerName = _txtLocalApiProviderName.Text.Trim();
@@ -3464,7 +3449,7 @@ internal partial class MainForm : Form
 		if (!string.IsNullOrWhiteSpace(upstreamMatch.Key))
 			return upstreamMatch.Key;
 
-		return FormatLocalApiDisplayName(trimmed, _txtLocalApiProviderUrl?.Text ?? _currentConfig.LocalApiForwarder?.Provider?.BaseUrl);
+		return FormatLocalApiDisplayName(trimmed, GetCurrentLocalApiProviderBaseUrl());
 	}
 
 	private string ResolveLocalApiStoredModelName(string? displayOrModelName)
@@ -3476,7 +3461,7 @@ internal partial class MainForm : Form
 		if (_localApiModelNameMap.TryGetValue(trimmed, out var upstreamModel))
 			return upstreamModel;
 
-		foreach (var suffix in GetLocalApiProviderSuffixCandidates(_txtLocalApiProviderUrl?.Text ?? _currentConfig.LocalApiForwarder?.Provider?.BaseUrl))
+		foreach (var suffix in GetLocalApiProviderSuffixCandidates(GetCurrentLocalApiProviderBaseUrl()))
 		{
 			if (!trimmed.EndsWith($"@{suffix}", StringComparison.OrdinalIgnoreCase))
 				continue;
@@ -3485,6 +3470,19 @@ internal partial class MainForm : Form
 		}
 
 		return trimmed;
+	}
+
+	private string? GetCurrentLocalApiProviderBaseUrl()
+	{
+		if (!string.IsNullOrWhiteSpace(_txtLocalApiProviderUrl?.Text))
+			return _txtLocalApiProviderUrl.Text.Trim();
+
+		var gatewaySettings = _currentConfig.OllamaGateway;
+		if (gatewaySettings is null)
+			return string.Empty;
+
+		var provider = GatewayProviderModelHelpers.GetDefault(gatewaySettings);
+		return provider.BaseUrl;
 	}
 
 	private static string FormatLocalApiDisplayName(string? modelName, string? providerBaseUrl)
