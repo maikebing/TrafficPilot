@@ -1040,19 +1040,20 @@ internal partial class MainForm : Form
 
 	private void ApplySimpleGatewayUi()
 	{
-		if (_lblGatewayOverviewSummary is not null)
-		{
-			_lblGatewayOverviewSummary.Text = "统一 Ollama Gateway。\r\n只保留 Ollama 入口；四家 provider 通过模型名后缀路由。\r\n每个 provider 的启用状态都在对应页签内配置，并保持为设计器静态控件。\r\n示例：gpt-4.1@openai、claude-sonnet-4@anthropic、gemini-2.5-pro@gemini、grok-4@xai。";
-		}
+	 
 	}
 
  private void ConfigureGatewayProviderControl(string providerId, GatewayProviderSettingsControl control)
 	{
-		control.EnabledInput.Tag = GatewayProviderModelHelpers.NormalizeProviderId(providerId);
+		var normalizedProviderId = GatewayProviderModelHelpers.NormalizeProviderId(providerId);
+		control.Tag = normalizedProviderId;
+		control.EnabledInput.Tag = normalizedProviderId;
+		control.BaseUrlInput.Tag = normalizedProviderId;
+		control.ApiKeyInput.Tag = normalizedProviderId;
      control.ApplyProviderPreset(
-			GetSimpleGatewayProviderDisplayName(providerId),
-			GetSimpleGatewayProviderSuffixHint(providerId),
-			GetSimpleGatewayProviderDefaultBaseUrl(providerId));
+			GetSimpleGatewayProviderDisplayName(normalizedProviderId),
+			GetSimpleGatewayProviderSuffixHint(normalizedProviderId),
+			GetSimpleGatewayProviderDefaultBaseUrl(normalizedProviderId));
 	}
 
 	private static string GetSimpleGatewayProviderDisplayName(string providerId)
@@ -1153,24 +1154,26 @@ internal partial class MainForm : Form
 		if (string.IsNullOrWhiteSpace(providerId))
 			return null;
 
-        return _gatewayProviderControls.GetValueOrDefault(providerId.Trim());
+		var normalizedProviderId = GatewayProviderModelHelpers.NormalizeProviderId(providerId);
+        return _gatewayProviderControls.GetValueOrDefault(normalizedProviderId);
+	}
+
+	private static string? GetGatewayProviderIdFromControl(Control? control)
+	{
+		if (control?.Tag is not string providerId || string.IsNullOrWhiteSpace(providerId))
+			return null;
+
+		return GatewayProviderModelHelpers.NormalizeProviderId(providerId);
 	}
 
 	private string? GetGatewayProviderId(TabPage? tabPage)
 	{
-		return tabPage?.Tag?.ToString() switch
-		{
-			"openai" => "openai",
-			"anthropic" => "anthropic",
-			"google" => "google",
-			"xai" => "xai",
-			_ => null
-		};
+		return GetGatewayProviderIdFromControl(tabPage);
 	}
 
 	private TabPage? GetGatewayProviderTabPage(string? providerId)
 	{
-		return providerId?.Trim().ToLowerInvariant() switch
+		return GatewayProviderModelHelpers.NormalizeProviderId(providerId) switch
 		{
 			"openai" => _gatewayOpenAiProviderTab,
 			"anthropic" => _gatewayAnthropicProviderTab,
@@ -1182,7 +1185,7 @@ internal partial class MainForm : Form
 
 	private static string GetGatewayProviderTabTitle(string providerId)
 	{
-		return providerId.Trim().ToLowerInvariant() switch
+		return GatewayProviderModelHelpers.NormalizeProviderId(providerId) switch
 		{
 			"openai" => "OpenAI",
 			"anthropic" => "Anthropic",
@@ -1207,8 +1210,7 @@ internal partial class MainForm : Form
 		if (_isRebuildingGatewayProviderTabs)
 			return;
 
-        ApplySelectedGatewayProviderChanges(_currentConfig.OllamaGateway);
-		UpdateGatewayOverviewProviderList(_currentConfig.OllamaGateway);
+		ApplyAllGatewayProviderChanges(_currentConfig.OllamaGateway);
 
 		var selectedProviderId = GetGatewayProviderId(_gatewayTabControl?.SelectedTab);
 		if (selectedProviderId is null)
@@ -1220,11 +1222,15 @@ internal partial class MainForm : Form
 
     private void GatewayProviderBaseUrl_TextChanged(object? sender, EventArgs e)
 	{
-		if (_isLoadingGatewayProviderFields)
+		if (_isLoadingGatewayProviderFields || sender is not Control inputControl)
 			return;
 
-        ApplySelectedGatewayProviderChanges(_currentConfig.OllamaGateway);
-		UpdateGatewayOverviewProviderList(_currentConfig.OllamaGateway);
+		var providerId = GetGatewayProviderIdFromControl(inputControl);
+		var control = GetGatewayProviderControl(providerId);
+		if (string.IsNullOrWhiteSpace(providerId) || control is null)
+			return;
+
+		ApplyGatewayProviderChanges(_currentConfig.OllamaGateway, providerId, control);
 	}
 
   private void LoadGatewayProviderTabs(OllamaGatewaySettings? gatewaySettings)
@@ -1251,7 +1257,6 @@ internal partial class MainForm : Form
 		_isRebuildingGatewayProviderTabs = false;
 		SelectGatewayProviderTab(selectedProviderId);
 
-		UpdateGatewayOverviewProviderList(gatewaySettings);
 	}
 
 	private string? GetSelectedGatewayProviderId()
@@ -1267,27 +1272,7 @@ internal partial class MainForm : Form
 
 		_gatewayTabControl.SelectedTab = tabPage;
 	}
-
-	private void UpdateGatewayOverviewProviderList(OllamaGatewaySettings? gatewaySettings)
-	{
-		if (_txtGatewayOverviewProviders is null)
-			return;
-
-		gatewaySettings ??= BuildOllamaGatewaySettings();
-		var lines = new List<string>();
-		foreach (var provider in EnumerateGatewayProviders(gatewaySettings))
-		{
-			var providerId = string.IsNullOrWhiteSpace(provider.Id) ? "openai" : provider.Id.Trim();
-			var name = string.IsNullOrWhiteSpace(provider.Name) ? providerId : provider.Name.Trim();
-			lines.Add($"- {name} [{providerId}]  suffix: {GetSimpleGatewayProviderSuffixHint(providerId)}");
-			lines.Add($"  enabled: {(provider.Enabled ? "yes" : "no")}");
-			lines.Add($"  baseUrl: {provider.BaseUrl}");
-			lines.Add($"  embeddings: {(provider.Capabilities?.SupportsEmbeddings == true ? "yes" : "no")}");
-		}
-
-		_txtGatewayOverviewProviders.Lines = lines.Count == 0 ? ["<no providers>"] : lines.ToArray();
-	}
-
+	 
 	private void ChkGatewayProviderEnabled_CheckedChanged(object? sender, EventArgs e)
 	{
 		if (_isLoadingGatewayProviderFields
@@ -1311,43 +1296,10 @@ internal partial class MainForm : Form
 		_currentConfig.OllamaGateway = gatewaySettings;
      LoadGatewayProviderTabs(gatewaySettings);
 		SelectGatewayProviderTab(providerId);
-		UpdateGatewayOverviewProviderList(gatewaySettings);
 	}
 
-	private void TxtGatewayOverviewProviders_DoubleClick(object? sender, EventArgs e)
-	{
-     JumpToProviderFromOverview();
-	}
-
-	private void TxtGatewayOverviewProviders_Click(object? sender, EventArgs e)
-	{
-        JumpToProviderFromOverview();
-	}
-
-  private void JumpToProviderFromOverview()
-	{
-		if (_txtGatewayOverviewProviders is null || _gatewayTabControl is null)
-			return;
-
-		var lineIndex = _txtGatewayOverviewProviders.GetLineFromCharIndex(_txtGatewayOverviewProviders.SelectionStart);
-		if (lineIndex < 0 || lineIndex >= _txtGatewayOverviewProviders.Lines.Length)
-			return;
-
-		var line = _txtGatewayOverviewProviders.Lines[lineIndex].Trim();
-		if (!line.StartsWith("- ") || !line.Contains("[", StringComparison.Ordinal) || !line.Contains("]", StringComparison.Ordinal))
-			return;
-
-		var start = line.IndexOf('[', StringComparison.Ordinal);
-		var end = line.IndexOf(']', start + 1);
-		if (start < 0 || end <= start)
-			return;
-
-		var providerId = line.Substring(start + 1, end - start - 1).Trim();
-		if (string.IsNullOrWhiteSpace(providerId))
-			return;
-
-		SelectGatewayProviderTab(providerId);
-	}
+ 
+ 
 
   private void LoadGatewayProviderControlValues(OllamaGatewaySettings? gatewaySettings, string? providerId)
 	{

@@ -75,6 +75,7 @@
 - Providers 页签现保留禁用项并显示 `(disabled)`，避免因过滤隐藏而造成“切不过去/像是丢了”的错觉。
 - Providers 工具按钮现改为 `Preset / Enable / Disable` 语义，匹配当前固定 provider 模式。
 - Gateway 配置模型已进一步收敛为显式三家 provider 对象；每个 provider 自带自己的模型路由 `routes`，不再依赖顶层共享 `providers / routes` 运行时结构。
+- 修复 Gateway provider 基础区的 `Base URL` 写回目标：现在按实际触发控件所属 provider 回写配置，不再因页签切换时序把 A 服务商地址写到 B 服务商上，导致模型目录串位。
 
 ### 兼容性
 - 保留 `localApiForwarder` 字段，避免旧配置立即失效。

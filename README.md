@@ -18,6 +18,7 @@
 > - Provider enable toggles now live inside each provider tab, and the Gateway provider UI is fully designer-defined instead of dynamically creating xAI/provider controls at runtime.
 > - Incoming Ollama Gateway requests are now persisted as one log file per request ID under the request log directory.
 > - Dead `Local API` designer fields and their compatibility-only MainForm code have been removed, along with the related MainForm nullability warnings.
+> - Provider base URL edits are now written back by the control's actual provider identity, preventing tab-switch timing from causing one provider to fetch another provider's models.
 
 ## 项目简介
 
@@ -139,6 +140,7 @@
   - `Endpoints`
   - `Capabilities`
   - 基础区里直接修改的 `Base URL` 会实时同步到当前 provider 配置，不需要先切换页签或手动保存才能在高级区/后续切换中生效
+  - 切换 provider 页签时，当前页已编辑的 `Base URL` 会按所属 provider 稳定回写，不会再出现 A 服务商误用 B 服务商模型目录的情况
 10. 切换到 `Routes` 页面，为当前 provider 按 `本地模型=上游模型` 逐行填写映射
 11. 如需排错，可在 `Diagnostics` 页面开启请求/响应日志、body 记录和错误诊断回传
 12. 保存配置后启动 TrafficPilot，本机其他应用即可继续访问 `http://127.0.0.1:<端口>/...`

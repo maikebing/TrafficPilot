@@ -139,18 +139,9 @@ partial class MainForm
     // Local API tab
     private TableLayoutPanel? _localApiPanel;
     private TabControl? _gatewayTabControl;
-    private TabPage? _gatewayOverviewTab;
     private TabPage? _gatewayDiagnosticsTab;
-    private TableLayoutPanel? _gatewayOverviewPanel;
-    private Label? _lblGatewayOverviewSummary;
-    private TextBox? _txtGatewayOverviewProviders;
     private FlowLayoutPanel? _localApiHeaderPanel;
     private CheckBox? _chkLocalApiForwarderEnabled;
-    private Label? _lblLocalApiHeaderHelp;
-    private Label? _lblLocalApiListenPorts;
-    private TableLayoutPanel? _localApiPortPanel;
-    private Label? _lblOllamaPort;
-    private NumericUpDown? _numOllamaPort;
     private FlowLayoutPanel? _localApiLoggingPanel;
     private CheckBox? _chkLocalApiRequestResponseLogging;
     private CheckBox? _chkLocalApiIncludeBodies;
@@ -214,16 +205,9 @@ partial class MainForm
         _localApiPanel = new TableLayoutPanel();
         _localApiHeaderPanel = new FlowLayoutPanel();
         _chkLocalApiForwarderEnabled = new CheckBox();
-        _lblLocalApiHeaderHelp = new Label();
-        _gatewayTabControl = new TabControl();
-        _gatewayOverviewTab = new TabPage();
-        _gatewayOverviewPanel = new TableLayoutPanel();
-        _lblLocalApiListenPorts = new Label();
-        _localApiPortPanel = new TableLayoutPanel();
         _lblOllamaPort = new Label();
         _numOllamaPort = new NumericUpDown();
-        _lblGatewayOverviewSummary = new Label();
-        _txtGatewayOverviewProviders = new TextBox();
+        _gatewayTabControl = new TabControl();
         _gatewayOpenAiProviderTab = new TabPage();
         _gatewayOpenAiProviderControl = new GatewayProviderSettingsControl();
         _gatewayAnthropicProviderTab = new TabPage();
@@ -325,11 +309,8 @@ partial class MainForm
         _localApiTab.SuspendLayout();
         _localApiPanel.SuspendLayout();
         _localApiHeaderPanel.SuspendLayout();
-        _gatewayTabControl.SuspendLayout();
-        _gatewayOverviewTab.SuspendLayout();
-        _gatewayOverviewPanel.SuspendLayout();
-        _localApiPortPanel.SuspendLayout();
         ((ISupportInitialize)_numOllamaPort).BeginInit();
+        _gatewayTabControl.SuspendLayout();
         _gatewayOpenAiProviderTab.SuspendLayout();
         _gatewayAnthropicProviderTab.SuspendLayout();
         _gatewayGeminiProviderTab.SuspendLayout();
@@ -931,7 +912,8 @@ partial class MainForm
         _localApiHeaderPanel.AutoSize = true;
         _localApiPanel.SetColumnSpan(_localApiHeaderPanel, 2);
         _localApiHeaderPanel.Controls.Add(_chkLocalApiForwarderEnabled);
-        _localApiHeaderPanel.Controls.Add(_lblLocalApiHeaderHelp);
+        _localApiHeaderPanel.Controls.Add(_lblOllamaPort);
+        _localApiHeaderPanel.Controls.Add(_numOllamaPort);
         _localApiHeaderPanel.Dock = DockStyle.Top;
         _localApiHeaderPanel.Location = new Point(13, 13);
         _localApiHeaderPanel.Name = "_localApiHeaderPanel";
@@ -949,20 +931,31 @@ partial class MainForm
         _chkLocalApiForwarderEnabled.TabIndex = 0;
         _chkLocalApiForwarderEnabled.Text = "Enable local Ollama Gateway";
         // 
-        // _lblLocalApiHeaderHelp
+        // _lblOllamaPort
         // 
-        _lblLocalApiHeaderHelp.Anchor = AnchorStyles.Left;
-        _lblLocalApiHeaderHelp.AutoSize = true;
-        _lblLocalApiHeaderHelp.Location = new Point(213, 6);
-        _lblLocalApiHeaderHelp.Name = "_lblLocalApiHeaderHelp";
-        _lblLocalApiHeaderHelp.Size = new Size(380, 17);
-        _lblLocalApiHeaderHelp.TabIndex = 1;
-        _lblLocalApiHeaderHelp.Text = "TrafficPilot keeps gateway listeners on loopback only for safety.";
+        _lblOllamaPort.Dock = DockStyle.Fill;
+        _lblOllamaPort.Location = new Point(213, 0);
+        _lblOllamaPort.Name = "_lblOllamaPort";
+        _lblOllamaPort.Size = new Size(104, 29);
+        _lblOllamaPort.TabIndex = 3;
+        _lblOllamaPort.Text = "Ollama Port:";
+        _lblOllamaPort.TextAlign = ContentAlignment.MiddleRight;
+        // 
+        // _numOllamaPort
+        // 
+        _numOllamaPort.Dock = DockStyle.Fill;
+        _numOllamaPort.Location = new Point(323, 6);
+        _numOllamaPort.Margin = new Padding(3, 6, 3, 6);
+        _numOllamaPort.Maximum = new decimal(new int[] { 65535, 0, 0, 0 });
+        _numOllamaPort.Minimum = new decimal(new int[] { 1, 0, 0, 0 });
+        _numOllamaPort.Name = "_numOllamaPort";
+        _numOllamaPort.Size = new Size(447, 23);
+        _numOllamaPort.TabIndex = 4;
+        _numOllamaPort.Value = new decimal(new int[] { 11434, 0, 0, 0 });
         // 
         // _gatewayTabControl
         // 
         _localApiPanel.SetColumnSpan(_gatewayTabControl, 2);
-        _gatewayTabControl.Controls.Add(_gatewayOverviewTab);
         _gatewayTabControl.Controls.Add(_gatewayOpenAiProviderTab);
         _gatewayTabControl.Controls.Add(_gatewayAnthropicProviderTab);
         _gatewayTabControl.Controls.Add(_gatewayGeminiProviderTab);
@@ -974,109 +967,6 @@ partial class MainForm
         _gatewayTabControl.SelectedIndex = 0;
         _gatewayTabControl.Size = new Size(743, 535);
         _gatewayTabControl.TabIndex = 2;
-        // 
-        // _gatewayOverviewTab
-        // 
-        _gatewayOverviewTab.Controls.Add(_gatewayOverviewPanel);
-        _gatewayOverviewTab.Location = new Point(4, 26);
-        _gatewayOverviewTab.Name = "_gatewayOverviewTab";
-        _gatewayOverviewTab.Padding = new Padding(8);
-        _gatewayOverviewTab.Size = new Size(735, 505);
-        _gatewayOverviewTab.TabIndex = 0;
-        _gatewayOverviewTab.Text = "Overview";
-        // 
-        // _gatewayOverviewPanel
-        // 
-        _gatewayOverviewPanel.ColumnCount = 2;
-        _gatewayOverviewPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 150F));
-        _gatewayOverviewPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-        _gatewayOverviewPanel.Controls.Add(_lblLocalApiListenPorts, 0, 0);
-        _gatewayOverviewPanel.Controls.Add(_localApiPortPanel, 1, 0);
-        _gatewayOverviewPanel.Controls.Add(_lblGatewayOverviewSummary, 0, 1);
-        _gatewayOverviewPanel.Controls.Add(_txtGatewayOverviewProviders, 1, 1);
-        _gatewayOverviewPanel.Dock = DockStyle.Fill;
-        _gatewayOverviewPanel.Location = new Point(8, 8);
-        _gatewayOverviewPanel.Name = "_gatewayOverviewPanel";
-        _gatewayOverviewPanel.RowCount = 2;
-        _gatewayOverviewPanel.RowStyles.Add(new RowStyle());
-        _gatewayOverviewPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
-        _gatewayOverviewPanel.Size = new Size(719, 489);
-        _gatewayOverviewPanel.TabIndex = 0;
-        // 
-        // _lblLocalApiListenPorts
-        // 
-        _lblLocalApiListenPorts.Anchor = AnchorStyles.Left | AnchorStyles.Right;
-        _lblLocalApiListenPorts.Location = new Point(3, 9);
-        _lblLocalApiListenPorts.Name = "_lblLocalApiListenPorts";
-        _lblLocalApiListenPorts.Size = new Size(144, 23);
-        _lblLocalApiListenPorts.TabIndex = 1;
-        _lblLocalApiListenPorts.Text = "Ollama Port:";
-        _lblLocalApiListenPorts.TextAlign = ContentAlignment.MiddleRight;
-        // 
-        // _localApiPortPanel
-        // 
-        _localApiPortPanel.ColumnCount = 2;
-        _localApiPortPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 110F));
-        _localApiPortPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 100F));
-        _localApiPortPanel.Controls.Add(_lblOllamaPort, 0, 0);
-        _localApiPortPanel.Controls.Add(_numOllamaPort, 1, 0);
-        _localApiPortPanel.Dock = DockStyle.Fill;
-        _localApiPortPanel.Location = new Point(153, 3);
-        _localApiPortPanel.Name = "_localApiPortPanel";
-        _localApiPortPanel.RowCount = 1;
-        _localApiPortPanel.RowStyles.Add(new RowStyle());
-        _localApiPortPanel.Size = new Size(563, 35);
-        _localApiPortPanel.TabIndex = 2;
-        // 
-        // _lblOllamaPort
-        // 
-        _lblOllamaPort.Dock = DockStyle.Fill;
-        _lblOllamaPort.Location = new Point(3, 0);
-        _lblOllamaPort.Name = "_lblOllamaPort";
-        _lblOllamaPort.Size = new Size(104, 36);
-        _lblOllamaPort.TabIndex = 0;
-        _lblOllamaPort.Text = "Ollama Port:";
-        _lblOllamaPort.TextAlign = ContentAlignment.MiddleRight;
-        // 
-        // _numOllamaPort
-        // 
-        _numOllamaPort.Dock = DockStyle.Fill;
-        _numOllamaPort.Location = new Point(113, 6);
-        _numOllamaPort.Margin = new Padding(3, 6, 3, 6);
-        _numOllamaPort.Maximum = new decimal(new int[] { 65535, 0, 0, 0 });
-        _numOllamaPort.Minimum = new decimal(new int[] { 1, 0, 0, 0 });
-        _numOllamaPort.Name = "_numOllamaPort";
-        _numOllamaPort.Size = new Size(447, 23);
-        _numOllamaPort.TabIndex = 1;
-        _numOllamaPort.Value = new decimal(new int[] { 11434, 0, 0, 0 });
-        // 
-        // _lblGatewayOverviewSummary
-        // 
-        _lblGatewayOverviewSummary.AutoSize = true;
-        _lblGatewayOverviewSummary.Dock = DockStyle.Fill;
-        _lblGatewayOverviewSummary.Location = new Point(3, 41);
-        _lblGatewayOverviewSummary.Name = "_lblGatewayOverviewSummary";
-        _lblGatewayOverviewSummary.Padding = new Padding(0, 8, 0, 0);
-        _lblGatewayOverviewSummary.Size = new Size(144, 414);
-        _lblGatewayOverviewSummary.TabIndex = 5;
-        _lblGatewayOverviewSummary.Text = "Overview 只保留全局项。\r\n每个 provider 的启用状态都在对应页签内配置，设计器中静态可见。\r\n在 Providers 里先填写提供者地址和 API Key；协议、鉴权和端点默认自动判断。";
-        // 
-        // _txtGatewayOverviewProviders
-        // 
-        _txtGatewayOverviewProviders.BackColor = SystemColors.Window;
-        _txtGatewayOverviewProviders.Cursor = Cursors.Hand;
-        _txtGatewayOverviewProviders.Dock = DockStyle.Fill;
-        _txtGatewayOverviewProviders.Location = new Point(153, 44);
-        _txtGatewayOverviewProviders.Multiline = true;
-        _txtGatewayOverviewProviders.Name = "_txtGatewayOverviewProviders";
-        _txtGatewayOverviewProviders.ReadOnly = true;
-        _txtGatewayOverviewProviders.ScrollBars = ScrollBars.Vertical;
-        _txtGatewayOverviewProviders.ShortcutsEnabled = false;
-        _txtGatewayOverviewProviders.Size = new Size(563, 408);
-        _txtGatewayOverviewProviders.TabIndex = 6;
-        _txtGatewayOverviewProviders.WordWrap = false;
-        _txtGatewayOverviewProviders.Click += TxtGatewayOverviewProviders_Click;
-        _txtGatewayOverviewProviders.DoubleClick += TxtGatewayOverviewProviders_DoubleClick;
         // 
         // _gatewayOpenAiProviderTab
         // 
@@ -1234,7 +1124,7 @@ partial class MainForm
         _dnsRedirectTab.Controls.Add(_dnsRedirectPanel);
         _dnsRedirectTab.Location = new Point(4, 26);
         _dnsRedirectTab.Name = "_dnsRedirectTab";
-        _dnsRedirectTab.Size = new Size(769, 596);
+        _dnsRedirectTab.Size = new Size(192, 70);
         _dnsRedirectTab.TabIndex = 3;
         _dnsRedirectTab.Text = "DNS Redirect";
         // 
@@ -1264,7 +1154,7 @@ partial class MainForm
         _dnsRedirectPanel.RowStyles.Add(new RowStyle());
         _dnsRedirectPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 30.2670631F));
         _dnsRedirectPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 69.73294F));
-        _dnsRedirectPanel.Size = new Size(769, 596);
+        _dnsRedirectPanel.Size = new Size(192, 70);
         _dnsRedirectPanel.TabIndex = 0;
         // 
         // _grpRedirectMode
@@ -1278,7 +1168,7 @@ partial class MainForm
         _grpRedirectMode.Margin = new Padding(3, 3, 3, 10);
         _grpRedirectMode.Name = "_grpRedirectMode";
         _grpRedirectMode.Padding = new Padding(8, 5, 8, 8);
-        _grpRedirectMode.Size = new Size(743, 105);
+        _grpRedirectMode.Size = new Size(166, 105);
         _grpRedirectMode.TabIndex = 0;
         _grpRedirectMode.TabStop = false;
         _grpRedirectMode.Text = "Redirect Mode";
@@ -1294,7 +1184,7 @@ partial class MainForm
         _modePanelRedirectMode.FlowDirection = FlowDirection.TopDown;
         _modePanelRedirectMode.Location = new Point(8, 21);
         _modePanelRedirectMode.Name = "_modePanelRedirectMode";
-        _modePanelRedirectMode.Size = new Size(727, 76);
+        _modePanelRedirectMode.Size = new Size(150, 76);
         _modePanelRedirectMode.TabIndex = 0;
         _modePanelRedirectMode.WrapContents = false;
         // 
@@ -1326,7 +1216,7 @@ partial class MainForm
         _lblHostsFileWarning.Location = new Point(20, 56);
         _lblHostsFileWarning.Margin = new Padding(20, 0, 3, 3);
         _lblHostsFileWarning.Name = "_lblHostsFileWarning";
-        _lblHostsFileWarning.Size = new Size(428, 17);
+        _lblHostsFileWarning.Size = new Size(367, 34);
         _lblHostsFileWarning.TabIndex = 2;
         _lblHostsFileWarning.Text = "⚠ Requires Administrator privileges. Creates backup before modifying.";
         _lblHostsFileWarning.Visible = false;
@@ -1347,7 +1237,7 @@ partial class MainForm
         _txtHostsUrl.Location = new Point(165, 133);
         _txtHostsUrl.Margin = new Padding(5);
         _txtHostsUrl.Name = "_txtHostsUrl";
-        _txtHostsUrl.Size = new Size(589, 23);
+        _txtHostsUrl.Size = new Size(12, 23);
         _txtHostsUrl.TabIndex = 2;
         _txtHostsUrl.Text = "https://raw.hellogithub.com/hosts";
         // 
@@ -1361,7 +1251,7 @@ partial class MainForm
         _hostsRedirectBtnPanel.Location = new Point(165, 166);
         _hostsRedirectBtnPanel.Margin = new Padding(5);
         _hostsRedirectBtnPanel.Name = "_hostsRedirectBtnPanel";
-        _hostsRedirectBtnPanel.Size = new Size(589, 36);
+        _hostsRedirectBtnPanel.Size = new Size(12, 67);
         _hostsRedirectBtnPanel.TabIndex = 3;
         // 
         // _btnRefreshHosts
@@ -1375,7 +1265,7 @@ partial class MainForm
         // 
         // _btnFetchIps
         // 
-        _btnFetchIps.Location = new Point(129, 3);
+        _btnFetchIps.Location = new Point(3, 39);
         _btnFetchIps.Name = "_btnFetchIps";
         _btnFetchIps.Size = new Size(130, 30);
         _btnFetchIps.TabIndex = 1;
@@ -1385,7 +1275,7 @@ partial class MainForm
         // _chkRetestSlowOrTimeoutOnly
         // 
         _chkRetestSlowOrTimeoutOnly.AutoSize = true;
-        _chkRetestSlowOrTimeoutOnly.Location = new Point(265, 7);
+        _chkRetestSlowOrTimeoutOnly.Location = new Point(3, 79);
         _chkRetestSlowOrTimeoutOnly.Margin = new Padding(3, 7, 3, 3);
         _chkRetestSlowOrTimeoutOnly.Name = "_chkRetestSlowOrTimeoutOnly";
         _chkRetestSlowOrTimeoutOnly.Size = new Size(267, 21);
@@ -1396,7 +1286,7 @@ partial class MainForm
         // 
         _lblHostsStatus.AutoSize = true;
         _dnsRedirectPanel.SetColumnSpan(_lblHostsStatus, 2);
-        _lblHostsStatus.Location = new Point(13, 212);
+        _lblHostsStatus.Location = new Point(13, 243);
         _lblHostsStatus.Margin = new Padding(3, 5, 3, 3);
         _lblHostsStatus.Name = "_lblHostsStatus";
         _lblHostsStatus.Size = new Size(117, 17);
@@ -1411,9 +1301,9 @@ partial class MainForm
         _autoFetchPanel.Controls.Add(_numAutoFetchInterval);
         _autoFetchPanel.Controls.Add(_lblAutoFetchMinutes);
         _autoFetchPanel.Dock = DockStyle.Fill;
-        _autoFetchPanel.Location = new Point(13, 235);
+        _autoFetchPanel.Location = new Point(13, 266);
         _autoFetchPanel.Name = "_autoFetchPanel";
-        _autoFetchPanel.Size = new Size(743, 29);
+        _autoFetchPanel.Size = new Size(166, 29);
         _autoFetchPanel.TabIndex = 6;
         _autoFetchPanel.WrapContents = false;
         // 
@@ -1451,9 +1341,9 @@ partial class MainForm
         // _lblRefreshDomains
         // 
         _lblRefreshDomains.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
-        _lblRefreshDomains.Location = new Point(13, 267);
+        _lblRefreshDomains.Location = new Point(13, 298);
         _lblRefreshDomains.Name = "_lblRefreshDomains";
-        _lblRefreshDomains.Size = new Size(144, 23);
+        _lblRefreshDomains.Size = new Size(144, 1);
         _lblRefreshDomains.TabIndex = 6;
         _lblRefreshDomains.Text = "Refresh Domains:";
         _lblRefreshDomains.TextAlign = ContentAlignment.TopRight;
@@ -1462,13 +1352,13 @@ partial class MainForm
         // 
         _txtRefreshDomains.AcceptsReturn = true;
         _txtRefreshDomains.Dock = DockStyle.Fill;
-        _txtRefreshDomains.Location = new Point(165, 272);
+        _txtRefreshDomains.Location = new Point(165, 303);
         _txtRefreshDomains.Margin = new Padding(5);
         _txtRefreshDomains.Multiline = true;
         _txtRefreshDomains.Name = "_txtRefreshDomains";
         _txtRefreshDomains.PlaceholderText = "\nalive.github.com\ngithub.com";
         _txtRefreshDomains.ScrollBars = ScrollBars.Vertical;
-        _txtRefreshDomains.Size = new Size(589, 86);
+        _txtRefreshDomains.Size = new Size(12, 1);
         _txtRefreshDomains.TabIndex = 7;
         _txtRefreshDomains.WordWrap = false;
         // 
@@ -1478,9 +1368,9 @@ partial class MainForm
         _lvIpResults.Dock = DockStyle.Fill;
         _lvIpResults.FullRowSelect = true;
         _lvIpResults.GridLines = true;
-        _lvIpResults.Location = new Point(13, 366);
+        _lvIpResults.Location = new Point(13, 229);
         _lvIpResults.Name = "_lvIpResults";
-        _lvIpResults.Size = new Size(743, 217);
+        _lvIpResults.Size = new Size(166, 1);
         _lvIpResults.TabIndex = 8;
         _lvIpResults.UseCompatibleStateImageBehavior = false;
         _lvIpResults.View = View.Details;
@@ -1490,7 +1380,7 @@ partial class MainForm
         _logsTab.Controls.Add(_logPanel);
         _logsTab.Location = new Point(4, 26);
         _logsTab.Name = "_logsTab";
-        _logsTab.Size = new Size(769, 596);
+        _logsTab.Size = new Size(192, 70);
         _logsTab.TabIndex = 1;
         _logsTab.Text = "Logs";
         // 
@@ -1507,7 +1397,7 @@ partial class MainForm
         _logPanel.RowCount = 2;
         _logPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
         _logPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 40F));
-        _logPanel.Size = new Size(769, 596);
+        _logPanel.Size = new Size(192, 70);
         _logPanel.TabIndex = 0;
         // 
         // _rtbLogs
@@ -1519,7 +1409,7 @@ partial class MainForm
         _rtbLogs.Location = new Point(3, 3);
         _rtbLogs.Name = "_rtbLogs";
         _rtbLogs.ReadOnly = true;
-        _rtbLogs.Size = new Size(763, 550);
+        _rtbLogs.Size = new Size(186, 24);
         _rtbLogs.TabIndex = 0;
         _rtbLogs.Text = "";
         _rtbLogs.WordWrap = false;
@@ -1529,15 +1419,15 @@ partial class MainForm
         _btnClearPanel.Controls.Add(_btnClearLogs);
         _btnClearPanel.Dock = DockStyle.Fill;
         _btnClearPanel.FlowDirection = FlowDirection.RightToLeft;
-        _btnClearPanel.Location = new Point(5, 561);
+        _btnClearPanel.Location = new Point(5, 35);
         _btnClearPanel.Margin = new Padding(5);
         _btnClearPanel.Name = "_btnClearPanel";
-        _btnClearPanel.Size = new Size(759, 30);
+        _btnClearPanel.Size = new Size(182, 30);
         _btnClearPanel.TabIndex = 1;
         // 
         // _btnClearLogs
         // 
-        _btnClearLogs.Location = new Point(676, 3);
+        _btnClearLogs.Location = new Point(99, 3);
         _btnClearLogs.Name = "_btnClearLogs";
         _btnClearLogs.Size = new Size(80, 30);
         _btnClearLogs.TabIndex = 0;
@@ -1549,7 +1439,7 @@ partial class MainForm
         _aboutTab.Controls.Add(_aboutScrollPanel);
         _aboutTab.Location = new Point(4, 26);
         _aboutTab.Name = "_aboutTab";
-        _aboutTab.Size = new Size(769, 596);
+        _aboutTab.Size = new Size(192, 70);
         _aboutTab.TabIndex = 4;
         _aboutTab.Text = "About";
         // 
@@ -1562,7 +1452,7 @@ partial class MainForm
         _aboutScrollPanel.Margin = new Padding(0);
         _aboutScrollPanel.Name = "_aboutScrollPanel";
         _aboutScrollPanel.Padding = new Padding(10);
-        _aboutScrollPanel.Size = new Size(769, 596);
+        _aboutScrollPanel.Size = new Size(192, 70);
         _aboutScrollPanel.TabIndex = 0;
         // 
         // _aboutContentPanel
@@ -1593,7 +1483,7 @@ partial class MainForm
         _aboutContentPanel.RowStyles.Add(new RowStyle());
         _aboutContentPanel.RowStyles.Add(new RowStyle());
         _aboutContentPanel.RowStyles.Add(new RowStyle());
-        _aboutContentPanel.Size = new Size(732, 667);
+        _aboutContentPanel.Size = new Size(155, 1478);
         _aboutContentPanel.TabIndex = 0;
         // 
         // titleLabel
@@ -1617,7 +1507,7 @@ partial class MainForm
         _versionPanel.Location = new Point(10, 50);
         _versionPanel.Margin = new Padding(0, 0, 0, 15);
         _versionPanel.Name = "_versionPanel";
-        _versionPanel.Size = new Size(210, 28);
+        _versionPanel.Size = new Size(135, 28);
         _versionPanel.TabIndex = 1;
         _versionPanel.WrapContents = false;
         // 
@@ -1671,18 +1561,18 @@ partial class MainForm
         descLabel.Location = new Point(10, 93);
         descLabel.Margin = new Padding(0, 0, 0, 5);
         descLabel.Name = "descLabel";
-        descLabel.Size = new Size(142, 20);
+        descLabel.Size = new Size(89, 40);
         descLabel.TabIndex = 2;
         descLabel.Text = "Project Description";
         // 
         // descContentLabel
         // 
         descContentLabel.AutoSize = true;
-        descContentLabel.Location = new Point(20, 118);
+        descContentLabel.Location = new Point(20, 138);
         descContentLabel.Margin = new Padding(10, 0, 0, 15);
         descContentLabel.MaximumSize = new Size(450, 0);
         descContentLabel.Name = "descContentLabel";
-        descContentLabel.Size = new Size(450, 306);
+        descContentLabel.Size = new Size(125, 867);
         descContentLabel.TabIndex = 3;
         descContentLabel.Text = resources.GetString("descContentLabel.Text");
         // 
@@ -1690,21 +1580,21 @@ partial class MainForm
         // 
         contribLabel.AutoSize = true;
         contribLabel.Font = new Font("Segoe UI", 11F, FontStyle.Bold);
-        contribLabel.Location = new Point(10, 439);
+        contribLabel.Location = new Point(10, 1020);
         contribLabel.Margin = new Padding(0, 0, 0, 5);
         contribLabel.Name = "contribLabel";
-        contribLabel.Size = new Size(236, 20);
+        contribLabel.Size = new Size(132, 60);
         contribLabel.TabIndex = 4;
         contribLabel.Text = "Contributors & Acknowledgments";
         // 
         // contribContentLabel
         // 
         contribContentLabel.AutoSize = true;
-        contribContentLabel.Location = new Point(20, 464);
+        contribContentLabel.Location = new Point(20, 1085);
         contribContentLabel.Margin = new Padding(10, 0, 0, 15);
         contribContentLabel.MaximumSize = new Size(450, 0);
         contribContentLabel.Name = "contribContentLabel";
-        contribContentLabel.Size = new Size(299, 68);
+        contribContentLabel.Size = new Size(124, 204);
         contribContentLabel.TabIndex = 5;
         contribContentLabel.Text = "鈥?Original Author: maikebing\n鈥?Repository: github.com/maikebing/TrafficPilot\n鈥?WinDivert: Windows Packet Divert library\n鈥?Contributors: Community members and testers";
         // 
@@ -1712,21 +1602,21 @@ partial class MainForm
         // 
         techLabel.AutoSize = true;
         techLabel.Font = new Font("Segoe UI", 11F, FontStyle.Bold);
-        techLabel.Location = new Point(10, 547);
+        techLabel.Location = new Point(10, 1304);
         techLabel.Margin = new Padding(0, 0, 0, 5);
         techLabel.Name = "techLabel";
-        techLabel.Size = new Size(162, 20);
+        techLabel.Size = new Size(94, 40);
         techLabel.TabIndex = 6;
         techLabel.Text = "Technical Information";
         // 
         // techContentLabel
         // 
         techContentLabel.AutoSize = true;
-        techContentLabel.Location = new Point(20, 572);
+        techContentLabel.Location = new Point(20, 1349);
         techContentLabel.Margin = new Padding(10, 0, 0, 0);
         techContentLabel.MaximumSize = new Size(450, 0);
         techContentLabel.Name = "techContentLabel";
-        techContentLabel.Size = new Size(135, 85);
+        techContentLabel.Size = new Size(121, 119);
         techContentLabel.TabIndex = 7;
         techContentLabel.Text = "Platform: Windows\n.NET Version: .NET 10\nC# Version: 14.0\nArchitecture: x64\nLicense: Open Source";
         // 
@@ -1947,7 +1837,7 @@ partial class MainForm
         // 
         ClientSize = new Size(787, 691);
         Controls.Add(_mainPanel);
-        Icon = (Icon?)resources.GetObject("$this.Icon") ?? Resources.favicon;
+        Icon = (Icon)resources.GetObject("$this.Icon");
         MinimumSize = new Size(600, 400);
         Name = "MainForm";
         StartPosition = FormStartPosition.CenterScreen;
@@ -1979,12 +1869,8 @@ partial class MainForm
         _localApiPanel.PerformLayout();
         _localApiHeaderPanel.ResumeLayout(false);
         _localApiHeaderPanel.PerformLayout();
-        _gatewayTabControl.ResumeLayout(false);
-        _gatewayOverviewTab.ResumeLayout(false);
-        _gatewayOverviewPanel.ResumeLayout(false);
-        _gatewayOverviewPanel.PerformLayout();
-        _localApiPortPanel.ResumeLayout(false);
         ((ISupportInitialize)_numOllamaPort).EndInit();
+        _gatewayTabControl.ResumeLayout(false);
         _gatewayOpenAiProviderTab.ResumeLayout(false);
         _gatewayAnthropicProviderTab.ResumeLayout(false);
         _gatewayGeminiProviderTab.ResumeLayout(false);
@@ -2158,6 +2044,8 @@ partial class MainForm
     private Label label1 = null!;
     private Label lblBytes = null!;
     private Button btnResetConfig = null!;
+    private Label _lblOllamaPort;
+    private NumericUpDown _numOllamaPort;
 }
 
 
