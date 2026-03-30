@@ -135,9 +135,6 @@
 • 流量统计：实时显示接收/转发成功/失败数据包数量
 • 在线更新：一键检查并下载最新版本</value>
   </data>
-  <metadata name="_gatewayModelPreviewContextMenu.TrayLocation" type="System.Drawing.Point, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a">
-    <value>17, 17</value>
-  </metadata>
   <metadata name="_contextMenu.TrayLocation" type="System.Drawing.Point, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a">
     <value>284, 17</value>
   </metadata>
