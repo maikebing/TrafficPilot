@@ -80,6 +80,7 @@
 - 模型目录探测日志已补充 provider、请求 URI、响应状态、返回体形态与解析结果；默认日志也改为显示 Debug 并写入日志目录，便于定位上游模型读取问题。
 - 修复应用日志文件写入依赖后台线程直接读取 UI `Write To Directory` 复选框的问题；现在改为使用线程安全的活动日志设置快照，因此勾选写盘后会稳定落到日志目录。
 - Provider API Key 的凭据目标名已改为严格使用“服务商名称 + Base URL”生成，不再兼容旧的 provider-id / provider-name 规则；地址相同但名称不同、或名称相同但地址不同的 key 现在会彻底分开。
+- Gateway 请求/响应日志现在会显式标注实际命中的上游 provider；内部模型目录探测也改为使用中性的 `upstream.models` / `upstream.tags` 标签，不再把所有探测都误记成 `openai.models`。
 
 ### 兼容性
 - 保留 `localApiForwarder` 字段，避免旧配置立即失效。

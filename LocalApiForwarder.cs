@@ -519,8 +519,8 @@ internal sealed class LocalApiForwarder : IDisposable
 		var requestJson = await ReadRequestJsonAsync(context.Request, ct);
 		var requestedModel = requestJson["model"]?.GetValue<string>() ?? string.Empty;
 		var stream = requestJson["stream"]?.GetValue<bool>() ?? false;
-		LogRequestIfEnabled("openai.chat", requestJson);
 		var providerContext = ResolveProviderContextForModel(requestedModel);
+		LogRequestIfEnabled("openai.chat", requestJson, providerContext);
 
 		if (IsAnthropicProtocol(providerContext))
 		{
@@ -538,7 +538,7 @@ internal sealed class LocalApiForwarder : IDisposable
 			using var upstreamRequest = CreateUpstreamRequest(providerContext.Provider.ChatEndpoint, anthropicRequest, providerContext);
 			using var upstreamResponse = await _httpClient.SendAsync(upstreamRequest, HttpCompletionOption.ResponseHeadersRead, ct);
 			var body = await upstreamResponse.Content.ReadAsStringAsync(ct);
-			LogResponseIfEnabled("openai.chat", upstreamResponse.StatusCode, body);
+			LogResponseIfEnabled("openai.chat", upstreamResponse.StatusCode, body, providerContext);
 
 			if (!upstreamResponse.IsSuccessStatusCode)
 			{
@@ -566,7 +566,7 @@ internal sealed class LocalApiForwarder : IDisposable
 		}
 
 		var responseBody = await response.Content.ReadAsStringAsync(ct);
-		LogResponseIfEnabled("openai.chat", response.StatusCode, responseBody);
+		LogResponseIfEnabled("openai.chat", response.StatusCode, responseBody, providerContext);
 		if (!response.IsSuccessStatusCode)
 		{
 			await WriteErrorAsync(context.Response, "/v1/chat/completions", response.StatusCode,
@@ -581,9 +581,9 @@ internal sealed class LocalApiForwarder : IDisposable
 	private async Task HandleOpenAiEmbeddingsAsync(HttpListenerContext context, CancellationToken ct)
 	{
 		var requestJson = await ReadRequestJsonAsync(context.Request, ct);
-		LogRequestIfEnabled("openai.embeddings", requestJson);
 		var requestedModel = requestJson["model"]?.GetValue<string>() ?? string.Empty;
 		var providerContext = ResolveProviderContextForModel(requestedModel);
+		LogRequestIfEnabled("openai.embeddings", requestJson, providerContext);
 
 		if (IsAnthropicProtocol(providerContext))
 		{
@@ -597,7 +597,7 @@ internal sealed class LocalApiForwarder : IDisposable
 		using var request = CreateUpstreamRequest(providerContext.Provider.EmbeddingsEndpoint, requestJson, providerContext);
 		using var response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
 		var responseBody = await response.Content.ReadAsStringAsync(ct);
-		LogResponseIfEnabled("openai.embeddings", response.StatusCode, responseBody);
+		LogResponseIfEnabled("openai.embeddings", response.StatusCode, responseBody, providerContext);
 
 		if (!response.IsSuccessStatusCode)
 		{
@@ -613,10 +613,10 @@ internal sealed class LocalApiForwarder : IDisposable
 	private async Task HandleOpenAiResponsesAsync(HttpListenerContext context, CancellationToken ct)
 	{
 		var requestJson = await ReadRequestJsonAsync(context.Request, ct);
-		LogRequestIfEnabled("openai.responses", requestJson);
 		var requestedModel = requestJson["model"]?.GetValue<string>() ?? string.Empty;
 		var stream = requestJson["stream"]?.GetValue<bool>() ?? false;
 		var providerContext = ResolveProviderContextForModel(requestedModel);
+		LogRequestIfEnabled("openai.responses", requestJson, providerContext);
 
 		if (IsAnthropicProtocol(providerContext))
 		{
@@ -634,7 +634,7 @@ internal sealed class LocalApiForwarder : IDisposable
 			using var upstreamRequest = CreateUpstreamRequest(providerContext.Provider.ChatEndpoint, anthropicRequest, providerContext);
 			using var upstreamResponse = await _httpClient.SendAsync(upstreamRequest, HttpCompletionOption.ResponseHeadersRead, ct);
 			var body = await upstreamResponse.Content.ReadAsStringAsync(ct);
-			LogResponseIfEnabled("openai.responses", upstreamResponse.StatusCode, body);
+			LogResponseIfEnabled("openai.responses", upstreamResponse.StatusCode, body, providerContext);
 
 			if (!upstreamResponse.IsSuccessStatusCode)
 			{
@@ -663,7 +663,7 @@ internal sealed class LocalApiForwarder : IDisposable
 		}
 
 		var responseBody = await response.Content.ReadAsStringAsync(ct);
-		LogResponseIfEnabled("openai.responses", response.StatusCode, responseBody);
+		LogResponseIfEnabled("openai.responses", response.StatusCode, responseBody, providerContext);
 
 		if (!response.IsSuccessStatusCode)
 		{
@@ -681,8 +681,8 @@ internal sealed class LocalApiForwarder : IDisposable
 		var requestJson = await ReadRequestJsonAsync(context.Request, ct);
 		var localModel = requestJson["model"]?.GetValue<string>() ?? string.Empty;
 		var stream = requestJson["stream"]?.GetValue<bool>() ?? false;
-		LogRequestIfEnabled("ollama.generate", requestJson);
 		var providerContext = ResolveProviderContextForModel(localModel);
+		LogRequestIfEnabled("ollama.generate", requestJson, providerContext);
 
 		if (IsAnthropicProtocol(providerContext))
 		{
@@ -700,7 +700,7 @@ internal sealed class LocalApiForwarder : IDisposable
 			using var upstreamRequest = CreateUpstreamRequest(providerContext.Provider.ChatEndpoint, anthropicRequest, providerContext);
 			using var upstreamResponse = await _httpClient.SendAsync(upstreamRequest, HttpCompletionOption.ResponseHeadersRead, ct);
 			var body = await upstreamResponse.Content.ReadAsStringAsync(ct);
-			LogResponseIfEnabled("ollama.generate", upstreamResponse.StatusCode, body);
+			LogResponseIfEnabled("ollama.generate", upstreamResponse.StatusCode, body, providerContext);
 
 			if (!upstreamResponse.IsSuccessStatusCode)
 			{
@@ -733,7 +733,7 @@ internal sealed class LocalApiForwarder : IDisposable
 		}
 
 		var body2 = await upstreamResponse2.Content.ReadAsStringAsync(ct);
-		LogResponseIfEnabled("ollama.generate", upstreamResponse2.StatusCode, body2);
+		LogResponseIfEnabled("ollama.generate", upstreamResponse2.StatusCode, body2, providerContext);
 		if (!upstreamResponse2.IsSuccessStatusCode)
 		{
 			await WriteErrorAsync(context.Response, "/api/generate", upstreamResponse2.StatusCode,
@@ -755,8 +755,8 @@ internal sealed class LocalApiForwarder : IDisposable
 		var requestJson = await ReadRequestJsonAsync(context.Request, ct);
 		var localModel = requestJson["model"]?.GetValue<string>() ?? string.Empty;
 		var stream = requestJson["stream"]?.GetValue<bool>() ?? false;
-		LogRequestIfEnabled("ollama.chat", requestJson);
 		var providerContext = ResolveProviderContextForModel(localModel);
+		LogRequestIfEnabled("ollama.chat", requestJson, providerContext);
 
 		if (IsAnthropicProtocol(providerContext))
 		{
@@ -774,7 +774,7 @@ internal sealed class LocalApiForwarder : IDisposable
 			using var upstreamRequest = CreateUpstreamRequest(providerContext.Provider.ChatEndpoint, anthropicRequest, providerContext);
 			using var upstreamResponse = await _httpClient.SendAsync(upstreamRequest, HttpCompletionOption.ResponseHeadersRead, ct);
 			var body = await upstreamResponse.Content.ReadAsStringAsync(ct);
-			LogResponseIfEnabled("ollama.chat", upstreamResponse.StatusCode, body);
+			LogResponseIfEnabled("ollama.chat", upstreamResponse.StatusCode, body, providerContext);
 
 			if (!upstreamResponse.IsSuccessStatusCode)
 			{
@@ -807,7 +807,7 @@ internal sealed class LocalApiForwarder : IDisposable
 		}
 
 		var body2 = await upstreamResponse2.Content.ReadAsStringAsync(ct);
-		LogResponseIfEnabled("ollama.chat", upstreamResponse2.StatusCode, body2);
+		LogResponseIfEnabled("ollama.chat", upstreamResponse2.StatusCode, body2, providerContext);
 		if (!upstreamResponse2.IsSuccessStatusCode)
 		{
 			await WriteErrorAsync(context.Response, "/api/chat", upstreamResponse2.StatusCode,
@@ -828,8 +828,8 @@ internal sealed class LocalApiForwarder : IDisposable
 	{
 		var requestJson = await ReadRequestJsonAsync(context.Request, ct);
 		var localModel = requestJson["model"]?.GetValue<string>() ?? string.Empty;
-		LogRequestIfEnabled("ollama.embeddings", requestJson);
 		var providerContext = ResolveProviderContextForModel(localModel);
+		LogRequestIfEnabled("ollama.embeddings", requestJson, providerContext);
 
 		if (IsAnthropicProtocol(providerContext))
 		{
@@ -843,7 +843,7 @@ internal sealed class LocalApiForwarder : IDisposable
 		using var request = CreateUpstreamRequest(providerContext.Provider.EmbeddingsEndpoint, upstreamRequestJson, providerContext);
 		using var response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
 		var responseBody = await response.Content.ReadAsStringAsync(ct);
-		LogResponseIfEnabled("ollama.embeddings", response.StatusCode, responseBody);
+		LogResponseIfEnabled("ollama.embeddings", response.StatusCode, responseBody, providerContext);
 
 		if (!response.IsSuccessStatusCode)
 		{
@@ -901,7 +901,7 @@ internal sealed class LocalApiForwarder : IDisposable
 		};
 
 		request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-		LogDebug($"upstream POST {requestUri} | content-type=application/json | bytes={requestBytes.Length}");
+		LogDebug($"upstream POST {requestUri} | provider='{GetProviderLogName(providerContext)}' | content-type=application/json | bytes={requestBytes.Length}");
 		ApplyAuthentication(request, providerContext);
 		foreach (var header in providerContext.Provider.AdditionalHeaders)
 		{
@@ -929,7 +929,7 @@ internal sealed class LocalApiForwarder : IDisposable
 	{
 		var request = new HttpRequestMessage(HttpMethod.Get, requestUri);
 		request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-		LogDebug($"upstream GET {requestUri} | accept=application/json");
+		LogDebug($"upstream GET {requestUri} | provider='{GetProviderLogName(providerContext)}' | accept=application/json");
 		ApplyAuthentication(request, providerContext);
 		foreach (var header in providerContext.Provider.AdditionalHeaders)
 		{
@@ -2580,23 +2580,27 @@ internal sealed class LocalApiForwarder : IDisposable
 			?? throw new InvalidOperationException($"{description} was not a JSON object.");
 	}
 
-	private void LogRequestIfEnabled(string operation, JsonNode payload)
+	private void LogRequestIfEnabled(string operation, JsonNode payload, GatewayProviderRuntimeContext? providerContext = null)
 	{
 		if (_settings.RequestResponseLogging.Enabled != true)
 			return;
 
-		var message = $"request {operation}";
+		var message = providerContext is null
+			? $"request {operation}"
+			: $"request {operation} | provider='{GetProviderLogName(providerContext)}'";
 		if (_settings.RequestResponseLogging?.IncludeBodies == true)
 			message += $": {TruncateForLog(payload.ToJsonString(JsonOptions))}";
 		LogDebug(message);
 	}
 
-	private void LogResponseIfEnabled(string operation, HttpStatusCode statusCode, string body)
+	private void LogResponseIfEnabled(string operation, HttpStatusCode statusCode, string body, GatewayProviderRuntimeContext? providerContext = null)
 	{
 		if (_settings.RequestResponseLogging.Enabled != true)
 			return;
 
-		var message = $"response {operation}: {(int)statusCode} {statusCode}";
+		var message = providerContext is null
+			? $"response {operation}: {(int)statusCode} {statusCode}"
+			: $"response {operation} | provider='{GetProviderLogName(providerContext)}': {(int)statusCode} {statusCode}";
 		if (_settings.RequestResponseLogging?.IncludeBodies == true)
 			message += $" | {TruncateForLog(body)}";
 		if ((int)statusCode >= 500)
@@ -2616,6 +2620,15 @@ internal sealed class LocalApiForwarder : IDisposable
 		var contentType = string.IsNullOrWhiteSpace(request.ContentType) ? "-" : request.ContentType;
 		var contentLength = request.HasEntityBody ? request.ContentLength64 : 0;
 		LogDebug($"incoming #{requestId}: {request.HttpMethod} {path}{query} | content-type={contentType} | length={contentLength}");
+	}
+
+	private static string GetProviderLogName(GatewayProviderRuntimeContext providerContext)
+	{
+		ArgumentNullException.ThrowIfNull(providerContext);
+
+		return string.IsNullOrWhiteSpace(providerContext.Provider.Name)
+			? GatewayProviderModelHelpers.NormalizeProviderId(providerContext.Provider.Id)
+			: providerContext.Provider.Name.Trim();
 	}
 
 	private string TruncateForLog(string text)
@@ -3634,7 +3647,7 @@ internal sealed class LocalApiForwarder : IDisposable
 				using var request = CreateUpstreamGetRequest(candidate.RequestUri, providerContext);
 				using var response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
 				var responseBody = await response.Content.ReadAsStringAsync(ct);
-				LogResponseIfEnabled(candidate.LogOperation, response.StatusCode, responseBody);
+				LogResponseIfEnabled(candidate.LogOperation, response.StatusCode, responseBody, providerContext);
 				LogInfo($"model catalog response: provider='{providerContext.Provider.Name}' uri={candidate.RequestUri} status={(int)response.StatusCode} bytes={responseBody.Length}");
 
 				if (!response.IsSuccessStatusCode)
@@ -3682,19 +3695,19 @@ internal sealed class LocalApiForwarder : IDisposable
 
 		var primaryModelsUri = BuildUpstreamUri("models", providerContext);
 		if (TryAdd(primaryModelsUri))
-			yield return (primaryModelsUri, "openai.models");
+			yield return (primaryModelsUri, "upstream.models");
 
 		if (!basePath.EndsWith("/v1", StringComparison.OrdinalIgnoreCase)
 			&& !basePath.Equals("v1", StringComparison.OrdinalIgnoreCase))
 		{
 			var rootModelsUri = BuildUpstreamRootUri("v1/models", providerContext);
 			if (TryAdd(rootModelsUri))
-				yield return (rootModelsUri, "openai.models");
+				yield return (rootModelsUri, "upstream.models");
 		}
 
 		var ollamaTagsUri = BuildUpstreamRootUri("api/tags", providerContext);
 		if (TryAdd(ollamaTagsUri))
-			yield return (ollamaTagsUri, "ollama.tags");
+			yield return (ollamaTagsUri, "upstream.tags");
 	}
 
 	private IReadOnlyList<ModelCatalogEntry> ParseUpstreamModelCatalog(string responseBody, GatewayProviderRuntimeContext providerContext)

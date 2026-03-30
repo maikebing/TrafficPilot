@@ -23,6 +23,7 @@
 > - App logs now default to showing debug entries and writing log files under the app log directory for easier gateway diagnostics.
 > - App log file writing now uses the active logging settings snapshot instead of reading the UI checkbox from a background flush thread, so selecting `Write To Directory` reliably produces log files.
 > - Provider API keys are now stored strictly by `provider name + base URL`; old provider-id based credential targets are no longer read.
+> - Gateway request/response logs now annotate the actual upstream provider, and internal model-catalog probes use neutral `upstream.models` / `upstream.tags` labels instead of misleading fixed `openai.models` markers.
 
 ## 项目简介
 
