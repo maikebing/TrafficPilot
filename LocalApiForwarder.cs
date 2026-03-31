@@ -968,10 +968,41 @@ internal sealed class LocalApiForwarder : IDisposable
 	private Uri BuildUpstreamRootUri(string relativePath, GatewayProviderRuntimeContext providerContext)
 	{
 		var baseUri = NormalizeBaseUri(providerContext.Provider.BaseUrl);
-		var rootUri = new Uri(baseUri.GetLeftPart(UriPartial.Authority) + "/", UriKind.Absolute);
+		var rootUri = GetUpstreamRootBaseUri(baseUri);
 		var relative = (relativePath ?? string.Empty).TrimStart('/');
 		var uri = new Uri(rootUri, relative);
 		return AppendQueryAuthIfNeeded(uri, providerContext);
+	}
+
+	private static Uri GetUpstreamRootBaseUri(Uri baseUri)
+	{
+		var normalizedPath = baseUri.AbsolutePath.TrimEnd('/');
+		if (normalizedPath.Length == 0 || normalizedPath.Equals("/", StringComparison.Ordinal))
+			return new Uri(baseUri.GetLeftPart(UriPartial.Authority) + "/", UriKind.Absolute);
+
+		if (normalizedPath.Equals("/v1", StringComparison.OrdinalIgnoreCase))
+		{
+			var builder = new UriBuilder(baseUri)
+			{
+				Path = "/",
+				Query = string.Empty,
+				Fragment = string.Empty
+			};
+			return builder.Uri;
+		}
+
+		if (normalizedPath.EndsWith("/v1", StringComparison.OrdinalIgnoreCase))
+		{
+			var builder = new UriBuilder(baseUri)
+			{
+				Path = $"{normalizedPath[..^3]}/",
+				Query = string.Empty,
+				Fragment = string.Empty
+			};
+			return builder.Uri;
+		}
+
+		return new Uri(baseUri.GetLeftPart(UriPartial.Authority) + "/", UriKind.Absolute);
 	}
 
 	private Uri AppendQueryAuthIfNeeded(Uri uri, GatewayProviderRuntimeContext providerContext)
@@ -1019,10 +1050,11 @@ internal sealed class LocalApiForwarder : IDisposable
 
 	private static Uri NormalizeBaseUri(string baseUrl)
 	{
-		if (baseUrl.EndsWith("/", StringComparison.Ordinal))
-			return new Uri(baseUrl, UriKind.Absolute);
+		var trimmedBaseUrl = baseUrl.Trim();
+		if (trimmedBaseUrl.EndsWith("/", StringComparison.Ordinal))
+			return new Uri(trimmedBaseUrl, UriKind.Absolute);
 
-		return new Uri($"{baseUrl}/", UriKind.Absolute);
+		return new Uri($"{trimmedBaseUrl}/", UriKind.Absolute);
 	}
 
 	private bool IsAnthropicProvider =>
@@ -3716,14 +3748,26 @@ internal sealed class LocalApiForwarder : IDisposable
 		if (!basePath.EndsWith("/v1", StringComparison.OrdinalIgnoreCase)
 			&& !basePath.Equals("v1", StringComparison.OrdinalIgnoreCase))
 		{
+			var scopedV1ModelsUri = BuildUpstreamUri("v1/models", providerContext);
+			if (TryAdd(scopedV1ModelsUri))
+				yield return (scopedV1ModelsUri, "upstream.models");
+
 			var rootModelsUri = BuildUpstreamRootUri("v1/models", providerContext);
 			if (TryAdd(rootModelsUri))
 				yield return (rootModelsUri, "upstream.models");
 		}
 
-		var ollamaTagsUri = BuildUpstreamRootUri("api/tags", providerContext);
-		if (TryAdd(ollamaTagsUri))
-			yield return (ollamaTagsUri, "upstream.tags");
+		var rootTagsUri = BuildUpstreamRootUri("tags", providerContext);
+		if (TryAdd(rootTagsUri))
+			yield return (rootTagsUri, "upstream.tags");
+
+		var rootApiTagsUri = BuildUpstreamRootUri("api/tags", providerContext);
+		if (TryAdd(rootApiTagsUri))
+			yield return (rootApiTagsUri, "upstream.tags");
+
+		var scopedApiTagsUri = BuildUpstreamUri("api/tags", providerContext);
+		if (TryAdd(scopedApiTagsUri))
+			yield return (scopedApiTagsUri, "upstream.tags");
 	}
 
 	private IReadOnlyList<ModelCatalogEntry> ParseUpstreamModelCatalog(string responseBody, GatewayProviderRuntimeContext providerContext)

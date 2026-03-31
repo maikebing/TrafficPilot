@@ -326,7 +326,7 @@
 | `localApiForwarder.requestResponseLogging.maxBodyCharacters` | int | 请求/响应正文日志最大字符数 |
 | `localApiForwarder.provider.protocol` | string | 上游协议适配器（`OpenAICompatible` / `Anthropic`） |
 | `localApiForwarder.provider.name` | string | 第三方 API 供应商显示名称 |
-| `localApiForwarder.provider.baseUrl` | string | 第三方 OpenAI-compatible API 基础地址（建议包含 `/v1/`） |
+| `localApiForwarder.provider.baseUrl` | string | 第三方 OpenAI-compatible API 基础地址（建议包含 `/v1/`，也支持带子路径前缀的地址，例如 `https://api.routin.ai/plan/v1`；此时 `models` 会请求到 `https://api.routin.ai/plan/v1/models`，`tags` 会优先请求到 `https://api.routin.ai/plan/tags`） |
 | `localApiForwarder.provider.defaultModel` | string | 未命中映射时使用的默认远程模型 |
 | `localApiForwarder.provider.defaultEmbeddingModel` | string | embeddings 请求默认使用的远程模型 |
 | `localApiForwarder.provider.authType` | string | 上游鉴权方式（`Bearer` / `Header` / `Query`） |
