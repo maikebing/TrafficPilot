@@ -4,6 +4,7 @@ using System.Net;
 using System.Net.NetworkInformation;
 using System.Reflection;
 using System.Text;
+using System.Text.Json.Serialization;
 using TrafficPilot.Properties;
 
 namespace TrafficPilot;
@@ -502,8 +503,7 @@ internal partial class MainForm : Form
 
 			string json = await syncProvider.PullAsync(gistId).ConfigureAwait(true);
 
-			var options = new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true };
-			var model = System.Text.Json.JsonSerializer.Deserialize<ProxyConfigModel>(json, options);
+			var model = System.Text.Json.JsonSerializer.Deserialize(json, TrafficPilotJsonContext.Default.ProxyConfigModel);
 			if (model is null)
 				throw new InvalidOperationException("Remote config could not be deserialized.");
 
@@ -994,8 +994,26 @@ internal partial class MainForm : Form
 		if (value is null)
 			return default;
 
-		var json = System.Text.Json.JsonSerializer.Serialize(value);
-		return System.Text.Json.JsonSerializer.Deserialize<T>(json);
+		if (typeof(T) == typeof(ProxyConfigModel))
+		{
+			var json = System.Text.Json.JsonSerializer.Serialize((ProxyConfigModel)(object)value, TrafficPilotJsonContext.Default.ProxyConfigModel);
+			return (T?)(object?)System.Text.Json.JsonSerializer.Deserialize(json, TrafficPilotJsonContext.Default.ProxyConfigModel);
+		}
+
+		if (typeof(T) == typeof(OllamaGatewaySettings))
+		{
+			var json = System.Text.Json.JsonSerializer.Serialize((OllamaGatewaySettings)(object)value, TrafficPilotJsonContext.Default.OllamaGatewaySettings);
+			return (T?)(object?)System.Text.Json.JsonSerializer.Deserialize(json, TrafficPilotJsonContext.Default.OllamaGatewaySettings);
+		}
+
+		throw new NotSupportedException($"AOT clone is not configured for type '{typeof(T).FullName}'.");
+	}
+
+	[JsonSourceGenerationOptions(PropertyNameCaseInsensitive = true, WriteIndented = false)]
+	[JsonSerializable(typeof(ProxyConfigModel))]
+	[JsonSerializable(typeof(OllamaGatewaySettings))]
+	private sealed partial class TrafficPilotJsonContext : JsonSerializerContext
+	{
 	}
 
    private void ApplyAllGatewayProviderChanges(OllamaGatewaySettings? gatewaySettings)

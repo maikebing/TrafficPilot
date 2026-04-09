@@ -1228,7 +1228,7 @@ internal sealed class LocalApiForwarder : IDisposable
 		var system = source["system"]?.GetValue<string>();
 		if (!string.IsNullOrWhiteSpace(system))
 		{
-			messages.Add(new JsonObject
+			AddNode(messages, new JsonObject
 			{
 				["role"] = "system",
 				["content"] = system
@@ -1238,7 +1238,7 @@ internal sealed class LocalApiForwarder : IDisposable
 		var prompt = source["prompt"]?.GetValue<string>();
 		if (!string.IsNullOrWhiteSpace(prompt))
 		{
-			messages.Add(new JsonObject
+			AddNode(messages, new JsonObject
 			{
 				["role"] = "user",
 				["content"] = prompt
@@ -1288,7 +1288,7 @@ internal sealed class LocalApiForwarder : IDisposable
 			var role = message["role"]?.GetValue<string>() ?? "user";
 			if (role.Equals("tool", StringComparison.OrdinalIgnoreCase))
 			{
-				converted.Add(ConvertOllamaToolMessageToOpenAi(message, pendingToolCallIdsByName));
+				AddNode(converted, ConvertOllamaToolMessageToOpenAi(message, pendingToolCallIdsByName));
 				continue;
 			}
 
@@ -1301,7 +1301,7 @@ internal sealed class LocalApiForwarder : IDisposable
 			if (message["tool_calls"] is JsonArray toolCalls && toolCalls.Count > 0)
 				openAiMessage["tool_calls"] = ConvertOllamaToolCallsToOpenAi(toolCalls, pendingToolCallIdsByName);
 
-			converted.Add(openAiMessage);
+			AddNode(converted, openAiMessage);
 		}
 
 		return converted;
@@ -1319,7 +1319,7 @@ internal sealed class LocalApiForwarder : IDisposable
 		var text = ExtractTextContent(message["content"]);
 		if (!string.IsNullOrWhiteSpace(text))
 		{
-			content.Add(new JsonObject
+			AddNode(content, new JsonObject
 			{
 				["type"] = "text",
 				["text"] = text
@@ -1332,7 +1332,7 @@ internal sealed class LocalApiForwarder : IDisposable
 			if (string.IsNullOrWhiteSpace(image))
 				continue;
 
-			content.Add(new JsonObject
+			AddNode(content, new JsonObject
 			{
 				["type"] = "image_url",
 				["image_url"] = new JsonObject
@@ -1372,7 +1372,7 @@ internal sealed class LocalApiForwarder : IDisposable
 			}
 
 			queue.Enqueue(toolCallId);
-			converted.Add(new JsonObject
+			AddNode(converted, new JsonObject
 			{
 				["id"] = toolCallId,
 				["type"] = "function",
@@ -1573,7 +1573,7 @@ internal sealed class LocalApiForwarder : IDisposable
 					var callId = TryReadString(messageObject["call_id"])
 						?? TryReadString(messageObject["id"])
 						?? $"call_{Guid.NewGuid():N}";
-					pendingToolCalls.Add(new JsonObject
+					AddNode(pendingToolCalls, new JsonObject
 					{
 						["id"] = callId,
 						["type"] = "function",
@@ -1590,7 +1590,7 @@ internal sealed class LocalApiForwarder : IDisposable
 				{
 					if (pendingToolCalls.Count > 0)
 					{
-						result.Add(new JsonObject
+						AddNode(result, new JsonObject
 						{
 							["role"] = "assistant",
 							["content"] = (JsonNode?)null,
@@ -1602,7 +1602,7 @@ internal sealed class LocalApiForwarder : IDisposable
 					var toolCallId = TryReadString(messageObject["call_id"])
 						?? $"call_{Guid.NewGuid():N}";
 					var output = TryReadString(messageObject["output"]) ?? string.Empty;
-					result.Add(new JsonObject
+					AddNode(result, new JsonObject
 					{
 						["role"] = "tool",
 						["tool_call_id"] = toolCallId,
@@ -1613,7 +1613,7 @@ internal sealed class LocalApiForwarder : IDisposable
 
 				if (pendingToolCalls.Count > 0)
 				{
-					result.Add(new JsonObject
+					AddNode(result, new JsonObject
 					{
 						["role"] = "assistant",
 						["content"] = (JsonNode?)null,
@@ -1624,7 +1624,7 @@ internal sealed class LocalApiForwarder : IDisposable
 
 				if (messageObject["role"] is not null && messageObject["content"] is not null)
 				{
-					result.Add(new JsonObject
+					AddNode(result, new JsonObject
 					{
 						["role"] = messageObject["role"]!.DeepClone(),
 						["content"] = ConvertResponsesContentToMessageContent(messageObject["content"])
@@ -1634,7 +1634,7 @@ internal sealed class LocalApiForwarder : IDisposable
 
 				if (itemType.Equals("message", StringComparison.OrdinalIgnoreCase))
 				{
-					result.Add(new JsonObject
+					AddNode(result, new JsonObject
 					{
 						["role"] = messageObject["role"]?.GetValue<string>() ?? "user",
 						["content"] = ConvertResponsesContentToMessageContent(messageObject["content"])
@@ -1644,7 +1644,7 @@ internal sealed class LocalApiForwarder : IDisposable
 
 			if (pendingToolCalls.Count > 0)
 			{
-				result.Add(new JsonObject
+				AddNode(result, new JsonObject
 				{
 					["role"] = "assistant",
 					["content"] = (JsonNode?)null,
@@ -1686,11 +1686,11 @@ internal sealed class LocalApiForwarder : IDisposable
 		{
 			if (toolNode["function"] is JsonObject)
 			{
-				result.Add(toolNode.DeepClone());
+				AddNode(result, toolNode.DeepClone());
 				continue;
 			}
 
-			result.Add(new JsonObject
+			AddNode(result, new JsonObject
 			{
 				["type"] = "function",
 				["function"] = new JsonObject
@@ -2063,15 +2063,13 @@ internal sealed class LocalApiForwarder : IDisposable
 				["id"] = messageItemId,
 				["status"] = "completed",
 				["role"] = "assistant",
-				["content"] = new JsonArray
-				{
+				["content"] = CreateArray(
 					new JsonObject
 					{
 						["type"] = "output_text",
 						["text"] = text,
 						["annotations"] = new JsonArray()
-					}
-				}
+					})
 			}
 		});
 	}
@@ -2083,6 +2081,15 @@ internal sealed class LocalApiForwarder : IDisposable
 		await writer.WriteAsync("data: ");
 		await writer.WriteLineAsync(data.ToJsonString(JsonOptions));
 		await writer.WriteLineAsync();
+	}
+
+	private static JsonArray CreateArray(params JsonNode?[] items)
+	{
+		JsonArray array = [];
+		foreach (var item in items)
+			AddNode(array, item);
+
+		return array;
 	}
 
 	private JsonObject BuildAnthropicMessagesRequestFromGenerate(JsonObject source)
@@ -2133,7 +2140,7 @@ internal sealed class LocalApiForwarder : IDisposable
 		var system = source["system"]?.GetValue<string>();
 		if (!string.IsNullOrWhiteSpace(system))
 		{
-			messages.Add(new JsonObject
+			AddNode(messages, new JsonObject
 			{
 				["role"] = "system",
 				["content"] = system
@@ -2143,7 +2150,7 @@ internal sealed class LocalApiForwarder : IDisposable
 		var prompt = source["prompt"]?.GetValue<string>();
 		if (!string.IsNullOrWhiteSpace(prompt))
 		{
-			messages.Add(new JsonObject
+			AddNode(messages, new JsonObject
 			{
 				["role"] = "user",
 				["content"] = prompt
@@ -2170,7 +2177,7 @@ internal sealed class LocalApiForwarder : IDisposable
 				continue;
 			}
 
-			anthropicMessages.Add(new JsonObject
+			AddNode(anthropicMessages, new JsonObject
 			{
 				["role"] = role.Equals("assistant", StringComparison.OrdinalIgnoreCase) ? "assistant" : "user",
 				["content"] = content
@@ -2284,7 +2291,7 @@ internal sealed class LocalApiForwarder : IDisposable
 			if (function is null)
 				continue;
 
-			anthropicTools.Add(new JsonObject
+			AddNode(anthropicTools, new JsonObject
 			{
 				["name"] = function["name"]?.GetValue<string>() ?? "tool",
 				["description"] = function["description"]?.GetValue<string>() ?? string.Empty,
@@ -2474,7 +2481,7 @@ internal sealed class LocalApiForwarder : IDisposable
 		if (message["tool_calls"] is JsonArray toolCalls && toolCalls.Count > 0)
 		{
 			foreach (var item in ConvertOpenAiToolCallsToResponses(toolCalls))
-				output.Add(item?.DeepClone());
+				AddNode(output, item?.DeepClone());
 		}
 
 		return new JsonObject
@@ -2515,7 +2522,7 @@ internal sealed class LocalApiForwarder : IDisposable
 		if (TryConvertAnthropicToolCalls(parsed, out var toolCalls))
 		{
 			foreach (var item in ConvertOpenAiToolCallsToResponses(toolCalls))
-				output.Add(item?.DeepClone());
+				AddNode(output, item?.DeepClone());
 		}
 
 		return new JsonObject
@@ -2568,6 +2575,11 @@ internal sealed class LocalApiForwarder : IDisposable
 		};
 	}
 
+	private static void AddNode(JsonArray array, JsonNode? node)
+	{
+		array.Add(node);
+	}
+
 	private static string ExtractAssistantContent(JsonObject parsed)
 	{
 		var messageContent = ExtractTextContent(parsed["choices"]?[0]?["message"]?["content"]);
@@ -2599,7 +2611,7 @@ internal sealed class LocalApiForwarder : IDisposable
 			if (!(item["type"]?.GetValue<string>() ?? string.Empty).Equals("tool_use", StringComparison.OrdinalIgnoreCase))
 				continue;
 
-			toolCalls.Add(new JsonObject
+			AddNode(toolCalls, new JsonObject
 			{
 				["id"] = item["id"]?.GetValue<string>() ?? $"call_{Guid.NewGuid():N}",
 				["type"] = "function",
@@ -2619,7 +2631,7 @@ internal sealed class LocalApiForwarder : IDisposable
 		var output = new JsonArray();
 		foreach (var item in toolCalls.OfType<JsonObject>())
 		{
-			output.Add(new JsonObject
+			AddNode(output, new JsonObject
 			{
 				["type"] = "function_call",
 				["id"] = item["id"]?.GetValue<string>() ?? $"fc_{Guid.NewGuid():N}",
@@ -3290,7 +3302,7 @@ internal sealed class LocalApiForwarder : IDisposable
 		foreach (var pair in streamedToolCalls.OrderBy(static item => item.Key))
 		{
 			var accumulator = pair.Value;
-			result.Add(new JsonObject
+			AddNode(result, new JsonObject
 			{
 				["index"] = pair.Key,
 				["id"] = string.IsNullOrWhiteSpace(accumulator.Id) ? $"call_{pair.Key}_{BuildArchitectureKey(accumulator.Name)}" : accumulator.Id,
@@ -3312,7 +3324,7 @@ internal sealed class LocalApiForwarder : IDisposable
 		foreach (var pair in streamedToolCalls.OrderBy(static item => item.Key))
 		{
 			var accumulator = pair.Value;
-			result.Add(new JsonObject
+			AddNode(result, new JsonObject
 			{
 				["type"] = "function_call",
 				["id"] = string.IsNullOrWhiteSpace(accumulator.Id) ? $"fc_{pair.Key}_{BuildArchitectureKey(accumulator.Name)}" : accumulator.Id,
@@ -3385,7 +3397,7 @@ internal sealed class LocalApiForwarder : IDisposable
 		{
 			var accumulator = pair.Value;
 			var argumentsNode = TryParseJsonNode(accumulator.Arguments.ToString()) ?? JsonValue.Create(accumulator.Arguments.ToString());
-			toolCalls.Add(new JsonObject
+			AddNode(toolCalls, new JsonObject
 			{
 				["id"] = string.IsNullOrWhiteSpace(accumulator.Id) ? $"call_{pair.Key}_{BuildArchitectureKey(accumulator.Name)}" : accumulator.Id,
 				["type"] = "function",
