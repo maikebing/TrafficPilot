@@ -2,16 +2,40 @@
 
 	<PropertyGroup>
 		<OutputType>WinExe</OutputType>
-		<TargetFramework>net10.0-windows</TargetFramework>
+		<TargetFramework>net10.0</TargetFramework>
 		<ImplicitUsings>enable</ImplicitUsings>
 		<Nullable>enable</Nullable>
-		<UseWindowsForms>true</UseWindowsForms>
+		<UseWindowsForms>false</UseWindowsForms>
+		<UseLuminaForms>true</UseLuminaForms>
 		<ApplicationIcon>Resources\favicon.ico</ApplicationIcon>
 		<ApplicationManifest>Properties\app.manifest</ApplicationManifest>
 	</PropertyGroup>
 
 	<ItemGroup>
 	  <None Include=".github\copilot-instructions.md" />
+	</ItemGroup>
+
+	<ItemGroup>
+	  <Compile Remove="Lumina\**\*.cs" />
+	  <EmbeddedResource Remove="Lumina\**\*" />
+	  <None Remove="Lumina\**\*" />
+	</ItemGroup>
+
+	<ItemGroup>
+	  <Using Include="Lumina.Forms" />
+	</ItemGroup>
+
+	<ItemGroup>
+	  <ProjectReference Include="Lumina\Lumina.Core\Lumina.Core.csproj" />
+	  <ProjectReference Include="Lumina\Lumina.Forms\Lumina.Forms.csproj" />
+	  <ProjectReference Include="Lumina\Lumina.Forms.Analyzers\Lumina.Forms.Analyzers.csproj"
+	                    OutputItemType="Analyzer"
+	                    ReferenceOutputAssembly="false" />
+	</ItemGroup>
+
+	<ItemGroup>
+	  <PackageReference Include="System.Drawing.Common" Version="10.0.0" />
+	  <PackageReference Include="System.Resources.Extensions" Version="10.0.0" />
 	</ItemGroup>
 
 </Project>
