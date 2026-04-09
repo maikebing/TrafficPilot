@@ -5,7 +5,6 @@ using System.Net.NetworkInformation;
 using System.Reflection;
 using System.Text;
 using System.Text.Json.Serialization;
-using TrafficPilot.Properties;
 
 namespace TrafficPilot;
 
@@ -440,8 +439,7 @@ internal partial class MainForm : Form
 		{
 			// Save current config to a JSON string
 			var model = BuildConfigModel();
-			var json = System.Text.Json.JsonSerializer.Serialize(model,
-				new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+			var json = System.Text.Json.JsonSerializer.Serialize(model, TrafficPilotConfigJsonContext.Default.ProxyConfigModel);
 
 			using var syncProvider = ConfigSyncProviderFactory.Create(provider, token);
 			string newId = await syncProvider.PushAsync(json, gistId).ConfigureAwait(true);

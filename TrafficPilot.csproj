@@ -16,8 +16,6 @@
 		<PublishTrimmed>true</PublishTrimmed>
 		<TrimMode>full</TrimMode>
 		<InvariantGlobalization>true</InvariantGlobalization>
-		<CustomResourceTypesSupport>true</CustomResourceTypesSupport>
-		<GenerateResourceUsePreserializedResources>true</GenerateResourceUsePreserializedResources>
 		<UseSizeOptimizedLinq>true</UseSizeOptimizedLinq>
 		<DebuggerSupport>false</DebuggerSupport>
 		<StackTraceSupport>false</StackTraceSupport>
@@ -53,7 +51,17 @@
 
 	<ItemGroup>
 	  <PackageReference Include="System.Drawing.Common" Version="10.0.0" />
-	  <PackageReference Include="System.Resources.Extensions" Version="10.0.5" />
+	</ItemGroup>
+
+	<ItemGroup>
+	  <Content Include="Resources\WinDivert.dll">
+	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	    <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+	  </Content>
+	  <Content Include="Resources\WinDivert64.sys">
+	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	    <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+	  </Content>
 	</ItemGroup>
 
 </Project>

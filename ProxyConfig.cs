@@ -833,6 +833,88 @@ internal class LocalApiRequestResponseLoggingSettings
 	public int MaxBodyCharacters { get; set; } = 4000;
 }
 
+internal sealed class PersistedProxyConfigModel
+{
+	[JsonPropertyName("configName")]
+	public string ConfigName { get; set; } = string.Empty;
+
+	[JsonPropertyName("proxy")]
+	public ProxySettings? Proxy { get; set; }
+
+	[JsonPropertyName("targeting")]
+	public TargetingSettings? Targeting { get; set; }
+
+	[JsonPropertyName("hostsRedirect")]
+	public HostsRedirectSettings? HostsRedirect { get; set; }
+
+	[JsonPropertyName("startOnBoot")]
+	public bool StartOnBoot { get; set; }
+
+	[JsonPropertyName("autoStartProxy")]
+	public bool AutoStartProxy { get; set; }
+
+	[JsonPropertyName("configSync")]
+	public PersistedConfigSyncSettings? ConfigSync { get; set; }
+
+	[JsonPropertyName("ollamaGateway")]
+	public PersistedOllamaGatewaySettings? OllamaGateway { get; set; }
+
+	[JsonPropertyName("logging")]
+	public AppLoggingSettings Logging { get; set; } = new();
+}
+
+internal sealed class PersistedConfigSyncSettings
+{
+	[JsonPropertyName("provider")]
+	public string Provider { get; set; } = string.Empty;
+}
+
+internal sealed class PersistedOllamaGatewaySettings
+{
+	[JsonPropertyName("enabled")]
+	public bool Enabled { get; set; }
+
+	[JsonPropertyName("ollamaPort")]
+	public ushort OllamaPort { get; set; } = 11434;
+
+	[JsonPropertyName("openAIProvider")]
+	public PersistedGatewayProviderSettings OpenAIProvider { get; set; } = new();
+
+	[JsonPropertyName("anthropicProvider")]
+	public PersistedGatewayProviderSettings AnthropicProvider { get; set; } = new();
+
+	[JsonPropertyName("geminiProvider")]
+	public PersistedGatewayProviderSettings GeminiProvider { get; set; } = new();
+
+	[JsonPropertyName("xaiProvider")]
+	public PersistedGatewayProviderSettings XAiProvider { get; set; } = new();
+
+	[JsonPropertyName("requestResponseLogging")]
+	public LocalApiRequestResponseLoggingSettings RequestResponseLogging { get; set; } = new();
+
+	[JsonPropertyName("includeErrorDiagnostics")]
+	public bool IncludeErrorDiagnostics { get; set; } = true;
+}
+
+internal sealed class PersistedGatewayProviderSettings
+{
+	[JsonPropertyName("enabled")]
+	public bool Enabled { get; set; }
+
+	[JsonPropertyName("baseUrl")]
+	public string BaseUrl { get; set; } = string.Empty;
+}
+
+[JsonSourceGenerationOptions(PropertyNameCaseInsensitive = true, PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase, WriteIndented = true)]
+[JsonSerializable(typeof(ProxyConfigModel))]
+[JsonSerializable(typeof(PersistedProxyConfigModel))]
+[JsonSerializable(typeof(OllamaGatewaySettings))]
+[JsonSerializable(typeof(LegacyGatewayProviderModel))]
+[JsonSerializable(typeof(LegacyGatewayRouteSettings))]
+internal sealed partial class TrafficPilotConfigJsonContext : JsonSerializerContext
+{
+}
+
 internal sealed class ProxyConfigManager
 {
 	private readonly string _configPath;
@@ -855,8 +937,7 @@ internal sealed class ProxyConfigManager
 		try
 		{
 			var json = File.ReadAllText(path);
-			var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
-			var config = JsonSerializer.Deserialize<ProxyConfigModel>(json, options) ?? new ProxyConfigModel();
+			var config = JsonSerializer.Deserialize(json, TrafficPilotConfigJsonContext.Default.ProxyConfigModel) as ProxyConfigModel ?? new ProxyConfigModel();
 			var migrated = TryNormalizeLoadedConfig(config, json);
 			if (migrated)
 				Save(config, path);
@@ -896,12 +977,8 @@ internal sealed class ProxyConfigManager
 			if (!Directory.Exists(dir))
 				Directory.CreateDirectory(dir!);
 
-			var options = new JsonSerializerOptions
-			{
-				WriteIndented = true,
-				PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-			};
-			var json = JsonSerializer.Serialize(CreatePersistedConfig(config), options);
+			var persisted = CreatePersistedConfig(config);
+			var json = JsonSerializer.Serialize(persisted, TrafficPilotConfigJsonContext.Default.PersistedProxyConfigModel);
 			File.WriteAllText(path, json);
 		}
 		catch (IOException ex)
@@ -950,8 +1027,7 @@ internal sealed class ProxyConfigManager
 		try
 		{
 			var json = File.ReadAllText(path);
-			var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
-			var config = JsonSerializer.Deserialize<ProxyConfigModel>(json, options);
+			var config = JsonSerializer.Deserialize(json, TrafficPilotConfigJsonContext.Default.ProxyConfigModel) as ProxyConfigModel;
 			return ConfigDisplayNames.Normalize(config?.ConfigName);
 		}
 		catch (IOException ex)
@@ -1035,7 +1111,7 @@ internal sealed class ProxyConfigManager
 			{
 				foreach (var providerElement in providersElement.EnumerateArray())
 				{
-					var legacyProvider = providerElement.Deserialize<LegacyGatewayProviderModel>();
+					var legacyProvider = providerElement.Deserialize(TrafficPilotConfigJsonContext.Default.LegacyGatewayProviderModel) as LegacyGatewayProviderModel;
 					if (legacyProvider is null)
 						continue;
 
@@ -1050,7 +1126,7 @@ internal sealed class ProxyConfigManager
 			{
 				foreach (var routeElement in routesElement.EnumerateArray())
 				{
-					var legacyRoute = routeElement.Deserialize<LegacyGatewayRouteSettings>();
+					var legacyRoute = routeElement.Deserialize(TrafficPilotConfigJsonContext.Default.LegacyGatewayRouteSettings) as LegacyGatewayRouteSettings;
 					if (legacyRoute is null)
 						continue;
 
@@ -1074,59 +1150,59 @@ internal sealed class ProxyConfigManager
 		return changed;
 	}
 
-	private static object CreatePersistedConfig(ProxyConfigModel config)
+	private static PersistedProxyConfigModel CreatePersistedConfig(ProxyConfigModel config)
 	{
-		return new
+		return new PersistedProxyConfigModel
 		{
-			config.ConfigName,
-			config.Proxy,
-			config.Targeting,
-			config.HostsRedirect,
-			config.StartOnBoot,
-			config.AutoStartProxy,
-			configSync = CreatePersistedConfigSync(config.ConfigSync),
-			ollamaGateway = CreatePersistedGateway(config.OllamaGateway),
-			logging = config.Logging
+			ConfigName = config.ConfigName,
+			Proxy = config.Proxy,
+			Targeting = config.Targeting,
+			HostsRedirect = config.HostsRedirect,
+			StartOnBoot = config.StartOnBoot,
+			AutoStartProxy = config.AutoStartProxy,
+			ConfigSync = CreatePersistedConfigSync(config.ConfigSync),
+			OllamaGateway = CreatePersistedGateway(config.OllamaGateway),
+			Logging = config.Logging
 		};
 	}
 
-	private static object? CreatePersistedConfigSync(ConfigSyncSettings? settings)
+	private static PersistedConfigSyncSettings? CreatePersistedConfigSync(ConfigSyncSettings? settings)
 	{
 		if (settings is null || string.IsNullOrWhiteSpace(settings.Provider))
 			return null;
 
-		return new
+		return new PersistedConfigSyncSettings
 		{
-			settings.Provider
+			Provider = settings.Provider
 		};
 	}
 
-	private static object? CreatePersistedGateway(OllamaGatewaySettings? settings)
+	private static PersistedOllamaGatewaySettings? CreatePersistedGateway(OllamaGatewaySettings? settings)
 	{
 		if (settings is null)
 			return null;
 
-		return new
+		return new PersistedOllamaGatewaySettings
 		{
-			settings.Enabled,
-			settings.OllamaPort,
-			settings.RequestResponseLogging,
-			settings.IncludeErrorDiagnostics,
-			openAIProvider = CreatePersistedProvider(settings.OpenAIProvider),
-			anthropicProvider = CreatePersistedProvider(settings.AnthropicProvider),
-			geminiProvider = CreatePersistedProvider(settings.GeminiProvider),
-			xaiProvider = CreatePersistedProvider(settings.XAiProvider)
+			Enabled = settings.Enabled,
+			OllamaPort = settings.OllamaPort,
+			RequestResponseLogging = settings.RequestResponseLogging,
+			IncludeErrorDiagnostics = settings.IncludeErrorDiagnostics,
+			OpenAIProvider = CreatePersistedProvider(settings.OpenAIProvider),
+			AnthropicProvider = CreatePersistedProvider(settings.AnthropicProvider),
+			GeminiProvider = CreatePersistedProvider(settings.GeminiProvider),
+			XAiProvider = CreatePersistedProvider(settings.XAiProvider)
 		};
 	}
 
-	private static object CreatePersistedProvider(IGatewayProviderModel provider)
+	private static PersistedGatewayProviderSettings CreatePersistedProvider(IGatewayProviderModel provider)
 	{
 		ArgumentNullException.ThrowIfNull(provider);
 
-		return new
+		return new PersistedGatewayProviderSettings
 		{
-			provider.Enabled,
-			provider.BaseUrl
+			Enabled = provider.Enabled,
+			BaseUrl = provider.BaseUrl
 		};
 	}
 

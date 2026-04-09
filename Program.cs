@@ -46,13 +46,15 @@ internal static class Program
             {
                 var windiv = new FileInfo(Path.Combine(appdir, "WinDivert.dll"));
                 var winsys = new FileInfo(Path.Combine(appdir, "WinDivert64.sys"));
+                var bundledWindiv = Path.Combine(AppContext.BaseDirectory, "WinDivert.dll");
+                var bundledWinsys = Path.Combine(AppContext.BaseDirectory, "WinDivert64.sys");
                 if (!windiv.Exists)
                 {
-                    System.IO.File.WriteAllBytes(windiv.FullName, Properties.Resources.WinDivert);
+                    System.IO.File.Copy(bundledWindiv, windiv.FullName, overwrite: true);
                 }
                 if (!winsys.Exists)
                 {
-                    System.IO.File.WriteAllBytes(winsys.FullName, Properties.Resources.WinDivertSys);
+                    System.IO.File.Copy(bundledWinsys, winsys.FullName, overwrite: true);
                 }
                 if (NativeLibrary.TryLoad(windiv.FullName, out nint _windivhandle))
                 {

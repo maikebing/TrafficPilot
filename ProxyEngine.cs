@@ -313,8 +313,8 @@ internal sealed class ProxyEngine : IDisposable
 		if (settings is null)
 			return null;
 
-		var json = JsonSerializer.Serialize(settings);
-		return JsonSerializer.Deserialize<OllamaGatewaySettings>(json);
+		var json = JsonSerializer.Serialize(settings, TrafficPilotConfigJsonContext.Default.OllamaGatewaySettings);
+		return JsonSerializer.Deserialize(json, TrafficPilotConfigJsonContext.Default.OllamaGatewaySettings) as OllamaGatewaySettings;
 	}
 	private async Task PacketProcessingLoopAsync(CancellationToken ct)
 	{

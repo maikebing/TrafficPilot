@@ -1,6 +1,5 @@
 ﻿#nullable enable
 using System.ComponentModel;
-using TrafficPilot.Properties;
 
 namespace TrafficPilot;
 
@@ -1574,7 +1573,7 @@ partial class MainForm
         descContentLabel.Name = "descContentLabel";
         descContentLabel.Size = new Size(125, 867);
         descContentLabel.TabIndex = 3;
-        descContentLabel.Text = resources.GetString("descContentLabel.Text");
+        descContentLabel.Text = resources.GetString("descContentLabel.Text") ?? string.Empty;
         // 
         // contribLabel
         // 
@@ -1837,7 +1836,6 @@ partial class MainForm
         // 
         ClientSize = new Size(787, 691);
         Controls.Add(_mainPanel);
-        Icon = (Icon)resources.GetObject("$this.Icon");
         MinimumSize = new Size(600, 400);
         Name = "MainForm";
         StartPosition = FormStartPosition.CenterScreen;
@@ -1959,8 +1957,16 @@ partial class MainForm
 
     private void LoadApplicationIcon()
     {
-        _notifyIcon!.Icon = Resources.favicon;
-        Icon = Resources.favicon;
+        var processPath = Environment.ProcessPath;
+        if (string.IsNullOrWhiteSpace(processPath) || !File.Exists(processPath))
+            return;
+
+        using var extractedIcon = Icon.ExtractAssociatedIcon(processPath);
+        if (extractedIcon is null)
+            return;
+
+        _notifyIcon!.Icon = (Icon)extractedIcon.Clone();
+        Icon = (Icon)extractedIcon.Clone();
     }
 
     private void InitializeHostsRedirectModeUI()
@@ -2044,8 +2050,8 @@ partial class MainForm
     private Label label1 = null!;
     private Label lblBytes = null!;
     private Button btnResetConfig = null!;
-    private Label _lblOllamaPort;
-    private NumericUpDown _numOllamaPort;
+    private Label _lblOllamaPort = null!;
+    private NumericUpDown _numOllamaPort = null!;
 }
 
 

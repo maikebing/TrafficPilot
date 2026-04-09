@@ -1546,14 +1546,11 @@ internal sealed class LocalApiForwarder : IDisposable
 
 		if (inputNode is JsonValue inputValue && inputValue.TryGetValue<string>(out var singleInput))
 		{
-			return
-			[
-				new JsonObject
-				{
-					["role"] = "user",
-					["content"] = singleInput
-				}
-			];
+			return CreateArray(new JsonObject
+			{
+				["role"] = "user",
+				["content"] = singleInput
+			});
 		}
 
 		if (inputNode is JsonArray inputArray)
@@ -1937,21 +1934,19 @@ internal sealed class LocalApiForwarder : IDisposable
 		var fullOutput = new JsonArray();
 		if (messageItemEmitted)
 		{
-			fullOutput.Add(new JsonObject
+			AddNode(fullOutput, new JsonObject
 			{
 				["type"] = "message",
 				["id"] = messageItemId,
 				["status"] = "completed",
 				["role"] = "assistant",
-				["content"] = new JsonArray
-				{
+				["content"] = CreateArray(
 					new JsonObject
 					{
 						["type"] = "output_text",
 						["text"] = textAccumulator.ToString(),
 						["annotations"] = new JsonArray()
-					}
-				}
+					})
 			});
 		}
 
@@ -1987,7 +1982,7 @@ internal sealed class LocalApiForwarder : IDisposable
 				["item"] = completedItem
 			});
 
-			fullOutput.Add(completedItem.DeepClone());
+			AddNode(fullOutput, completedItem.DeepClone());
 		}
 
 		var completedResponse = new JsonObject
@@ -2436,15 +2431,13 @@ internal sealed class LocalApiForwarder : IDisposable
 			["object"] = "chat.completion",
 			["created"] = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
 			["model"] = model,
-			["choices"] = new JsonArray
-			{
+			["choices"] = CreateArray(
 				new JsonObject
 				{
 					["index"] = 0,
 					["message"] = assistantMessage,
 					["finish_reason"] = parsed["stop_reason"]?.GetValue<string>() ?? "stop"
-				}
-			},
+				}),
 			["usage"] = new JsonObject
 			{
 				["prompt_tokens"] = usage?["input_tokens"]?.GetValue<int>() ?? 0,
@@ -2458,25 +2451,22 @@ internal sealed class LocalApiForwarder : IDisposable
 	{
 		var message = parsed["choices"]?[0]?["message"]?.AsObject() ?? new JsonObject();
 		var text = message["content"]?.GetValue<string>() ?? string.Empty;
-		var output = new JsonArray
-		{
+		var output = CreateArray(
 			new JsonObject
 			{
 				["id"] = $"msg_{Guid.NewGuid():N}",
 				["type"] = "message",
 				["status"] = "completed",
 				["role"] = "assistant",
-				["content"] = new JsonArray
-				{
+				["content"] = CreateArray(
 					new JsonObject
 					{
 						["type"] = "output_text",
 						["text"] = text,
 						["annotations"] = new JsonArray()
-					}
-				}
+					})
 			}
-		};
+		);
 
 		if (message["tool_calls"] is JsonArray toolCalls && toolCalls.Count > 0)
 		{
@@ -2499,25 +2489,22 @@ internal sealed class LocalApiForwarder : IDisposable
 	private JsonObject ConvertAnthropicResponseToResponses(JsonObject parsed, string requestedModel)
 	{
 		var text = ExtractAnthropicText(parsed);
-		var output = new JsonArray
-		{
+		var output = CreateArray(
 			new JsonObject
 			{
 				["id"] = $"msg_{Guid.NewGuid():N}",
 				["type"] = "message",
 				["status"] = "completed",
 				["role"] = "assistant",
-				["content"] = new JsonArray
-				{
+				["content"] = CreateArray(
 					new JsonObject
 					{
 						["type"] = "output_text",
 						["text"] = text,
 						["annotations"] = new JsonArray()
-					}
-				}
+					})
 			}
-		};
+		);
 
 		if (TryConvertAnthropicToolCalls(parsed, out var toolCalls))
 		{
@@ -3021,8 +3008,7 @@ internal sealed class LocalApiForwarder : IDisposable
 					["object"] = "chat.completion.chunk",
 					["created"] = created,
 					["model"] = effectiveModel,
-					["choices"] = new JsonArray
-					{
+					["choices"] = CreateArray(
 						new JsonObject
 						{
 							["index"] = 0,
@@ -3031,8 +3017,7 @@ internal sealed class LocalApiForwarder : IDisposable
 								["content"] = deltaText
 							},
 							["finish_reason"] = null
-						}
-					}
+						})
 				}.ToJsonString(JsonOptions));
 				await writer.WriteLineAsync();
 			}
@@ -3048,8 +3033,7 @@ internal sealed class LocalApiForwarder : IDisposable
 						["object"] = "chat.completion.chunk",
 						["created"] = created,
 						["model"] = effectiveModel,
-						["choices"] = new JsonArray
-						{
+						["choices"] = CreateArray(
 							new JsonObject
 							{
 								["index"] = 0,
@@ -3058,8 +3042,7 @@ internal sealed class LocalApiForwarder : IDisposable
 									["tool_calls"] = BuildOpenAiStreamingToolCalls(streamedToolCalls)
 								},
 								["finish_reason"] = null
-							}
-						}
+							})
 					}.ToJsonString(JsonOptions));
 					await writer.WriteLineAsync();
 				}
@@ -3071,15 +3054,13 @@ internal sealed class LocalApiForwarder : IDisposable
 					["object"] = "chat.completion.chunk",
 					["created"] = created,
 					["model"] = effectiveModel,
-					["choices"] = new JsonArray
-					{
+					["choices"] = CreateArray(
 						new JsonObject
 						{
 							["index"] = 0,
 							["delta"] = new JsonObject(),
 							["finish_reason"] = "stop"
-						}
-					}
+						})
 				}.ToJsonString(JsonOptions));
 				await writer.WriteLineAsync();
 				await writer.WriteLineAsync("data: [DONE]");
@@ -3203,7 +3184,7 @@ internal sealed class LocalApiForwarder : IDisposable
 
 				var outputItems = new JsonArray();
 				foreach (var item in BuildResponsesFunctionCallItems(streamedToolCalls))
-					outputItems.Add(item);
+					AddNode(outputItems, item);
 
 				await WriteSseEventAsync(writer, "response.completed", new JsonObject
 				{
@@ -3487,7 +3468,7 @@ internal sealed class LocalApiForwarder : IDisposable
 		var models = new JsonArray();
 		foreach (var model in await GetAdvertisedModelCatalogAsync(ct))
 		{
-			models.Add(new JsonObject
+			AddNode(models, new JsonObject
 			{
 				["name"] = model.LocalName,
 				["model"] = model.LocalName,
@@ -3501,7 +3482,7 @@ internal sealed class LocalApiForwarder : IDisposable
 				{
 					["format"] = "trafficpilot",
 					["family"] = model.Architecture,
-					["families"] = new JsonArray(model.Architecture),
+					["families"] = CreateArray(model.Architecture),
 					["parameter_size"] = model.ParameterSize,
 					["quantization_level"] = model.QuantizationLevel
 				},
@@ -3519,7 +3500,7 @@ internal sealed class LocalApiForwarder : IDisposable
 		var models = new JsonArray();
 		foreach (var modelName in GetLoadedModelNames())
 		{
-			models.Add(new JsonObject
+			AddNode(models, new JsonObject
 			{
 				["name"] = modelName,
 				["model"] = modelName,
@@ -3530,7 +3511,7 @@ internal sealed class LocalApiForwarder : IDisposable
 					["parent_model"] = string.Empty,
 					["format"] = "trafficpilot",
 					["family"] = "forwarded",
-					["families"] = new JsonArray("forwarded"),
+					["families"] = CreateArray("forwarded"),
 					["parameter_size"] = "unknown",
 					["quantization_level"] = "unknown"
 				},
@@ -3573,7 +3554,7 @@ internal sealed class LocalApiForwarder : IDisposable
 				? parsedArguments
 				: function["arguments"]?.DeepClone() ?? new JsonObject();
 
-			toolCalls.Add(new JsonObject
+			AddNode(toolCalls, new JsonObject
 			{
 				["id"] = toolCall["id"]?.DeepClone() ?? $"call_{position}_{BuildArchitectureKey(function["name"]?.GetValue<string>() ?? "tool")}",
 				["type"] = "function",
@@ -3619,7 +3600,7 @@ internal sealed class LocalApiForwarder : IDisposable
 				["parent_model"] = model.UpstreamModel,
 				["format"] = "trafficpilot",
 				["family"] = model.Architecture,
-				["families"] = new JsonArray(model.Architecture),
+				["families"] = CreateArray(model.Architecture),
 				["parameter_size"] = model.ParameterSize,
 				["quantization_level"] = model.QuantizationLevel
 			},
@@ -3653,7 +3634,7 @@ internal sealed class LocalApiForwarder : IDisposable
 				capabilities["vision"] = true;
 			modelObj["capabilities"] = capabilities;
 
-			data.Add(modelObj);
+			AddNode(data, modelObj);
 		}
 
 		foreach (var loadedModel in GetLoadedModelNames())
@@ -3663,7 +3644,7 @@ internal sealed class LocalApiForwarder : IDisposable
 
 			var providerContext = ResolveProviderContextForModel(loadedModel);
 
-			data.Add(new JsonObject
+			AddNode(data, new JsonObject
 			{
 				["id"] = loadedModel,
 				["object"] = "model",
