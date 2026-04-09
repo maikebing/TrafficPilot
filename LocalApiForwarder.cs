@@ -314,23 +314,23 @@ internal sealed class LocalApiForwarder : IDisposable
 
 	private async Task HandleContextAsync(HttpListenerContext context, CancellationToken ct)
 	{
-		var path = context.Request.Url?.AbsolutePath ?? "/";
-     var normalizedPath = NormalizeLocalApiRequestPath(path);
+		var rawPath = context.Request.Url?.AbsolutePath ?? "/";
+		var normalizedPath = NormalizeLocalApiRequestPath(rawPath);
 		var requestId = Interlocked.Increment(ref _requestCounter);
-		var requestLogSession = _requestLogWriter.BeginRequest(requestId, context.Request, path);
+		var requestLogSession = _requestLogWriter.BeginRequest(requestId, context.Request, rawPath);
 		var priorRequestLogSession = _currentRequestLogSession.Value;
 		_currentRequestLogSession.Value = requestLogSession;
 		var startedAt = Stopwatch.GetTimestamp();
-		LogIncomingRequest(requestId, context.Request, path);
+		LogIncomingRequest(requestId, context.Request, rawPath);
 		try
 		{
-            if (HttpMethodsEqual(context.Request.HttpMethod, "GET") && path.Equals("/api/tags", StringComparison.OrdinalIgnoreCase))
+			if (HttpMethodsEqual(context.Request.HttpMethod, "GET") && normalizedPath.Equals("/api/tags", StringComparison.OrdinalIgnoreCase))
 			{
 				await WriteJsonAsync(context.Response, HttpStatusCode.OK, await BuildOllamaTagsResponseAsync(ct));
 				return;
 			}
 
-			if (HttpMethodsEqual(context.Request.HttpMethod, "GET") && path.Equals("/api/version", StringComparison.OrdinalIgnoreCase))
+			if (HttpMethodsEqual(context.Request.HttpMethod, "GET") && normalizedPath.Equals("/api/version", StringComparison.OrdinalIgnoreCase))
 			{
 				await WriteJsonAsync(context.Response, HttpStatusCode.OK, new JsonObject
 				{
@@ -340,13 +340,13 @@ internal sealed class LocalApiForwarder : IDisposable
 				return;
 			}
 
-			if (HttpMethodsEqual(context.Request.HttpMethod, "GET") && path.Equals("/api/ps", StringComparison.OrdinalIgnoreCase))
+			if (HttpMethodsEqual(context.Request.HttpMethod, "GET") && normalizedPath.Equals("/api/ps", StringComparison.OrdinalIgnoreCase))
 			{
 				await WriteJsonAsync(context.Response, HttpStatusCode.OK, BuildOllamaPsResponse());
 				return;
 			}
 
-			if (HttpMethodsEqual(context.Request.HttpMethod, "POST") && path.Equals("/api/show", StringComparison.OrdinalIgnoreCase))
+			if (HttpMethodsEqual(context.Request.HttpMethod, "POST") && normalizedPath.Equals("/api/show", StringComparison.OrdinalIgnoreCase))
 			{
 				await HandleOllamaShowAsync(context, ct);
 				return;
@@ -358,23 +358,23 @@ internal sealed class LocalApiForwarder : IDisposable
 				return;
 			}
 
-			if (HttpMethodsEqual(context.Request.HttpMethod, "POST") && path.Equals("/api/generate", StringComparison.OrdinalIgnoreCase))
+			if (HttpMethodsEqual(context.Request.HttpMethod, "POST") && normalizedPath.Equals("/api/generate", StringComparison.OrdinalIgnoreCase))
 			{
 				await HandleOllamaGenerateAsync(context, ct);
 				return;
 			}
 
-			if (HttpMethodsEqual(context.Request.HttpMethod, "POST") && path.Equals("/api/chat", StringComparison.OrdinalIgnoreCase))
+			if (HttpMethodsEqual(context.Request.HttpMethod, "POST") && normalizedPath.Equals("/api/chat", StringComparison.OrdinalIgnoreCase))
 			{
 				await HandleOllamaChatAsync(context, ct);
 				return;
 			}
 
 			if (HttpMethodsEqual(context.Request.HttpMethod, "POST")
-				&& (path.Equals("/api/embeddings", StringComparison.OrdinalIgnoreCase)
-					|| path.Equals("/api/embed", StringComparison.OrdinalIgnoreCase)))
+				&& (normalizedPath.Equals("/api/embeddings", StringComparison.OrdinalIgnoreCase)
+					|| normalizedPath.Equals("/api/embed", StringComparison.OrdinalIgnoreCase)))
 			{
-				await HandleOllamaEmbeddingsAsync(context, path, ct);
+				await HandleOllamaEmbeddingsAsync(context, normalizedPath, ct);
 				return;
 			}
 
@@ -417,8 +417,8 @@ internal sealed class LocalApiForwarder : IDisposable
 				return;
 			}
 
-         if (normalizedPath.StartsWith("/v1/", StringComparison.OrdinalIgnoreCase)
-				|| path.StartsWith("/openai/", StringComparison.OrdinalIgnoreCase)
+			if (normalizedPath.StartsWith("/v1/", StringComparison.OrdinalIgnoreCase)
+				|| normalizedPath.StartsWith("/openai/", StringComparison.OrdinalIgnoreCase)
 				|| normalizedPath.Equals("/models", StringComparison.OrdinalIgnoreCase)
 				|| normalizedPath.Equals("/responses", StringComparison.OrdinalIgnoreCase)
 				|| normalizedPath.Equals("/embeddings", StringComparison.OrdinalIgnoreCase)
@@ -426,9 +426,9 @@ internal sealed class LocalApiForwarder : IDisposable
 			{
 				await WriteErrorAsync(
 					context.Response,
-					path,
+					normalizedPath,
 					HttpStatusCode.NotFound,
-                 $"Unsupported OpenAI-compatible local API path: {path}. Use /v1/models, /v1/chat/completions, /v1/embeddings, /v1/responses, /models, /chat/completions, /embeddings, or /responses.",
+					$"Unsupported OpenAI-compatible local API path: {normalizedPath}. Use /v1/models, /v1/chat/completions, /v1/embeddings, /v1/responses, /models, /chat/completions, /embeddings, or /responses.",
 					"ollama",
 					null,
 					null,
@@ -436,12 +436,12 @@ internal sealed class LocalApiForwarder : IDisposable
 				return;
 			}
 
-			await WriteErrorAsync(context.Response, path, HttpStatusCode.NotFound, $"Unsupported local API path: {path}", "ollama", null, null, null);
+			await WriteErrorAsync(context.Response, normalizedPath, HttpStatusCode.NotFound, $"Unsupported local API path: {normalizedPath}", "ollama", null, null, null);
 		}
 		catch (Exception ex) when (ex is not OperationCanceledException)
 		{
-			LogError($"request #{requestId} failed on {path}: {ex.Message}");
-			await WriteErrorAsync(context.Response, path, HttpStatusCode.BadGateway, ex.Message, "ollama", null, null, null);
+			LogError($"request #{requestId} failed on {normalizedPath}: {ex.Message}");
+			await WriteErrorAsync(context.Response, normalizedPath, HttpStatusCode.BadGateway, ex.Message, "ollama", null, null, null);
 		}
 		finally
 		{
@@ -455,10 +455,48 @@ internal sealed class LocalApiForwarder : IDisposable
 
 	private static string NormalizeLocalApiRequestPath(string path)
 	{
-		if (path.StartsWith("/openai/", StringComparison.OrdinalIgnoreCase))
-			return path["/openai".Length..];
+		if (string.IsNullOrWhiteSpace(path))
+			return "/";
 
-		return path;
+		var trimmed = path.Trim();
+		var normalizedBuilder = new StringBuilder(trimmed.Length);
+		var previousWasSlash = false;
+
+		foreach (var ch in trimmed)
+		{
+			var current = ch == '\\' ? '/' : ch;
+			if (current == '/')
+			{
+				if (previousWasSlash)
+				{
+					continue;
+				}
+
+				previousWasSlash = true;
+			}
+			else
+			{
+				previousWasSlash = false;
+			}
+
+			normalizedBuilder.Append(current);
+		}
+
+		var normalized = normalizedBuilder.ToString();
+		if (!normalized.StartsWith('/'))
+		{
+			normalized = "/" + normalized;
+		}
+
+		if (normalized.Length > 1)
+		{
+			normalized = normalized.TrimEnd('/');
+		}
+
+		if (normalized.StartsWith("/openai/", StringComparison.OrdinalIgnoreCase))
+			return normalized["/openai".Length..];
+
+		return normalized;
 	}
 
 	private static bool TryGetOpenAiModelId(string path, out string modelId)
