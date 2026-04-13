@@ -400,13 +400,13 @@ partial class MainForm
         _configPanel.Padding = new Padding(10);
         _configPanel.RowCount = 8;
         _configPanel.RowStyles.Add(new RowStyle());
-        _configPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 36F));
-        _configPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 132F));
-        _configPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 143F));
-        _configPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 34F));
-        _configPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 44F));
-        _configPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 44F));
-        _configPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 42F));
+        _configPanel.RowStyles.Add(new RowStyle());
+        _configPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 50F));
+        _configPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 50F));
+        _configPanel.RowStyles.Add(new RowStyle());
+        _configPanel.RowStyles.Add(new RowStyle());
+        _configPanel.RowStyles.Add(new RowStyle());
+        _configPanel.RowStyles.Add(new RowStyle());
         _configPanel.Size = new Size(769, 596);
         _configPanel.TabIndex = 0;
         // 
@@ -477,8 +477,8 @@ partial class MainForm
         _proxySettingsPanel.Margin = new Padding(3, 0, 3, 3);
         _proxySettingsPanel.Name = "_proxySettingsPanel";
         _proxySettingsPanel.RowCount = 1;
-        _proxySettingsPanel.RowStyles.Add(new RowStyle());
-        _proxySettingsPanel.Size = new Size(743, 33);
+        _proxySettingsPanel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        _proxySettingsPanel.Size = new Size(743, 35);
         _proxySettingsPanel.TabIndex = 1;
         // 
         // _chkLocalProxy
@@ -574,7 +574,7 @@ partial class MainForm
         _procPanel.Name = "_procPanel";
         _procPanel.RowCount = 1;
         _procPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
-        _procPanel.Size = new Size(631, 122);
+        _procPanel.Size = new Size(631, 118);
         _procPanel.TabIndex = 7;
         // 
         // _txtProcesses
@@ -587,7 +587,7 @@ partial class MainForm
         _txtProcesses.Name = "_txtProcesses";
         _txtProcesses.PlaceholderText = "\r\ndevenv.exe\r\nservicehub*.exe";
         _txtProcesses.ScrollBars = ScrollBars.Vertical;
-        _txtProcesses.Size = new Size(625, 116);
+        _txtProcesses.Size = new Size(625, 112);
         _txtProcesses.TabIndex = 0;
         _txtProcesses.WordWrap = false;
         // 
@@ -612,7 +612,7 @@ partial class MainForm
         _domainRulesPanel.Name = "_domainRulesPanel";
         _domainRulesPanel.RowCount = 1;
         _domainRulesPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
-        _domainRulesPanel.Size = new Size(631, 133);
+        _domainRulesPanel.Size = new Size(631, 124);
         _domainRulesPanel.TabIndex = 9;
         // 
         // _txtDomainRules
@@ -625,7 +625,7 @@ partial class MainForm
         _txtDomainRules.Name = "_txtDomainRules";
         _txtDomainRules.PlaceholderText = ":\r\n*.github.com\r\nraw.githubusercontent.com";
         _txtDomainRules.ScrollBars = ScrollBars.Vertical;
-        _txtDomainRules.Size = new Size(625, 127);
+        _txtDomainRules.Size = new Size(625, 118);
         _txtDomainRules.TabIndex = 0;
         _txtDomainRules.WordWrap = false;
         // 
@@ -799,6 +799,7 @@ partial class MainForm
         // _configActionPanel
         // 
         _configActionPanel.AutoSize = true;
+        _configActionPanel.AutoSizeMode = AutoSizeMode.GrowAndShrink;
         _configActionPanel.ColumnCount = 2;
         _configActionPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
         _configActionPanel.ColumnStyles.Add(new ColumnStyle());
@@ -809,8 +810,8 @@ partial class MainForm
         _configActionPanel.Margin = new Padding(3, 0, 3, 3);
         _configActionPanel.Name = "_configActionPanel";
         _configActionPanel.RowCount = 1;
-        _configActionPanel.RowStyles.Add(new RowStyle());
-        _configActionPanel.Size = new Size(635, 105);
+        _configActionPanel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        _configActionPanel.Size = new Size(635, 44);
         _configActionPanel.TabIndex = 18;
         // 
         // _quickConfigPanel
@@ -820,7 +821,7 @@ partial class MainForm
         _quickConfigPanel.Location = new Point(0, 0);
         _quickConfigPanel.Margin = new Padding(0);
         _quickConfigPanel.Name = "_quickConfigPanel";
-        _quickConfigPanel.Size = new Size(347, 105);
+        _quickConfigPanel.Size = new Size(347, 44);
         _quickConfigPanel.TabIndex = 0;
         _quickConfigPanel.WrapContents = false;
         // 
@@ -836,7 +837,7 @@ partial class MainForm
         _configBtnPanel.Location = new Point(352, 5);
         _configBtnPanel.Margin = new Padding(5);
         _configBtnPanel.Name = "_configBtnPanel";
-        _configBtnPanel.Size = new Size(278, 36);
+        _configBtnPanel.Size = new Size(283, 34);
         _configBtnPanel.TabIndex = 18;
         _configBtnPanel.WrapContents = false;
         // 
@@ -1123,7 +1124,7 @@ partial class MainForm
         _dnsRedirectTab.Controls.Add(_dnsRedirectPanel);
         _dnsRedirectTab.Location = new Point(4, 26);
         _dnsRedirectTab.Name = "_dnsRedirectTab";
-        _dnsRedirectTab.Size = new Size(192, 70);
+        _dnsRedirectTab.Size = new Size(769, 596);
         _dnsRedirectTab.TabIndex = 3;
         _dnsRedirectTab.Text = "DNS Redirect";
         // 
@@ -1151,9 +1152,9 @@ partial class MainForm
         _dnsRedirectPanel.RowStyles.Add(new RowStyle());
         _dnsRedirectPanel.RowStyles.Add(new RowStyle());
         _dnsRedirectPanel.RowStyles.Add(new RowStyle());
-        _dnsRedirectPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 30.2670631F));
-        _dnsRedirectPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 69.73294F));
-        _dnsRedirectPanel.Size = new Size(192, 70);
+        _dnsRedirectPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 120F));
+        _dnsRedirectPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
+        _dnsRedirectPanel.Size = new Size(769, 596);
         _dnsRedirectPanel.TabIndex = 0;
         // 
         // _grpRedirectMode
@@ -1167,7 +1168,7 @@ partial class MainForm
         _grpRedirectMode.Margin = new Padding(3, 3, 3, 10);
         _grpRedirectMode.Name = "_grpRedirectMode";
         _grpRedirectMode.Padding = new Padding(8, 5, 8, 8);
-        _grpRedirectMode.Size = new Size(166, 105);
+        _grpRedirectMode.Size = new Size(743, 105);
         _grpRedirectMode.TabIndex = 0;
         _grpRedirectMode.TabStop = false;
         _grpRedirectMode.Text = "Redirect Mode";
@@ -1236,7 +1237,7 @@ partial class MainForm
         _txtHostsUrl.Location = new Point(165, 133);
         _txtHostsUrl.Margin = new Padding(5);
         _txtHostsUrl.Name = "_txtHostsUrl";
-        _txtHostsUrl.Size = new Size(12, 23);
+        _txtHostsUrl.Size = new Size(589, 23);
         _txtHostsUrl.TabIndex = 2;
         _txtHostsUrl.Text = "https://raw.hellogithub.com/hosts";
         // 
@@ -1247,11 +1248,13 @@ partial class MainForm
         _hostsRedirectBtnPanel.Controls.Add(_btnFetchIps);
         _hostsRedirectBtnPanel.Controls.Add(_chkRetestSlowOrTimeoutOnly);
         _hostsRedirectBtnPanel.Dock = DockStyle.Fill;
+        _hostsRedirectBtnPanel.FlowDirection = FlowDirection.LeftToRight;
         _hostsRedirectBtnPanel.Location = new Point(165, 166);
         _hostsRedirectBtnPanel.Margin = new Padding(5);
         _hostsRedirectBtnPanel.Name = "_hostsRedirectBtnPanel";
-        _hostsRedirectBtnPanel.Size = new Size(12, 67);
+        _hostsRedirectBtnPanel.Size = new Size(589, 36);
         _hostsRedirectBtnPanel.TabIndex = 3;
+        _hostsRedirectBtnPanel.WrapContents = false;
         // 
         // _btnRefreshHosts
         // 
@@ -1264,7 +1267,7 @@ partial class MainForm
         // 
         // _btnFetchIps
         // 
-        _btnFetchIps.Location = new Point(3, 39);
+        _btnFetchIps.Location = new Point(129, 3);
         _btnFetchIps.Name = "_btnFetchIps";
         _btnFetchIps.Size = new Size(130, 30);
         _btnFetchIps.TabIndex = 1;
@@ -1274,7 +1277,7 @@ partial class MainForm
         // _chkRetestSlowOrTimeoutOnly
         // 
         _chkRetestSlowOrTimeoutOnly.AutoSize = true;
-        _chkRetestSlowOrTimeoutOnly.Location = new Point(3, 79);
+        _chkRetestSlowOrTimeoutOnly.Location = new Point(265, 7);
         _chkRetestSlowOrTimeoutOnly.Margin = new Padding(3, 7, 3, 3);
         _chkRetestSlowOrTimeoutOnly.Name = "_chkRetestSlowOrTimeoutOnly";
         _chkRetestSlowOrTimeoutOnly.Size = new Size(267, 21);
@@ -1302,7 +1305,7 @@ partial class MainForm
         _autoFetchPanel.Dock = DockStyle.Fill;
         _autoFetchPanel.Location = new Point(13, 266);
         _autoFetchPanel.Name = "_autoFetchPanel";
-        _autoFetchPanel.Size = new Size(166, 29);
+        _autoFetchPanel.Size = new Size(743, 29);
         _autoFetchPanel.TabIndex = 6;
         _autoFetchPanel.WrapContents = false;
         // 
@@ -1340,9 +1343,9 @@ partial class MainForm
         // _lblRefreshDomains
         // 
         _lblRefreshDomains.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
-        _lblRefreshDomains.Location = new Point(13, 298);
+        _lblRefreshDomains.Location = new Point(13, 303);
         _lblRefreshDomains.Name = "_lblRefreshDomains";
-        _lblRefreshDomains.Size = new Size(144, 1);
+        _lblRefreshDomains.Size = new Size(144, 115);
         _lblRefreshDomains.TabIndex = 6;
         _lblRefreshDomains.Text = "Refresh Domains:";
         _lblRefreshDomains.TextAlign = ContentAlignment.TopRight;
@@ -1357,7 +1360,7 @@ partial class MainForm
         _txtRefreshDomains.Name = "_txtRefreshDomains";
         _txtRefreshDomains.PlaceholderText = "\nalive.github.com\ngithub.com";
         _txtRefreshDomains.ScrollBars = ScrollBars.Vertical;
-        _txtRefreshDomains.Size = new Size(12, 1);
+        _txtRefreshDomains.Size = new Size(589, 110);
         _txtRefreshDomains.TabIndex = 7;
         _txtRefreshDomains.WordWrap = false;
         // 
@@ -1367,9 +1370,9 @@ partial class MainForm
         _lvIpResults.Dock = DockStyle.Fill;
         _lvIpResults.FullRowSelect = true;
         _lvIpResults.GridLines = true;
-        _lvIpResults.Location = new Point(13, 229);
+        _lvIpResults.Location = new Point(13, 428);
         _lvIpResults.Name = "_lvIpResults";
-        _lvIpResults.Size = new Size(166, 1);
+        _lvIpResults.Size = new Size(743, 155);
         _lvIpResults.TabIndex = 8;
         _lvIpResults.UseCompatibleStateImageBehavior = false;
         _lvIpResults.View = View.Details;
@@ -1379,7 +1382,7 @@ partial class MainForm
         _logsTab.Controls.Add(_logPanel);
         _logsTab.Location = new Point(4, 26);
         _logsTab.Name = "_logsTab";
-        _logsTab.Size = new Size(192, 70);
+        _logsTab.Size = new Size(769, 596);
         _logsTab.TabIndex = 1;
         _logsTab.Text = "Logs";
         // 
@@ -1396,7 +1399,7 @@ partial class MainForm
         _logPanel.RowCount = 2;
         _logPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
         _logPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 40F));
-        _logPanel.Size = new Size(192, 70);
+        _logPanel.Size = new Size(769, 596);
         _logPanel.TabIndex = 0;
         // 
         // _rtbLogs
@@ -1408,7 +1411,7 @@ partial class MainForm
         _rtbLogs.Location = new Point(3, 3);
         _rtbLogs.Name = "_rtbLogs";
         _rtbLogs.ReadOnly = true;
-        _rtbLogs.Size = new Size(186, 24);
+        _rtbLogs.Size = new Size(763, 550);
         _rtbLogs.TabIndex = 0;
         _rtbLogs.Text = "";
         _rtbLogs.WordWrap = false;
@@ -1421,7 +1424,7 @@ partial class MainForm
         _btnClearPanel.Location = new Point(5, 35);
         _btnClearPanel.Margin = new Padding(5);
         _btnClearPanel.Name = "_btnClearPanel";
-        _btnClearPanel.Size = new Size(182, 30);
+        _btnClearPanel.Size = new Size(759, 30);
         _btnClearPanel.TabIndex = 1;
         // 
         // _btnClearLogs
@@ -1438,7 +1441,7 @@ partial class MainForm
         _aboutTab.Controls.Add(_aboutScrollPanel);
         _aboutTab.Location = new Point(4, 26);
         _aboutTab.Name = "_aboutTab";
-        _aboutTab.Size = new Size(192, 70);
+        _aboutTab.Size = new Size(769, 596);
         _aboutTab.TabIndex = 4;
         _aboutTab.Text = "About";
         // 
@@ -1451,7 +1454,7 @@ partial class MainForm
         _aboutScrollPanel.Margin = new Padding(0);
         _aboutScrollPanel.Name = "_aboutScrollPanel";
         _aboutScrollPanel.Padding = new Padding(10);
-        _aboutScrollPanel.Size = new Size(192, 70);
+        _aboutScrollPanel.Size = new Size(769, 596);
         _aboutScrollPanel.TabIndex = 0;
         // 
         // _aboutContentPanel

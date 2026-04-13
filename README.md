@@ -91,6 +91,8 @@
 
 > 当前结构补充：Gateway 的模型路由不再作为顶层共享 `routes` 维护；OpenAI / Anthropic / Gemini 各自持有自己的 `routes`，UI 与运行时都直接按当前 provider 读写，避免跨 provider 混写。
 
+> Lumina UI 修复：主窗口 `Configuration` 页已重新对齐到更接近旧版 WinForms 的布局，配置快捷按钮保持左侧、固定保存/加载按钮保持右侧；此前在 Lumina 下被压缩得几乎不可见的 `DNS Redirect`、`Logs`、`About` 页签内容区也已恢复正常尺寸。
+
 ## 主要功能
 
 - **进程流量重定向**：支持按进程名（含通配符匹配）进行筛选，将相关网络请求通过指定代理服务器转发到目标网络。

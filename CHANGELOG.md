@@ -8,6 +8,8 @@
 - 新增 provider capability 配置模型，用于描述 chat / embeddings / responses / streaming 支持能力。
 
 ### 改进
+- 修复 Lumina 版主窗口布局回归：`Configuration` 页重新对齐为与旧 WinForms 版更接近的横向布局，启动相关两个选项保持同一行，配置快捷按钮继续固定在左侧、`Load / Save As / Save / Reset` 固定在右侧。
+- 修复 `DNS Redirect`、`Logs`、`About` 页签在 Lumina 下被错误压缩为极小内容区的问题，恢复正常可见尺寸并随窗口拉伸。
 - 模型目录请求已取消 2 分钟级别的运行时缓存；每次刷新或访问模型列表时都会重新按当前 forwarder 配置拉取上游模型。
 - 配置页中的 `Refresh Models` 现在始终基于最新保存的 UI 配置创建临时 forwarder 获取模型，不再复用运行中实例启动时的 provider 快照。
 - 运行中的 `Ollama Gateway` 现在会在保存配置、载入配置和刷新模型时热更新当前 provider 设置，不再要求手动重启代理才能让转发链路切到新配置。
